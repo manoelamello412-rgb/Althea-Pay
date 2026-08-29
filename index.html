@@ -56,6 +56,95 @@ const supabaseClient = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_KEY
 );
+let usuarioSupabase = null;
+
+async function verificarLoginSupabase() {
+  const { data, error } = await supabaseClient.auth.getSession();
+
+  if (error) {
+    console.error('Erro ao verificar sessão:', error);
+    mostrarLoginSupabase();
+    return;
+  }
+
+  usuarioSupabase = data.session?.user || null;
+
+  if (!usuarioSupabase) {
+    mostrarLoginSupabase();
+  }
+}
+
+function mostrarLoginSupabase() {
+  document.body.innerHTML = `
+    <div style="min-height:100vh;background:#050505;color:#fff;display:flex;align-items:center;justify-content:center;padding:20px;font-family:Arial,sans-serif">
+      <div style="width:100%;max-width:400px;background:#101010;border:1px solid #333;border-radius:16px;padding:30px">
+        
+        <div style="text-align:center;color:#d4af37;font-size:28px;font-weight:bold;margin-bottom:8px">
+          ALTHEA PAY
+        </div>
+
+        <div style="text-align:center;color:#888;margin-bottom:25px">
+          Acesso administrativo
+        </div>
+
+        <input
+          id="loginEmail"
+          type="email"
+          placeholder="E-mail"
+          style="width:100%;box-sizing:border-box;padding:14px;margin-bottom:12px;background:#181818;border:1px solid #333;border-radius:8px;color:#fff"
+        >
+
+        <input
+          id="loginPassword"
+          type="password"
+          placeholder="Senha"
+          style="width:100%;box-sizing:border-box;padding:14px;margin-bottom:15px;background:#181818;border:1px solid #333;border-radius:8px;color:#fff"
+        >
+
+        <button
+          onclick="entrarSupabase()"
+          style="width:100%;padding:14px;background:#d4af37;border:0;border-radius:8px;font-weight:bold;cursor:pointer"
+        >
+          ENTRAR
+        </button>
+
+        <div id="loginMensagem" style="text-align:center;color:#aaa;margin-top:15px;font-size:13px"></div>
+      </div>
+    </div>
+  `;
+}
+
+async function entrarSupabase() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const mensagem = document.getElementById('loginMensagem');
+
+  if (!email || !password) {
+    mensagem.textContent = 'Digite o e-mail e a senha.';
+    return;
+  }
+
+  mensagem.textContent = 'Entrando...';
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    console.error(error);
+    mensagem.textContent = 'E-mail ou senha incorretos.';
+    return;
+  }
+
+  usuarioSupabase = data.user;
+  location.reload();
+}
+
+async function sairSupabase() {
+  await supabaseClient.auth.signOut();
+  location.reload();
+}
 </script>
 <body>
 <div class="header-mobile">
@@ -102,6 +191,7 @@ function save(){localStorage.setItem(KEY,JSON.stringify(db));}
 function uid(p){return p+'-'+Math.random().toString(36).slice(2,6).toUpperCase()+'-'+Date.now().toString().slice(-4);}
 function logA(u,a,r,d){db.logs.unshift({id:uid('LOG'),user:u,action:a,resource:r,details:d||'',createdAt:new Date().toISOString()}); save();}
 let db=load();
+  verificarLoginSupabase();
 let view='ai', search='', aiChat=[], modalHTML=null;
 
 function renderMenu(){
