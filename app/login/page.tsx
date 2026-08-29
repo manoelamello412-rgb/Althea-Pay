@@ -4,6 +4,15 @@ import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '../../lib/supabase/client'
 
+function friendlyAuthError(message: string) {
+  const text = message.toLowerCase()
+  if (text.includes('invalid login credentials')) return 'E-mail ou senha incorretos. Confira os dados e tente novamente.'
+  if (text.includes('email not confirmed')) return 'Seu e-mail ainda não foi confirmado. Confira sua caixa de entrada ou solicite um novo e-mail de confirmação.'
+  if (text.includes('rate limit') || text.includes('too many requests')) return 'Muitas tentativas foram feitas. Aguarde alguns minutos antes de tentar novamente.'
+  if (text.includes('password')) return 'A senha informada não é válida.'
+  return message
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const supabase = createSupabaseBrowserClient()
@@ -17,20 +26,35 @@ export default function LoginPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
-    setMessage('')
-    if (!supabase) {
-      setError('O ALTHEA PAY ainda não está conectado ao Supabase neste ambiente.')
-      return
-    }
+    setError(''); setMessage('')
+    if (!supabase) { setError('O ALTHEA PAY ainda não está conectado ao Supabase neste ambiente.'); return }
     setLoading(true)
-    const result = mode === 'login'
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } })
-    if (result.error) setError(result.error.message)
-    else if (mode === 'signup' && !result.data.session) setMessage('Cadastro criado. Confirme seu e-mail para entrar no ALTHEA PAY.')
-    else { router.replace('/'); router.refresh() }
-    setLoading(false)
+    try {
+      if (mode === 'login') {
+        const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+        if (error) throw error
+        if (!data.session) { setError('Não foi possível criar sua sessão. Tente novamente.'); return }
+        setMessage('Login realizado. Abrindo seu painel...')
+        router.replace('/')
+        router.refresh()
+      } else {
+        if (password.length < 6) { setError('A senha precisa ter pelo menos 6 caracteres.'); return }
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(), password,
+          options: { data: { full_name: fullName.trim() } },
+        })
+        if (error) throw error
+        if (data.session) {
+          setMessage('Conta criada e acesso liberado. Abrindo seu painel...')
+          router.replace('/')
+          router.refresh()
+        } else {
+          setMessage('Conta criada. Se a confirmação por e-mail estiver ativada, será necessário confirmar o endereço antes de entrar. O envio depende do serviço de e-mail configurado no Supabase.')
+        }
+      }
+    } catch (err) {
+      setError(friendlyAuthError(err instanceof Error ? err.message : 'Não foi possível concluir a operação.'))
+    } finally { setLoading(false) }
   }
 
   return (
@@ -46,11 +70,7 @@ export default function LoginPage() {
           {mode === 'signup' && <label>Nome<input value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" required /></label>}
           <label>E-mail<input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required /></label>
           <label>Senha<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} required /></label>
-          {mode === 'login' && (
-            <button type="button" className="auth-switch auth-forgot" onClick={() => router.push('/forgot-password')}>
-              Esqueci minha senha
-            </button>
-          )}
+          {mode === 'login' && <button type="button" className="auth-switch auth-forgot" onClick={() => router.push('/forgot-password')}>Esqueci minha senha</button>}
           {error && <div className="auth-error" role="alert">{error}</div>}
           {message && <div className="auth-message" role="status">{message}</div>}
           <button className="primary auth-submit" type="submit" disabled={loading}>{loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar conta'}</button>
