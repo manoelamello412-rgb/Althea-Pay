@@ -6,8 +6,6 @@ export async function proxy(request: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   const isLogin = request.nextUrl.pathname === '/login'
 
-  // Never crash the whole app when deployment variables are missing.
-  // The login page can render a clear configuration error instead.
   if (!url || !key) {
     if (isLogin) return NextResponse.next()
     const target = request.nextUrl.clone()
@@ -17,12 +15,9 @@ export async function proxy(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request })
-
   const supabase = createServerClient(url, key, {
     cookies: {
-      getAll() {
-        return request.cookies.getAll()
-      },
+      getAll() { return request.cookies.getAll() },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
         response = NextResponse.next({ request })
@@ -31,8 +26,8 @@ export async function proxy(request: NextRequest) {
     },
   })
 
-  const { data: { claims } } = await supabase.auth.getClaims()
-  const isAuthenticated = Boolean(claims)
+  const { data: claimsData } = await supabase.auth.getClaims()
+  const isAuthenticated = Boolean(claimsData)
 
   if (!isAuthenticated && !isLogin) {
     const target = request.nextUrl.clone()
@@ -41,15 +36,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(target)
   }
 
-  if (isAuthenticated && isLogin) {
-    return NextResponse.redirect(new URL('/', request.url))
-  }
-
+  if (isAuthenticated && isLogin) return NextResponse.redirect(new URL('/', request.url))
   return response
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }
