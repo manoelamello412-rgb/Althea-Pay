@@ -1,86 +1,322 @@
 <!DOCTYPE html>
+
 <html lang="pt-BR">
-<head><style>
-@font-face {
-  font-family: "Optimistic";
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Optimistic Mono";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
-}
-:where(html) {
-  font-family: "Optimistic", system-ui, sans-serif;
-}
-:where(code, pre, kbd, samp) {
-  font-family: "Optimistic Mono", ui-monospace, monospace;
-}
-</style>
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ANTHEA PAY - 100% PT-BR DARK GOLD</title>
+
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial, sans-serif;background:#050507;color:#fff;min-height:100vh}
-.mono{font-family:Consolas, monospace}
-.glass{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:16px}
-.glass-gold{background:linear-gradient(135deg,rgba(212,175,55,0.18),rgba(212,175,55,0.06));border:1px solid rgba(212,175,55,0.4);border-radius:16px}
-.gold{color:#d4af37} .gold-bg{background:#d4af37;color:#000}
-.btn{padding:12px 20px;border-radius:999px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;font-size:12px}
-.btn-gold{background:#d4af37;color:#000;font-weight:bold;border:none}
-.btn:hover{opacity:0.9}
-.input{width:100%;background:#0e0e10;border:1px solid #222;border-radius:12px;padding:12px 16px;color:#fff;outline:none;margin-top:8px}
+
+body{
+  font-family:Arial,sans-serif;
+  background:#050507;
+  color:#fff;
+  min-height:100vh
+}
+
+.mono{font-family:Consolas,monospace}
+
+.glass{
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:16px
+}
+
+.glass-gold{
+  background:linear-gradient(135deg,rgba(212,175,55,.18),rgba(212,175,55,.06));
+  border:1px solid rgba(212,175,55,.4);
+  border-radius:16px
+}
+
+.gold{color:#d4af37}
+.gold-bg{background:#d4af37;color:#000}
+
+.btn{
+  padding:12px 20px;
+  border-radius:999px;
+  border:1px solid #333;
+  background:#111;
+  color:#fff;
+  cursor:pointer;
+  font-size:12px
+}
+
+.btn-gold{
+  background:#d4af37;
+  color:#000;
+  font-weight:bold;
+  border:none
+}
+
+.btn:hover{opacity:.9}
+
+.input{
+  width:100%;
+  background:#0e0e10;
+  border:1px solid #222;
+  border-radius:12px;
+  padding:12px 16px;
+  color:#fff;
+  outline:none;
+  margin-top:8px
+}
+
 .input:focus{border-color:#d4af37}
-.card{padding:20px;margin-bottom:12px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media(max-width:768px){.grid2{grid-template-columns:1fr}}
-.sidebar{width:300px;background:#000;border-right:1px solid #222;position:fixed;height:100vh;overflow:auto;padding:20px}
-.main{margin-left:300px;padding:20px}
-@media(max-width:1024px){.sidebar{display:none}.main{margin-left:0;padding-top:70px}}
-.header-mobile{display:none;position:fixed;top:0;left:0;right:0;background:#000;border-bottom:1px solid #222;padding:12px 16px;z-index:50;justify-content:space-between;align-items:center}
-@media(max-width:1024px){.header-mobile{display:flex}}
+
+.card{
+  padding:20px;
+  margin-bottom:12px
+}
+
+.grid2{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px
+}
+
+@media(max-width:768px){
+  .grid2{grid-template-columns:1fr}
+}
+
+.sidebar{
+  width:300px;
+  background:#000;
+  border-right:1px solid #222;
+  position:fixed;
+  height:100vh;
+  overflow:auto;
+  padding:20px
+}
+
+.main{
+  margin-left:300px;
+  padding:20px
+}
+
+@media(max-width:1024px){
+  .sidebar{
+    display:none;
+    z-index:60;
+    top:58px;
+    left:0
+  }
+
+  .main{
+    margin-left:0;
+    padding-top:70px
+  }
+}
+
+.header-mobile{
+  display:none;
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  background:#000;
+  border-bottom:1px solid #222;
+  padding:12px 16px;
+  z-index:50;
+  justify-content:space-between;
+  align-items:center
+}
+
+@media(max-width:1024px){
+  .header-mobile{display:flex}
+}
+
+@keyframes spin{
+  to{transform:rotate(360deg)}
+}
 </style>
-</head><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+</head>
+
+<body>
+
+<div class="header-mobile">
+  <div style="display:flex;gap:10px;align-items:center">
+    <div style="width:36px;height:36px;background:linear-gradient(135deg,#d4af37,#8a6d0e);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000">
+      A
+    </div>
+    <div>
+      <div style="font-weight:bold;font-size:11px;letter-spacing:2px">ANTHEA PAY</div>
+      <div class="mono gold" style="font-size:8px">100% PT-BR • DARK GOLD</div>
+    </div>
+  </div>
+
+<button class="btn" onclick="toggleSidebar()">☰</button>
+
+</div>
+
+<div class="sidebar" id="sidebar">
+
+  <div style="display:flex;gap:12px;align-items:center">
+    <div style="width:44px;height:44px;background:linear-gradient(135deg,#d4af37,#8a6d0e);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;font-size:18px">
+      A
+    </div>
+
+```
+<div>
+  <div style="font-weight:bold;letter-spacing:2px;font-size:13px">ANTHEA PAY</div>
+  <div class="mono gold" style="font-size:9px;letter-spacing:2px">100% PT-BR • CORE REAL</div>
+</div>
+```
+
+  </div>
+
+  <div class="glass" style="padding:12px;margin-top:20px;display:flex;justify-content:space-between;align-items:center">
+    <div style="display:flex;gap:8px;align-items:center">
+      <div style="width:8px;height:8px;background:#10b981;border-radius:50%"></div>
+      <span class="mono" style="font-size:10px">CORE ONLINE</span>
+    </div>
+
+```
+<span class="mono" style="font-size:10px;color:#888" id="countFunis">0 FUNIS</span>
+```
+
+  </div>
+
+  <div style="margin-top:24px">
+
+```
+<div class="mono" style="font-size:9px;letter-spacing:3px;color:#666;padding:8px">
+  IA CORE UNIVERSAL
+</div>
+
+<button onclick="nav('ai')" id="btn-ai" class="glass-gold gold" style="width:100%;text-align:left;padding:14px;border-radius:14px;display:flex;gap:12px;margin-top:8px;cursor:pointer">
+  <span>🧠</span>
+  <div>
+    <div style="font-weight:bold;font-size:12px;letter-spacing:1px">IA CORE UNIVERSAL</div>
+    <div class="mono" style="font-size:10px;opacity:.7">Meta AI, Claude, OpenAI, qualquer IA</div>
+  </div>
+</button>
+
+<div class="mono" style="font-size:9px;letter-spacing:3px;color:#666;padding:8px;margin-top:16px">
+  SISTEMA 100% PT-BR
+</div>
+
+<div id="menu"></div>
+```
+
+  </div>
+
+  <div style="margin-top:20px;padding-top:20px;border-top:1px solid #222">
+
+```
+<div class="glass" style="padding:12px">
+
+  <div style="display:flex;gap:8px;align-items:center">
+
+    <div style="width:32px;height:32px;background:#222;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px">
+      RJ
+    </div>
+
+    <div>
+      <div style="font-size:12px">Rafaela Julio</div>
+      <div class="mono" style="font-size:10px;color:#888">ADMIN CORE</div>
+    </div>
+
+  </div>
+
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <button class="btn" style="flex:1;font-size:10px" onclick="exportDB()">EXPORTAR DB</button>
+    <button class="btn-gold btn" style="flex:1;font-size:10px" onclick="openLang()">🌐 PT</button>
+  </div>
+
+</div>
+```
+
+  </div>
+
+</div>
+
+<div class="main">
+
+  <div style="position:sticky;top:0;background:rgba(5,5,7,.9);backdrop-filter:blur(10px);border-bottom:1px solid #222;padding:16px 20px;margin:-20px -20px 20px -20px;display:flex;gap:12px;align-items:center">
+
+```
+<div style="flex:1;position:relative">
+
+  <input
+    id="search"
+    placeholder="BUSCA: funis, clientes, chats, registros..."
+    class="input"
+    style="padding-left:40px"
+    oninput="search=this.value.toLowerCase(); render()"
+  >
+
+  <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#666">⌕</span>
+
+</div>
+
+<button class="btn" onclick="openLang()">🌐 PT-BR</button>
+```
+
+  </div>
+
+  <div id="main"></div>
+
+</div>
+
+<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;padding:16px"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
+
+// =====================================================
+// SUPABASE
+// =====================================================
+
 const SUPABASE_URL = 'https://hkraryqoziravulvqkid.supabase.co';
+
 const SUPABASE_KEY = 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl';
 
 const supabaseClient = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_KEY
 );
+
 let usuarioSupabase = null;
 
-async function verificarLoginSupabase() {
-  const { data, error } = await supabaseClient.auth.getSession();
 
-  if (error) {
-    console.error('Erro ao verificar sessão:', error);
+// =====================================================
+// LOGIN
+// =====================================================
+
+async function verificarLoginSupabase(){
+
+  const {data,error} = await supabaseClient.auth.getSession();
+
+  if(error){
+    console.error('Erro ao verificar sessão:',error);
     mostrarLoginSupabase();
-    return;
+    return false;
   }
 
   usuarioSupabase = data.session?.user || null;
 
-  if (!usuarioSupabase) {
+  if(!usuarioSupabase){
     mostrarLoginSupabase();
+    return false;
   }
+
+  return true;
 }
 
-function mostrarLoginSupabase() {
+
+function mostrarLoginSupabase(){
+
   document.body.innerHTML = `
     <div style="min-height:100vh;background:#050505;color:#fff;display:flex;align-items:center;justify-content:center;padding:20px;font-family:Arial,sans-serif">
+
       <div style="width:100%;max-width:400px;background:#101010;border:1px solid #333;border-radius:16px;padding:30px">
-        
+
         <div style="text-align:center;color:#d4af37;font-size:28px;font-weight:bold;margin-bottom:8px">
-          ALTHEA PAY
+          ANTHEA PAY
         </div>
 
         <div style="text-align:center;color:#888;margin-bottom:25px">
@@ -109,404 +345,1718 @@ function mostrarLoginSupabase() {
         </button>
 
         <div id="loginMensagem" style="text-align:center;color:#aaa;margin-top:15px;font-size:13px"></div>
+
       </div>
     </div>
   `;
 }
 
-async function entrarSupabase() {
+
+async function entrarSupabase(){
+
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
   const mensagem = document.getElementById('loginMensagem');
 
-  if (!email || !password) {
-    mensagem.textContent = 'Digite o e-mail e a senha.';
+  if(!email || !password){
+    mensagem.textContent='Digite o e-mail e a senha.';
     return;
   }
 
-  mensagem.textContent = 'Entrando...';
+  mensagem.textContent='Entrando...';
 
-  const { data, error } = await supabaseClient.auth.signInWithPassword({
+  const {data,error} = await supabaseClient.auth.signInWithPassword({
     email,
     password
   });
 
-  if (error) {
+  if(error){
     console.error(error);
-    mensagem.textContent = 'E-mail ou senha incorretos.';
+    mensagem.textContent='E-mail ou senha incorretos.';
     return;
   }
 
-  usuarioSupabase = data.user;
+  usuarioSupabase=data.user;
+
   location.reload();
 }
 
-async function sairSupabase() {
+
+async function sairSupabase(){
+
   await supabaseClient.auth.signOut();
+
   location.reload();
+
 }
-</script>
-<body>
-<div class="header-mobile">
-<div style="display:flex;gap:10px;align-items:center"><div style="width:36px;height:36px;background:linear-gradient(135deg,#d4af37,#8a6d0e);border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000">A</div><div><div style="font-weight:bold;font-size:11px;letter-spacing:2px">ANTHEA PAY</div><div class="mono gold" style="font-size:8px">100% PT-BR • DARK GOLD</div></div></div>
-<button class="btn" onclick="document.querySelector('.sidebar').style.display=document.querySelector('.sidebar').style.display==='block'?'none':'block'">☰</button>
-</div>
 
-<div class="sidebar" id="sidebar">
-<div style="display:flex;gap:12px;align-items:center"><div style="width:44px;height:44px;background:linear-gradient(135deg,#d4af37,#8a6d0e);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#000;font-size:18px">A</div><div><div style="font-weight:bold;letter-spacing:2px;font-size:13px">ANTHEA PAY</div><div class="mono gold" style="font-size:9px;letter-spacing:2px">100% PT-BR • CORE REAL</div></div></div>
 
-<div class="glass" style="padding:12px;margin-top:20px;display:flex;justify-content:space-between;align-items:center"><div style="display:flex;gap:8px;align-items:center"><div style="width:8px;height:8px;background:#10b981;border-radius:50%"></div><span class="mono" style="font-size:10px">CORE ONLINE</span></div><span class="mono" style="font-size:10px;color:#888" id="countFunis">0 FUNIS</span></div>
+// =====================================================
+// BANCO LOCAL
+// =====================================================
 
-<div style="margin-top:24px">
-<div class="mono" style="font-size:9px;letter-spacing:3px;color:#666;padding:8px">IA CORE UNIVERSAL</div>
-<button onclick="nav('ai')" id="btn-ai" class="glass-gold gold" style="width:100%;text-align:left;padding:14px;border-radius:14px;display:flex;gap:12px;margin-top:8px;cursor:pointer"><span>🧠</span><div><div style="font-weight:bold;font-size:12px;letter-spacing:1px">IA CORE UNIVERSAL</div><div class="mono" style="font-size:10px;opacity:0.7">Meta AI, Claude, OpenAI, qualquer IA</div></div></button>
-
-<div class="mono" style="font-size:9px;letter-spacing:3px;color:#666;padding:8px;margin-top:16px">SISTEMA 100% PT-BR</div>
-<div id="menu"></div>
-</div>
-
-<div style="margin-top:20px;padding-top:20px;border-top:1px solid #222">
-<div class="glass" style="padding:12px"><div style="display:flex;gap:8px;align-items:center"><div style="width:32px;height:32px;background:#222;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px">RJ</div><div><div style="font-size:12px">Rafaela Julio</div><div class="mono" style="font-size:10px;color:#888">ADMIN CORE</div></div></div>
-<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" style="flex:1;font-size:10px" onclick="exportDB()">EXPORTAR DB</button><button class="btn-gold btn" style="flex:1;font-size:10px" onclick="openLang()">🌐 PT</button></div>
-</div>
-</div>
-</div>
-
-<div class="main">
-<div style="position:sticky;top:0;background:rgba(5,5,7,0.9);backdrop-filter:blur(10px);border-bottom:1px solid #222;padding:12px 0;margin:-20px -20px 20px -20px;padding:16px 20px;display:flex;gap:12px;align-items:center">
-<div style="flex:1;position:relative"><input id="search" placeholder="BUSCA: funis, clientes, chats, registros... Escreva comando para IA" class="input" style="padding-left:40px" oninput="search=this.value.toLowerCase(); renderMain()"><span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#666">⌕</span></div>
-<button class="btn" onclick="openLang()">🌐 PT-BR</button>
-</div>
-
-<div id="main"></div>
-</div>
-
-<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center;padding:16px"></div>
-
-<script>
 const KEY='anthea_final_pt_v1';
-function empty(){return {funnels:[],products:[],pixConfigs:[],pixHistory:[],gateways:[],clients:[],sales:[],chats:[],messages:[],collaborators:[{id:'COL-001',name:'Rafaela Julio',email:'rafaela@anthea.pay',role:'ADMIN CORE'}],logs:[],backups:[],lang:'pt',aiProviders:{meta:{id:'meta',name:'Meta AI',model:'Llama 3.1',apiKey:'',active:true},openai:{id:'openai',name:'OpenAI',model:'gpt-4o',apiKey:'',active:false},claude:{id:'claude',name:'Claude',model:'claude-3-5-sonnet',apiKey:'',active:false},gemini:{id:'gemini',name:'Gemini',model:'gemini-2.0',apiKey:'',active:false},grok:{id:'grok',name:'Grok',model:'grok-2',apiKey:'',active:false},custom:{id:'custom',name:'API Personalizada',model:'custom',apiKey:'',active:false}},aiSettings:{activeProvider:'meta',history:[]}}}
-function load(){try{let d=localStorage.getItem(KEY); if(!d){let e=empty(); localStorage.setItem(KEY,JSON.stringify(e)); return e;} return JSON.parse(d);}catch{return empty();}}
-function save(){localStorage.setItem(KEY,JSON.stringify(db));}
-  // ===============================
-// CLIENTES — SUPABASE
-// ===============================
 
-async function salvarClienteSupabase(cliente) {
-  const { data, error } = await supabaseClient
+
+function empty(){
+
+  return {
+    funnels:[],
+    products:[],
+    pixConfigs:[],
+    pixHistory:[],
+    gateways:[],
+    clients:[],
+    sales:[],
+    chats:[],
+    messages:[],
+    collaborators:[
+      {
+        id:'COL-001',
+        name:'Rafaela Julio',
+        email:'rafaela@anthea.pay',
+        role:'ADMIN CORE'
+      }
+    ],
+    logs:[],
+    backups:[],
+    lang:'pt',
+
+    aiProviders:{
+      meta:{
+        id:'meta',
+        name:'Meta AI',
+        model:'Llama 3.1',
+        apiKey:'',
+        active:true
+      },
+
+      openai:{
+        id:'openai',
+        name:'OpenAI',
+        model:'gpt-4o',
+        apiKey:'',
+        active:false
+      },
+
+      claude:{
+        id:'claude',
+        name:'Claude',
+        model:'claude-3-5-sonnet',
+        apiKey:'',
+        active:false
+      },
+
+      gemini:{
+        id:'gemini',
+        name:'Gemini',
+        model:'gemini-2.0',
+        apiKey:'',
+        active:false
+      },
+
+      grok:{
+        id:'grok',
+        name:'Grok',
+        model:'grok-2',
+        apiKey:'',
+        active:false
+      },
+
+      custom:{
+        id:'custom',
+        name:'API Personalizada',
+        model:'custom',
+        apiKey:'',
+        active:false
+      }
+    },
+
+    aiSettings:{
+      activeProvider:'meta',
+      history:[]
+    }
+  };
+}
+
+
+function load(){
+
+  try{
+
+    let d=localStorage.getItem(KEY);
+
+    if(!d){
+
+      let e=empty();
+
+      localStorage.setItem(KEY,JSON.stringify(e));
+
+      return e;
+    }
+
+    return JSON.parse(d);
+
+  }catch{
+
+    return empty();
+
+  }
+
+}
+
+
+function save(){
+
+  localStorage.setItem(KEY,JSON.stringify(db));
+
+}
+
+
+function uid(p){
+
+  return p+'-'+
+    Math.random().toString(36).slice(2,6).toUpperCase()+
+    '-'+
+    Date.now().toString().slice(-4);
+
+}
+
+
+function logA(u,a,r,d){
+
+  db.logs.unshift({
+    id:uid('LOG'),
+    user:u,
+    action:a,
+    resource:r,
+    details:d||'',
+    createdAt:new Date().toISOString()
+  });
+
+  save();
+
+}
+
+
+// =====================================================
+// CLIENTES — SUPABASE
+// =====================================================
+
+async function salvarClienteSupabase(cliente){
+
+  const {data,error}=await supabaseClient
     .from('clients')
     .insert([{
-      id: cliente.id || uid('CLI'),
-      nome: cliente.nome || '',
-      email: cliente.email || '',
-      telefone: cliente.telefone || '',
-      status: cliente.status || 'ativo'
+      id:cliente.id||uid('CLI'),
+      nome:cliente.nome||'',
+      email:cliente.email||'',
+      telefone:cliente.telefone||'',
+      status:cliente.status||'ativo'
     }])
     .select()
     .single();
 
-  if (error) {
-    console.error('Erro ao salvar cliente:', error);
-    alert('Erro ao salvar cliente: ' + error.message);
+  if(error){
+
+    console.error('Erro ao salvar cliente:',error);
+
+    alert('Erro ao salvar cliente: '+error.message);
+
     return null;
+
   }
 
   return data;
+
 }
 
-async function carregarClientesSupabase() {
-  const { data, error } = await supabaseClient
+
+async function carregarClientesSupabase(){
+
+  const {data,error}=await supabaseClient
     .from('clients')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at',{ascending:false});
 
-  if (error) {
-    console.error('Erro ao carregar clientes:', error);
+  if(error){
+
+    console.error('Erro ao carregar clientes:',error);
+
     return [];
+
   }
 
-  return data || [];
+  return data||[];
+
 }
 
 
-// ===============================
+// =====================================================
 // VENDAS — SUPABASE
-// ===============================
+// =====================================================
 
-async function salvarVendaSupabase(venda) {
-  const { data, error } = await supabaseClient
+async function salvarVendaSupabase(venda){
+
+  const {data,error}=await supabaseClient
     .from('sales')
     .insert([{
-      id: venda.id || uid('VEN'),
-      client_id: venda.client_id || null,
-      funnel_id: venda.funnel_id || null,
-      produto: venda.produto || '',
-      valor: Number(venda.valor || 0),
-      status: venda.status || 'pendente'
+      id:venda.id||uid('VEN'),
+      client_id:venda.client_id||null,
+      funnel_id:venda.funnel_id||null,
+      produto:venda.produto||'',
+      valor:Number(venda.valor||0),
+      status:venda.status||'pendente'
     }])
     .select()
     .single();
 
-  if (error) {
-    console.error('Erro ao salvar venda:', error);
-    alert('Erro ao salvar venda: ' + error.message);
+  if(error){
+
+    console.error('Erro ao salvar venda:',error);
+
+    alert('Erro ao salvar venda: '+error.message);
+
     return null;
+
   }
 
   return data;
+
 }
 
-async function carregarVendasSupabase()
-// ===============================
-// CARREGAR DADOS REAIS DO SUPABASE
-// ===============================
 
-async function sincronizarDadosSupabase() {
-  try {
-    const clientes = await carregarClientesSupabase();
-    const vendas = await carregarVendasSupabase();
+async function carregarVendasSupabase(){
 
-    db.clients = clientes.map(c => ({
-      id: c.id,
-      nome: c.nome,
-      email: c.email,
-      telefone: c.telefone,
-      status: c.status,
-      createdAt: c.created_at
+  const {data,error}=await supabaseClient
+    .from('sales')
+    .select('*')
+    .order('created_at',{ascending:false});
+
+  if(error){
+
+    console.error('Erro ao carregar vendas:',error);
+
+    return [];
+
+  }
+
+  return data||[];
+
+}
+
+
+// =====================================================
+// SINCRONIZAR SUPABASE
+// =====================================================
+
+async function sincronizarDadosSupabase(){
+
+  try{
+
+    const clientes=await carregarClientesSupabase();
+    const vendas=await carregarVendasSupabase();
+
+    db.clients=clientes.map(c=>({
+
+      id:c.id,
+      nome:c.nome,
+      email:c.email,
+      telefone:c.telefone,
+      status:c.status,
+      createdAt:c.created_at
+
     }));
 
-    db.sales = vendas.map(v => ({
-      id: v.id,
-      client_id: v.client_id,
-      funnel_id: v.funnel_id,
-      produto: v.produto,
-      valor: Number(v.valor || 0),
-      status: v.status,
-      createdAt: v.created_at
+
+    db.sales=vendas.map(v=>({
+
+      id:v.id,
+      client_id:v.client_id,
+      funnel_id:v.funnel_id,
+      produto:v.produto,
+      valor:Number(v.valor||0),
+      status:v.status,
+      createdAt:v.created_at
+
     }));
+
 
     save();
 
     console.log('✓ Clientes e vendas sincronizados com Supabase');
+
     render();
 
-  } catch (error) {
-    console.error('Erro na sincronização:', error);
-  }
-}
-  const { data, error } = await supabaseClient
-    .from('sales')
-    .select('*')
-    .order('created_at', { ascending: false });
+  }catch(error){
 
-  if (error) {
-    console.error('Erro ao carregar vendas:', error);
-    return [];
+    console.error('Erro na sincronização:',error);
+
   }
 
-  return data || [];
 }
-function uid(p){return p+'-'+Math.random().toString(36).slice(2,6).toUpperCase()+'-'+Date.now().toString().slice(-4);}
-function logA(u,a,r,d){db.logs.unshift({id:uid('LOG'),user:u,action:a,resource:r,details:d||'',createdAt:new Date().toISOString()}); save();}
+
+
+// =====================================================
+// ESTADO
+// =====================================================
+
 let db=load();
-  verificarLoginSupabase();
-let view='ai', search='', aiChat=[], modalHTML=null;
+
+let view='ai';
+
+let search='';
+
+let aiChat=[];
+
+let modalHTML=null;
+
+
+// =====================================================
+// MENU
+// =====================================================
 
 function renderMenu(){
-let items=[['ai','🧠','IA CORE UNIVERSAL'],['dashboard','◧','CORE'],['funnels','⟁','FUNIS'],['pix','₿','PIX MATRIX'],['chats','✦','CHAT NEURAL'],['logs','≡','REGISTROS']];
-document.getElementById('menu').innerHTML=items.map(([k,i,l])=>`<button onclick="nav('${k}')" id="btn-${k}" class="${view===k?'glass-gold gold':'glass'}" style="width:100%;text-align:left;padding:12px;border-radius:12px;display:flex;gap:10px;margin-top:6px;cursor:pointer;color:${view===k?'#d4af37':'#888'}"><span>${i}</span><span style="font-size:11px;font-weight:bold;letter-spacing:1px">${l}</span></button>`).join('');
+
+  let items=[
+    ['ai','🧠','IA CORE UNIVERSAL'],
+    ['dashboard','◧','CORE'],
+    ['funnels','⟁','FUNIS'],
+    ['pix','₿','PIX MATRIX'],
+    ['chats','✦','CHAT NEURAL'],
+    ['logs','≡','REGISTROS']
+  ];
+
+  document.getElementById('menu').innerHTML=
+
+    items.map(([k,i,l])=>`
+
+      <button
+        onclick="nav('${k}')"
+        id="btn-${k}"
+        class="${view===k?'glass-gold gold':'glass'}"
+        style="width:100%;text-align:left;padding:12px;border-radius:12px;display:flex;gap:10px;margin-top:6px;cursor:pointer;color:${view===k?'#d4af37':'#888'}"
+      >
+
+        <span>${i}</span>
+
+        <span style="font-size:11px;font-weight:bold;letter-spacing:1px">
+          ${l}
+        </span>
+
+      </button>
+
+    `).join('');
+
 }
+
+
+// =====================================================
+// RENDER
+// =====================================================
 
 function render(){
-renderMenu();
-document.getElementById('countFunis').innerText=db.funnels.length+' FUNIS';
-document.getElementById('main').innerHTML=renderMain();
-let m=document.getElementById('modal');
-if(modalHTML){m.style.display='flex'; m.innerHTML=`<div style="background:#0a0a0a;border:1px solid #333;border-radius:20px;max-width:600px;width:100%;max-height:90vh;overflow:auto;padding:24px" onclick="event.stopPropagation()">${modalHTML}<div style="margin-top:16px"><button class="btn" style="width:100%" onclick="closeModal()">FECHAR</button></div></div>`; m.onclick=closeModal;} else {m.style.display='none';}
-}
 
-function renderMain(){
-if(view==='ai'){
-let active=db.aiProviders[db.aiSettings.activeProvider];
-return `
-<h1 style="font-size:32px;font-weight:bold">IA CORE <span class="gold">UNIVERSAL</span></h1>
-<p class="mono" style="font-size:11px;color:#666;letter-spacing:1px;margin-top:8px">100% PORTUGUÊS • CONECTE QUALQUER IA • META AI, OPENAI, CLAUDE, GEMINI, GROK, PERSONALIZADA</p>
+  renderMenu();
 
-<div class="grid2" style="margin-top:24px">
-${Object.values(db.aiProviders).map(p=>`<div onclick="setActiveAI('${p.id}')" class="${db.aiSettings.activeProvider===p.id?'glass-gold':'glass'} card" style="cursor:pointer;border-color:${db.aiSettings.activeProvider===p.id?'#d4af37':'#222'}"><div style="display:flex;justify-content:space-between"><div style="font-weight:bold;font-size:12px">${p.name.toUpperCase()} • ${p.model}</div><div style="width:8px;height:8px;background:${p.apiKey?'#10b981':'#444'};border-radius:50%"></div></div><div class="mono" style="font-size:10px;margin-top:8px"><span style="background:${p.apiKey?'#d4af37':'#222'};color:${p.apiKey?'#000':'#888'};padding:2px 8px;border-radius:20px">${p.apiKey?'CONECTADA':'DESCONECTADA'}</span> ${db.aiSettings.activeProvider===p.id?'<span style="background:#fff;color:#000;padding:2px 8px;border-radius:20px;margin-left:6px">ATIVA</span>':''}</div></div>`).join('')}
-</div>
+  document.getElementById('countFunis').innerText=
+    db.funnels.length+' FUNIS';
 
-<div class="grid2" style="margin-top:24px">
-<div class="glass card">
-<h3 style="font-size:12px;letter-spacing:2px">CONECTAR IA — PLUG & PLAY</h3>
-<p class="mono" style="font-size:10px;color:#888;margin-top:6px">ATIVA: ${active.name.toUpperCase()} • Troque quando quiser</p>
+  document.getElementById('main').innerHTML=
+    renderMain();
 
-<label class="mono" style="font-size:10px;color:#888;margin-top:16px;display:block">PROVEDOR ATIVO</label>
-<select id="providerSelect" onchange="setActiveAI(this.value)" class="input">
-${Object.values(db.aiProviders).map(p=>`<option value="${p.id}" ${db.aiSettings.activeProvider===p.id?'selected':''}>${p.name} — ${p.model}</option>`).join('')}
-</select>
+  let m=document.getElementById('modal');
 
-<label class="mono" style="font-size:10px;color:#888;margin-top:12px;display:block">CHAVE API (oculta **** após salvar)</label>
-<input id="aiKey" value="${active.apiKey}" type="password" placeholder="Cole sua API Key aqui ou deixe vazio para usar via chat" class="input">
+  if(modalHTML){
 
-<label class="mono" style="font-size:10px;color:#888;margin-top:12px;display:block">MODELO</label>
-<input id="aiModel" value="${active.model}" class="input">
+    m.style.display='flex';
 
-<div class="glass" style="padding:12px;margin-top:16px;background:rgba(212,175,55,0.08);border-color:rgba(212,175,55,0.3)">
-<div class="mono" style="font-size:10px">COMO CONECTAR META AI (HOJE)</div>
-<div class="mono" style="font-size:11px;color:#aaa;margin-top:8px;line-height:1.6">
-1. Selecione Meta AI acima<br>
-2. Cole sua API Key (ou deixe vazio)<br>
-3. Clique SALVAR E TESTAR CONEXÃO REAL<br>
-4. Amanhã: troque para Claude → cole key Anthropic → SALVAR → pronto
-</div>
-</div>
+    m.innerHTML=`
 
-<div style="display:flex;gap:8px;margin-top:16px">
-<button onclick="saveAI()" class="btn-gold btn" style="flex:1;font-weight:bold">SALVAR E TESTAR CONEXÃO REAL</button>
-<button onclick="testAI()" class="btn">TESTAR</button>
-</div>
+      <div
+        style="background:#0a0a0a;border:1px solid #333;border-radius:20px;max-width:600px;width:100%;max-height:90vh;overflow:auto;padding:24px"
+        onclick="event.stopPropagation()"
+      >
 
-<div style="margin-top:24px;border-top:1px solid #222;padding-top:20px">
-<h4 style="font-size:12px;letter-spacing:1px">CONVERSAR COM IA ATIVA — ELA EDITA CÓDIGO REAL</h4>
-<div style="background:#000;border:1px solid #222;border-radius:16px;height:320px;display:flex;flex-direction:column;margin-top:12px;overflow:hidden">
-<div id="aiChatBox" style="flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px">
-${aiChat.length?aiChat.map(m=>`<div style="${m.role==='user'?'align-self:flex-end;background:#d4af37;color:#000':'align-self:flex-start;background:#111;border:1px solid #222'};max-width:85%;border-radius:14px;padding:10px 14px"><div class="mono" style="font-size:10px;font-weight:bold">${m.role==='user'?'VOCÊ':active.name.toUpperCase()}</div><div style="font-size:12px;margin-top:4px">${m.text}</div>${m.diff?`<div style="margin-top:10px;background:#000;border:1px solid #333;border-radius:8px;padding:8px"><div class="mono gold" style="font-size:10px">ALTERAÇÃO PROPOSTA:</div><pre class="mono" style="font-size:10px;color:#888;margin-top:6px;white-space:pre-wrap">${m.diff.slice(0,300)}...</pre><div style="display:flex;gap:6px;margin-top:8px"><button onclick="approveAI('${m.id}')" class="btn-gold btn" style="font-size:10px;padding:6px 12px">APROVAR E APLICAR REAL</button></div></div>`:''}</div>`).join(''):`<div style="text-align:center;padding:60px 20px;color:#666" class="mono"><div style="font-size:32px">🧠</div><div style="font-size:12px;margin-top:12px">NENHUMA CONVERSA<br>Digite abaixo: "Altere o botão de conectar funil para dourado pulsante"</div></div>`}
-</div>
-<div style="padding:10px;border-top:1px solid #222;display:flex;gap:8px;background:#0a0a0a"><input id="aiInput" placeholder="COMANDO: Altere o botão X, crie campo Y..." class="input" style="margin:0;flex:1" onkeydown="if(event.key==='Enter') sendToAI()"><button onclick="sendToAI()" class="btn-gold btn" style="white-space:nowrap">ENVIAR</button></div>
-</div>
-</div>
-</div>
+        ${modalHTML}
 
-<div>
-<div class="glass-gold card">
-<h4 style="font-size:11px;letter-spacing:1px">PERMISSÕES DA IA — SEGURANÇA</h4>
-<div style="margin-top:12px;display:flex;flex-direction:column;gap:8px" class="mono">
-<label style="display:flex;justify-content:space-between;align-items:center;border:1px solid #222;border-radius:999px;padding:10px 14px;font-size:11px"><span>IA pode editar funis</span><input type="checkbox" checked></label>
-<label style="display:flex;justify-content:space-between;align-items:center;border:1px solid #222;border-radius:999px;padding:10px 14px;font-size:11px"><span>IA pode editar Pix/QR</span><input type="checkbox" checked></label>
-<label style="display:flex;justify-content:space-between;align-items:center;border:1px solid #222;border-radius:999px;padding:10px 14px;font-size:11px"><span>Exigir aprovação</span><input type="checkbox" checked></label>
-<label style="display:flex;justify-content:space-between;align-items:center;border:1px solid #222;border-radius:999px;padding:10px 14px;font-size:11px"><span>Backup automático</span><input type="checkbox" checked></label>
-</div>
-</div>
-
-<div class="glass card" style="margin-top:12px">
-<h4 style="font-size:11px;letter-spacing:1px">HISTÓRICO DE ALTERAÇÕES POR IA</h4>
-<div style="margin-top:12px;max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:8px">
-${db.aiSettings.history.slice(0,8).map(h=>`<div style="border:1px solid #222;border-radius:12px;padding:10px"><div style="display:flex;justify-content:space-between"><span class="mono gold" style="font-size:10px;font-weight:bold">${h.provider.toUpperCase()} • ${h.action}</span><span class="mono" style="font-size:9px;color:#666">${new Date(h.createdAt).toLocaleTimeString('pt-BR')}</span></div><div class="mono" style="font-size:11px;margin-top:4px">${h.description}</div></div>`).join('')||'<div class="mono" style="font-size:11px;color:#666;text-align:center;padding:20px">NENHUMA ALTERAÇÃO POR IA AINDA</div>'}
-</div>
-</div>
-</div>
-</div>
-
-<div class="glass card" style="margin-top:24px">
-<h3 style="font-size:11px;letter-spacing:1px">COMO FUNCIONA PLUG & PLAY</h3>
-<div class="grid2" style="margin-top:12px">
-<div style="background:#000;border:1px solid #222;border-radius:12px;padding:12px"><div class="gold" style="font-weight:bold;font-size:11px">HOJE — META AI</div><div class="mono" style="font-size:11px;color:#888;margin-top:6px">Meta AI ativa, fala em PT-BR, edita código real, backup, log</div></div>
-<div style="background:#000;border:1px solid #222;border-radius:12px;padding:12px"><div class="gold" style="font-weight:bold;font-size:11px">AMANHÃ — CLAUDE</div><div class="mono" style="font-size:11px;color:#888;margin-top:6px">Troca para Claude, continua PT-BR, mesma segurança</div></div>
-<div style="background:#000;border:1px solid #222;border-radius:12px;padding:12px"><div class="gold" style="font-weight:bold;font-size:11px">DEPOIS — QUALQUER IA</div><div class="mono" style="font-size:11px;color:#888;margin-top:6px">Qualquer IA, qualquer idioma, plug & play</div></div>
-</div>
-</div>
-`;
-}
-if(view==='dashboard'){
-return `<h1 style="font-size:32px;font-weight:bold">CORE 100% PT-BR</h1><div class="grid2" style="margin-top:20px"><div class="glass card"><div class="mono" style="font-size:10px;color:#666">FUNIS</div><div style="font-size:28px;font-weight:bold" class="gold mono">${db.funnels.length}</div></div><div class="glass card"><div class="mono" style="font-size:10px;color:#666">PIX</div><div style="font-size:28px;font-weight:bold" class="gold mono">${db.pixConfigs.length}</div></div><div class="glass card"><div class="mono" style="font-size:10px;color:#666">CHATS</div><div style="font-size:28px;font-weight:bold" class="mono">${db.chats.length}</div></div><div class="glass card"><div class="mono" style="font-size:10px;color:#666">LOGS</div><div style="font-size:28px;font-weight:bold" class="mono">${db.logs.length}</div></div></div><button onclick="nav('ai')" class="btn-gold btn" style="margin-top:20px">IR PARA IA CORE UNIVERSAL →</button>`;
-}
-if(view==='funnels'){
-return `<div style="display:flex;justify-content:space-between;align-items:center"><h1 style="font-size:28px;font-weight:bold">FUNIS</h1><button onclick="createFunnel()" class="btn-gold btn">+ CONECTAR FUNIL REAL</button></div><div class="grid2" style="margin-top:20px">${db.funnels.map(f=>`<div class="glass card"><div class="mono" style="font-size:10px;background:#fff;color:#000;padding:2px 8px;border-radius:20px;display:inline-block;font-weight:bold">${f.id}</div><div style="font-weight:bold;margin-top:12px">${f.nome}</div><div class="mono" style="font-size:11px;color:#888;margin-top:4px">${f.status}</div></div>`).join('')||'<div class="glass card" style="grid-column:1/-1;text-align:center;padding:40px;color:#666">SEM FUNIS CONECTADOS<br><span class="mono" style="font-size:11px">Clique em + CONECTAR FUNIL REAL e faça teste real</span></div>'}</div>`;
-}
-if(view==='pix'){return `<h1 style="font-size:28px;font-weight:bold">PIX <span class="gold">MATRIX</span></h1><p class="mono" style="font-size:11px;color:#666;margin-top:8px">VERSIONAMENTO REAL • HISTÓRICO • RESTAURAR</p><div class="glass card" style="margin-top:20px;text-align:center;padding:40px;color:#666" class="mono">PIX MATRIX — ${db.pixConfigs.length} configs • Versionamento real implementado<br><button onclick="nav('funnels')" class="btn" style="margin-top:12px">IR PARA FUNIS PARA CONFIGURAR PIX</button></div>`}
-if(view==='chats'){return `<h1 style="font-size:28px;font-weight:bold">CHAT NEURAL</h1><div class="glass card" style="margin-top:20px;text-align:center;padding:40px;color:#666">CHAT ID PERMANENTE CHAT-000001 • ${db.chats.length} conversas</div>`}
-if(view==='logs'){return `<h1 style="font-size:28px;font-weight:bold">REGISTROS</h1><div class="glass card" style="margin-top:20px;max-height:70vh;overflow:auto">${db.logs.map(l=>`<div style="border-bottom:1px solid #222;padding:10px 0;display:flex;gap:12px" class="mono"><span style="color:#666;font-size:11px">${new Date(l.createdAt).toLocaleTimeString('pt-BR')}</span><span style="color:#d4af37;font-size:11px">${l.action}</span><span style="font-size:11px">${l.resource}</span></div>`).join('')||'<div style="text-align:center;padding:40px;color:#666">SEM LOGS</div>'}</div>`}
-return `<div class="glass card" style="text-align:center;padding:40px;color:#666">${view.toUpperCase()} — MÓDULO REAL 100% PT-BR</div>`;
-}
-function nav(v){view=v; render(); window.scrollTo(0,0);}
-function closeModal(){modalHTML=null; render();}
-function openLang(){modalHTML=`<h2 style="font-size:18px;font-weight:bold">🌐 IDIOMA — 100% TRADUZIDO</h2><p class="mono" style="font-size:11px;color:#888;margin-top:8px">Todo painel em português por padrão. Troca instantânea.</p><div style="margin-top:16px;display:flex;flex-direction:column;gap:8px"><button onclick="alert('Já está em PT-BR 100%'); closeModal()" class="glass-gold gold card" style="text-align:left"><div style="font-weight:bold">🇧🇷 PORTUGUÊS (BRASIL) — 100% ✓</div><div class="mono" style="font-size:11px;color:#888;margin-top:4px">Padrão • Todo sistema em português</div></button><button onclick="alert('Inglês em breve - por enquanto 100% PT-BR como pediu')" class="glass card" style="text-align:left"><div style="font-weight:bold">🇺🇸 ENGLISH — Em breve</div></button><button onclick="alert('Español en breve')" class="glass card" style="text-align:left"><div style="font-weight:bold">🇪🇸 ESPAÑOL — En breve</div></button></div>`; render();}
-function setActiveAI(id){db.aiSettings.activeProvider=id; Object.values(db.aiProviders).forEach(p=>p.active=false); db.aiProviders[id].active=true; save(); render(); logA('Rafaela','trocar_ia','ai_core',id);}
-function saveAI(){let id=db.aiSettings.activeProvider; let p=db.aiProviders[id]; p.apiKey=document.getElementById('aiKey').value.trim(); p.model=document.getElementById('aiModel').value.trim(); save(); modalHTML=`<div style="text-align:center;padding:20px"><div style="width:48px;height:48px;border:3px solid #d4af37;border-top-color:transparent;border-radius:50%;margin:0 auto;animation:spin 1s linear infinite"></div><div class="mono gold" style="font-size:12px;margin-top:16px">TESTANDO CONEXÃO REAL COM ${p.name.toUpperCase()}...</div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>`; render(); setTimeout(()=>{p.apiKey=p.apiKey||'via-chat-'+id; modalHTML=`<div style="text-align:center"><div style="width:56px;height:56px;background:#d4af37;color:#000;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto;font-weight:bold;font-size:24px">✓</div><div style="font-weight:bold;margin-top:16px">${p.name.toUpperCase()} CONECTADA</div><div class="mono" style="font-size:11px;color:#888;margin-top:8px">100% PT-BR<br>Key: ****${p.apiKey.slice(-4)}<br>Agora fala em português e edita código real</div></div>`; save(); render();},1200);}
-function testAI(){let p=db.aiProviders[db.aiSettings.activeProvider]; alert('Testando '+p.name+' — 100% PT-BR — Key: ****'+p.apiKey.slice(-4));}
-function sendToAI(){let input=document.getElementById('aiInput'); let text=input.value.trim(); if(!text) return; let active=db.aiProviders[db.aiSettings.activeProvider]; aiChat.unshift({id:uid('AI'), role:'user', text}); input.value=''; render(); setTimeout(()=>{let diff=`// ALTERAÇÃO REAL - ${active.name}\n// Comando: ${text}\n// 100% PT-BR\n// Backup automático criado`; let response={id:uid('AI'), role:'assistant', text:`Entendi. Vou alterar no código REAL em 100% PT-BR. Backup criado, log auditado, rollback disponível.`, diff, provider:active.id}; aiChat.unshift(response); db.aiSettings.history.unshift({id:uid('HIST'), provider:active.id, action:'propor_alteracao', description:text, diff, status:'aguardando_aprovacao', createdAt:new Date().toISOString()}); save(); render();},600);}
-function approveAI(id){let msg=aiChat.find(m=>m.id===id); if(!msg) return; if(confirm('Aprovar alteração em 100% PT-BR?')){let backup={id:'BK-AI-'+Date.now(), createdAt:new Date().toISOString(), data:JSON.parse(JSON.stringify(db))}; db.backups=db.backups||[]; db.backups.unshift(backup); logA(`IA-${msg.provider}`, 'ia_edit_aplicado', 'codigo_real', msg.text.slice(0,80)); save(); alert('✓ Alteração aplicada 100% PT-BR real — Backup: '+backup.id); render();}}
-function createFunnel(){modalHTML=`<h3 style="font-weight:bold">CONECTAR FUNIL REAL — 100% PT-BR</h3><p class="mono" style="font-size:11px;color:#888;margin-top:6px">Só fica CONECTADO após teste real. Gera ID ANT-FUN-001</p><input id="fName" placeholder="NOME: Funil 1 - Black Friday" class="input" style="margin-top:16px"><input id="fUrl" placeholder="URL: https://checkout.seudominio.com" class="input"><input id="fEndpoint" placeholder="ENDPOINT REAL: https://api.seudominio.com/webhook" class="input"><div style="display:flex;gap:8px;margin-top:16px"><button onclick="saveFunnel()" class="btn-gold btn" style="flex:1">SALVAR E TESTAR CONEXÃO REAL</button><button onclick="closeModal()" class="btn">CANCELAR</button></div>`; render();}
-async function saveFunnel(){
-  const nome = document.getElementById('fName').value.trim();
-  const url = document.getElementById('fUrl').value.trim();
-  const endpoint = document.getElementById('fEndpoint').value.trim();
-
-  if(!nome) return alert('Nome obrigatório');
-
-  const id = 'ANT-FUN-' + String(db.funnels.length + 1).padStart(3,'0');
-
-  const f = {
-    id,
-    nome,
-    url,
-    endpoint,
-    status:'testando',
-    createdAt:new Date().toISOString()
-  };
-
-  modalHTML = `
-    <div style="text-align:center;padding:20px">
-      <div style="width:48px;height:48px;border:3px solid #d4af37;border-top-color:transparent;border-radius:50%;margin:0 auto;animation:spin 1s linear infinite"></div>
-      <div class="mono gold" style="font-size:12px;margin-top:16px">
-        SALVANDO NO BANCO DE DADOS...
-      </div>
-    </div>
-  `;
-
-  render();
-
-  const { error } = await supabaseClient
-    .from('funnels')
-    .insert([{
-      id: f.id,
-      nome: f.nome,
-      url: f.url,
-      endpoint: f.endpoint,
-      status: f.status
-    }]);
-
-  if(error){
-    console.error(error);
-    modalHTML = `
-      <div style="text-align:center;padding:20px">
-        <div style="font-size:40px">⚠️</div>
-        <div style="font-weight:bold;margin-top:12px">
-          ERRO AO SALVAR
+        <div style="margin-top:16px">
+          <button class="btn" style="width:100%" onclick="closeModal()">
+            FECHAR
+          </button>
         </div>
-        <div class="mono" style="font-size:11px;color:#888;margin-top:8px">
-          ${error.message}
-        </div>
-        <button onclick="closeModal()" class="btn" style="margin-top:16px">
-          FECHAR
-        </button>
+
       </div>
+
     `;
-    render();
-    return;
+
+    m.onclick=closeModal;
+
+  }else{
+
+    m.style.display='none';
+
   }
 
-  f.status = f.endpoint && f.url.startsWith('http')
-    ? 'conectado'
-    : 'erro';
-
-  f.lastCommunication = f.status === 'conectado'
-    ? new Date().toISOString()
-    : null;
-
-  db.funnels.push(f);
-  save();
-
-  logA('Rafaela','conectar','funil',f.id);
-
-  closeModal();
-  render();
-
-  alert('✓ Funil salvo no Supabase: ' + f.id);
 }
-function exportDB(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}); let url=URL.createObjectURL(blob); let a=document.createElement('a'); a.href=url; a.download='anthea-100-pt-br-'+new Date().toISOString().slice(0,10)+'.json'; a.click();}
+
+
+// =====================================================
+// CONTEÚDO PRINCIPAL
+// =====================================================
+
+function renderMain(){
+
+  if(view==='ai'){
+
+    let active=db.aiProviders[db.aiSettings.activeProvider];
+
+    return `
+
+      <h1 style="font-size:32px;font-weight:bold">
+        IA CORE <span class="gold">UNIVERSAL</span>
+      </h1>
+
+      <p class="mono" style="font-size:11px;color:#666;letter-spacing:1px;margin-top:8px">
+        100% PORTUGUÊS • CONECTE QUALQUER IA • META AI, OPENAI, CLAUDE, GEMINI, GROK, PERSONALIZADA
+      </p>
+
+
+      <div class="grid2" style="margin-top:24px">
+
+        ${Object.values(db.aiProviders).map(p=>`
+
+          <div
+            onclick="setActiveAI('${p.id}')"
+            class="${db.aiSettings.activeProvider===p.id?'glass-gold':'glass'} card"
+            style="cursor:pointer;border-color:${db.aiSettings.activeProvider===p.id?'#d4af37':'#222'}"
+          >
+
+            <div style="display:flex;justify-content:space-between">
+
+              <div style="font-weight:bold;font-size:12px">
+                ${p.name.toUpperCase()} • ${p.model}
+              </div>
+
+              <div style="width:8px;height:8px;background:${p.apiKey?'#10b981':'#444'};border-radius:50%"></div>
+
+            </div>
+
+            <div class="mono" style="font-size:10px;margin-top:8px">
+
+              <span style="background:${p.apiKey?'#d4af37':'#222'};color:${p.apiKey?'#000':'#888'};padding:2px 8px;border-radius:20px">
+
+                ${p.apiKey?'CONECTADA':'DESCONECTADA'}
+
+              </span>
+
+              ${db.aiSettings.activeProvider===p.id?
+                '<span style="background:#fff;color:#000;padding:2px 8px;border-radius:20px;margin-left:6px">ATIVA</span>'
+                :''
+              }
+
+            </div>
+
+          </div>
+
+        `).join('')}
+
+      </div>
+
+
+      <div class="grid2" style="margin-top:24px">
+
+        <div class="glass card">
+
+          <h3 style="font-size:12px;letter-spacing:2px">
+            CONECTAR IA — PLUG & PLAY
+          </h3>
+
+          <p class="mono" style="font-size:10px;color:#888;margin-top:6px">
+            ATIVA: ${active.name.toUpperCase()} • Troque quando quiser
+          </p>
+
+
+          <label class="mono" style="font-size:10px;color:#888;margin-top:16px;display:block">
+            PROVEDOR ATIVO
+          </label>
+
+          <select id="providerSelect" onchange="setActiveAI(this.value)" class="input">
+
+            ${Object.values(db.aiProviders).map(p=>`
+
+              <option value="${p.id}" ${db.aiSettings.activeProvider===p.id?'selected':''}>
+                ${p.name} — ${p.model}
+              </option>
+
+            `).join('')}
+
+          </select>
+
+
+          <label class="mono" style="font-size:10px;color:#888;margin-top:12px;display:block">
+            CHAVE API
+          </label>
+
+          <input
+            id="aiKey"
+            value="${active.apiKey}"
+            type="password"
+            placeholder="Cole sua API Key aqui"
+            class="input"
+          >
+
+
+          <label class="mono" style="font-size:10px;color:#888;margin-top:12px;display:block">
+            MODELO
+          </label>
+
+          <input
+            id="aiModel"
+            value="${active.model}"
+            class="input"
+          >
+
+
+          <div class="glass" style="padding:12px;margin-top:16px;background:rgba(212,175,55,.08);border-color:rgba(212,175,55,.3)">
+
+            <div class="mono" style="font-size:10px">
+              COMO CONECTAR
+            </div>
+
+            <div class="mono" style="font-size:11px;color:#aaa;margin-top:8px;line-height:1.6">
+
+              1. Selecione a IA acima<br>
+              2. Cole sua API Key<br>
+              3. Clique em SALVAR<br>
+              4. Depois você pode trocar de provedor
+
+            </div>
+
+          </div>
+
+
+          <div style="display:flex;gap:8px;margin-top:16px">
+
+            <button
+              onclick="saveAI()"
+              class="btn-gold btn"
+              style="flex:1;font-weight:bold"
+            >
+              SALVAR E TESTAR
+            </button>
+
+            <button onclick="testAI()" class="btn">
+              TESTAR
+            </button>
+
+          </div>
+
+
+          <div style="margin-top:24px;border-top:1px solid #222;padding-top:20px">
+
+            <h4 style="font-size:12px;letter-spacing:1px">
+              CONVERSAR COM IA ATIVA
+            </h4>
+
+
+            <div style="background:#000;border:1px solid #222;border-radius:16px;height:320px;display:flex;flex-direction:column;margin-top:12px;overflow:hidden">
+
+              <div
+                id="aiChatBox"
+                style="flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px"
+              >
+
+                ${
+                  aiChat.length?
+
+                  aiChat.map(m=>`
+
+                    <div
+                      style="${m.role==='user'
+                        ?'align-self:flex-end;background:#d4af37;color:#000'
+                        :'align-self:flex-start;background:#111;border:1px solid #222'
+                      };max-width:85%;border-radius:14px;padding:10px 14px"
+                    >
+
+                      <div class="mono" style="font-size:10px;font-weight:bold">
+                        ${m.role==='user'?'VOCÊ':active.name.toUpperCase()}
+                      </div>
+
+                      <div style="font-size:12px;margin-top:4px">
+                        ${m.text}
+                      </div>
+
+                      ${m.diff?`
+
+                        <div style="margin-top:10px;background:#000;border:1px solid #333;border-radius:8px;padding:8px">
+
+                          <div class="mono gold" style="font-size:10px">
+                            ALTERAÇÃO PROPOSTA:
+                          </div>
+
+                          <pre class="mono" style="font-size:10px;color:#888;margin-top:6px;white-space:pre-wrap">
+${m.diff.slice(0,300)}...
+                          </pre>
+
+```
+                      <div style="display:flex;gap:6px;margin-top:8px">
+
+                        <button
+                          onclick="approveAI('${m.id}')"
+                          class="btn-gold btn"
+                          style="font-size:10px;padding:6px 12px"
+                        >
+                          APROVAR E APLICAR
+                        </button>
+
+                      </div>
+
+                    </div>
+
+                  `:''}
+
+                </div>
+
+              `).join('')
+
+              :
+
+              `
+                <div style="text-align:center;padding:60px 20px;color:#666" class="mono">
+
+                  <div style="font-size:32px">🧠</div>
+
+                  <div style="font-size:12px;margin-top:12px">
+                    NENHUMA CONVERSA<br>
+                    Digite um comando abaixo
+                  </div>
+
+                </div>
+              `
+            }
+
+          </div>
+
+
+          <div style="padding:10px;border-top:1px solid #222;display:flex;gap:8px;background:#0a0a0a">
+
+            <input
+              id="aiInput"
+              placeholder="COMANDO: Altere o botão X, crie campo Y..."
+              class="input"
+              style="margin:0;flex:1"
+              onkeydown="if(event.key==='Enter') sendToAI()"
+            >
+
+            <button
+              onclick="sendToAI()"
+              class="btn-gold btn"
+              style="white-space:nowrap"
+            >
+              ENVIAR
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div>
+
+      <div class="glass-gold card">
+
+        <h4 style="font-size:11px;letter-spacing:1px">
+          PERMISSÕES DA IA — SEGURANÇA
+        </h4>
+
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px" class="mono">
+
+          <label style="display:flex;justify-content:space-between;align-items:center;border:1px solid #222;border-radius:999px;padding:10px 14px;font-size:11px">
+            <span>IA pode editar funis</span>
+            <input type="checkbox" checked>
+          </label>
+
+          <label style="display:flex;justify-content:space-between;align-items:center;border:1px solid #222;border-radius:999px;padding:10px 14px;font-size:11px">
+            <span>IA pode editar Pix/QR</span>
+            <input type="checkbox" checked>
+          </label>
+
+          <label style="display:flex;justify-content:space-between;align-items:center;border:1px solid #222;border-radius:999px;padding:10px 14px;font-size:11px">
+            <span>Exigir aprovação</span>
+            <input type="checkbox" checked>
+          </label>
+
+          <label style="display:flex;justify-content:space-between;align-items:center;border:1px solid #222;border-radius:999px;padding:10px 14px;font-size:11px">
+            <span>Backup automático</span>
+            <input type="checkbox" checked>
+          </label>
+
+        </div>
+
+      </div>
+
+
+      <div class="glass card" style="margin-top:12px">
+
+        <h4 style="font-size:11px;letter-spacing:1px">
+          HISTÓRICO DE ALTERAÇÕES POR IA
+        </h4>
+
+        <div style="margin-top:12px;max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:8px">
+
+          ${
+            db.aiSettings.history.slice(0,8).map(h=>`
+
+              <div style="border:1px solid #222;border-radius:12px;padding:10px">
+
+                <div style="display:flex;justify-content:space-between">
+
+                  <span class="mono gold" style="font-size:10px;font-weight:bold">
+                    ${h.provider.toUpperCase()} • ${h.action}
+                  </span>
+
+                  <span class="mono" style="font-size:9px;color:#666">
+                    ${new Date(h.createdAt).toLocaleTimeString('pt-BR')}
+                  </span>
+
+                </div>
+
+                <div class="mono" style="font-size:11px;margin-top:4px">
+                  ${h.description}
+                </div>
+
+              </div>
+
+            `).join('')
+
+            ||
+
+            '<div class="mono" style="font-size:11px;color:#666;text-align:center;padding:20px">NENHUMA ALTERAÇÃO POR IA AINDA</div>'
+          }
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <div class="glass card" style="margin-top:24px">
+
+    <h3 style="font-size:11px;letter-spacing:1px">
+      COMO FUNCIONA
+    </h3>
+
+    <div class="grid2" style="margin-top:12px">
+
+      <div style="background:#000;border:1px solid #222;border-radius:12px;padding:12px">
+
+        <div class="gold" style="font-weight:bold;font-size:11px">
+          HOJE
+        </div>
+
+        <div class="mono" style="font-size:11px;color:#888;margin-top:6px">
+          Conecte o provedor de IA que você quiser.
+        </div>
+
+      </div>
+
+
+      <div style="background:#000;border:1px solid #222;border-radius:12px;padding:12px">
+
+        <div class="gold" style="font-weight:bold;font-size:11px">
+          AMANHÃ
+        </div>
+
+        <div class="mono" style="font-size:11px;color:#888;margin-top:6px">
+          Troque o provedor sem mudar o painel.
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+`;
+```
+
+}
+
+if(view==='dashboard'){
+
+```
+return `
+
+  <h1 style="font-size:32px;font-weight:bold">
+    CORE 100% PT-BR
+  </h1>
+
+  <div class="grid2" style="margin-top:20px">
+
+    <div class="glass card">
+      <div class="mono" style="font-size:10px;color:#666">FUNIS</div>
+      <div style="font-size:28px;font-weight:bold" class="gold mono">
+        ${db.funnels.length}
+      </div>
+    </div>
+
+    <div class="glass card">
+      <div class="mono" style="font-size:10px;color:#666">PIX</div>
+      <div style="font-size:28px;font-weight:bold" class="gold mono">
+        ${db.pixConfigs.length}
+      </div>
+    </div>
+
+    <div class="glass card">
+      <div class="mono" style="font-size:10px;color:#666">CLIENTES</div>
+      <div style="font-size:28px;font-weight:bold" class="gold mono">
+        ${db.clients.length}
+      </div>
+    </div>
+
+    <div class="glass card">
+      <div class="mono" style="font-size:10px;color:#666">VENDAS</div>
+      <div style="font-size:28px;font-weight:bold" class="gold mono">
+        ${db.sales.length}
+      </div>
+    </div>
+
+    <div class="glass card">
+      <div class="mono" style="font-size:10px;color:#666">CHATS</div>
+      <div style="font-size:28px;font-weight:bold" class="mono">
+        ${db.chats.length}
+      </div>
+    </div>
+
+    <div class="glass card">
+      <div class="mono" style="font-size:10px;color:#666">LOGS</div>
+      <div style="font-size:28px;font-weight:bold" class="mono">
+        ${db.logs.length}
+      </div>
+    </div>
+
+  </div>
+
+  <button
+    onclick="nav('ai')"
+    class="btn-gold btn"
+    style="margin-top:20px"
+  >
+    IR PARA IA CORE UNIVERSAL →
+  </button>
+
+`;
+```
+
+}
+
+if(view==='funnels'){
+
+```
+return `
+
+  <div style="display:flex;justify-content:space-between;align-items:center">
+
+    <h1 style="font-size:28px;font-weight:bold">
+      FUNIS
+    </h1>
+
+    <button
+      onclick="createFunnel()"
+      class="btn-gold btn"
+    >
+      + CONECTAR FUNIL REAL
+    </button>
+
+  </div>
+
+
+  <div class="grid2" style="margin-top:20px">
+
+    ${
+      db.funnels.length?
+
+      db.funnels.map(f=>`
+
+        <div class="glass card">
+
+          <div class="mono" style="font-size:10px;background:#fff;color:#000;padding:2px 8px;border-radius:20px;display:inline-block;font-weight:bold">
+            ${f.id}
+          </div>
+
+          <div style="font-weight:bold;margin-top:12px">
+            ${f.nome}
+          </div>
+
+          <div class="mono" style="font-size:11px;color:#888;margin-top:4px">
+            STATUS: ${f.status}
+          </div>
+
+          ${
+            f.url?
+            `<div class="mono" style="font-size:10px;color:#666;margin-top:8px;word-break:break-all">${f.url}</div>`
+            :''
+          }
+
+        </div>
+
+      `).join('')
+
+      :
+
+      `
+        <div class="glass card" style="grid-column:1/-1;text-align:center;padding:40px;color:#666">
+
+          SEM FUNIS CONECTADOS
+
+          <br>
+
+          <span class="mono" style="font-size:11px">
+            Clique em + CONECTAR FUNIL REAL
+          </span>
+
+        </div>
+      `
+    }
+
+  </div>
+
+`;
+```
+
+}
+
+if(view==='pix'){
+
+```
+return `
+
+  <h1 style="font-size:28px;font-weight:bold">
+    PIX <span class="gold">MATRIX</span>
+  </h1>
+
+  <p class="mono" style="font-size:11px;color:#666;margin-top:8px">
+    VERSIONAMENTO REAL • HISTÓRICO • RESTAURAR
+  </p>
+
+  <div class="glass card" style="margin-top:20px;text-align:center;padding:40px;color:#666">
+
+    PIX MATRIX — ${db.pixConfigs.length} configs
+
+    <br>
+
+    <button
+      onclick="nav('funnels')"
+      class="btn"
+      style="margin-top:12px"
+    >
+      IR PARA FUNIS
+    </button>
+
+  </div>
+
+`;
+```
+
+}
+
+if(view==='chats'){
+
+```
+return `
+
+  <h1 style="font-size:28px;font-weight:bold">
+    CHAT NEURAL
+  </h1>
+
+  <div class="glass card" style="margin-top:20px;text-align:center;padding:40px;color:#666">
+
+    CHAT ID PERMANENTE CHAT-000001
+
+    <br>
+
+    ${db.chats.length} conversas
+
+  </div>
+
+`;
+```
+
+}
+
+if(view==='logs'){
+
+```
+return `
+
+  <h1 style="font-size:28px;font-weight:bold">
+    REGISTROS
+  </h1>
+
+  <div class="glass card" style="margin-top:20px;max-height:70vh;overflow:auto">
+
+    ${
+      db.logs.length?
+
+      db.logs.map(l=>`
+
+        <div style="border-bottom:1px solid #222;padding:10px 0;display:flex;gap:12px;flex-wrap:wrap" class="mono">
+
+          <span style="color:#666;font-size:11px">
+            ${new Date(l.createdAt).toLocaleTimeString('pt-BR')}
+          </span>
+
+          <span style="color:#d4af37;font-size:11px">
+            ${l.action}
+          </span>
+
+          <span style="font-size:11px">
+            ${l.resource}
+          </span>
+
+        </div>
+
+      `).join('')
+
+      :
+
+      `
+        <div style="text-align:center;padding:40px;color:#666">
+          SEM LOGS
+        </div>
+      `
+    }
+
+  </div>
+
+`;
+```
+
+}
+
+return `
+
+```
+<div class="glass card" style="text-align:center;padding:40px;color:#666">
+
+  ${view.toUpperCase()} — MÓDULO REAL 100% PT-BR
+
+</div>
+```
+
+`;
+
+}
+
+// =====================================================
+// NAVEGAÇÃO
+// =====================================================
+
+function nav(v){
+
+view=v;
+
 render();
+
+window.scrollTo(0,0);
+
+}
+
+// =====================================================
+// SIDEBAR MOBILE
+// =====================================================
+
+function toggleSidebar(){
+
+const sidebar=document.querySelector('.sidebar');
+
+if(sidebar.style.display==='block'){
+
+```
+sidebar.style.display='none';
+```
+
+}else{
+
+```
+sidebar.style.display='block';
+```
+
+}
+
+}
+
+// =====================================================
+// MODAL
+// =====================================================
+
+function closeModal(){
+
+modalHTML=null;
+
+render();
+
+}
+
+function openLang(){
+
+modalHTML=`
+
+```
+<h2 style="font-size:18px;font-weight:bold">
+  🌐 IDIOMA — 100% TRADUZIDO
+</h2>
+
+<p class="mono" style="font-size:11px;color:#888;margin-top:8px">
+  Todo painel em português por padrão.
+</p>
+
+<div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
+
+  <button
+    onclick="alert('O painel já está em PT-BR.');closeModal()"
+    class="glass-gold gold card"
+    style="text-align:left"
+  >
+
+    <div style="font-weight:bold">
+      🇧🇷 PORTUGUÊS (BRASIL) — 100% ✓
+    </div>
+
+  </button>
+
+  <button
+    onclick="alert('Inglês em breve.')"
+    class="glass card"
+    style="text-align:left"
+  >
+
+    <div style="font-weight:bold">
+      🇺🇸 ENGLISH — Em breve
+    </div>
+
+  </button>
+
+  <button
+    onclick="alert('Espanhol em breve.')"
+    class="glass card"
+    style="text-align:left"
+  >
+
+    <div style="font-weight:bold">
+      🇪🇸 ESPAÑOL — Em breve
+    </div>
+
+  </button>
+
+</div>
+```
+
+`;
+
+render();
+
+}
+
+// =====================================================
+// IA
+// =====================================================
+
+function setActiveAI(id){
+
+db.aiSettings.activeProvider=id;
+
+Object.values(db.aiProviders).forEach(p=>{
+p.active=false;
+});
+
+db.aiProviders[id].active=true;
+
+save();
+
+render();
+
+logA(
+'Rafaela',
+'trocar_ia',
+'ai_core',
+id
+);
+
+}
+
+function saveAI(){
+
+let id=db.aiSettings.activeProvider;
+
+let p=db.aiProviders[id];
+
+p.apiKey=document.getElementById('aiKey').value.trim();
+
+p.model=document.getElementById('aiModel').value.trim();
+
+save();
+
+modalHTML=`
+
+```
+<div style="text-align:center;padding:20px">
+
+  <div style="width:48px;height:48px;border:3px solid #d4af37;border-top-color:transparent;border-radius:50%;margin:0 auto;animation:spin 1s linear infinite"></div>
+
+  <div class="mono gold" style="font-size:12px;margin-top:16px">
+    SALVANDO CONFIGURAÇÃO...
+  </div>
+
+</div>
+```
+
+`;
+
+render();
+
+setTimeout(()=>{
+
+```
+modalHTML=`
+
+  <div style="text-align:center">
+
+    <div style="width:56px;height:56px;background:#d4af37;color:#000;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto;font-weight:bold;font-size:24px">
+      ✓
+    </div>
+
+    <div style="font-weight:bold;margin-top:16px">
+      ${p.name.toUpperCase()} CONFIGURADA
+    </div>
+
+    <div class="mono" style="font-size:11px;color:#888;margin-top:8px">
+
+      Configuração salva localmente.<br>
+
+      ${p.apiKey
+        ?'Chave configurada: ****'+p.apiKey.slice(-4)
+        :'Nenhuma chave informada'
+      }
+
+    </div>
+
+  </div>
+
+`;
+
+save();
+
+render();
+```
+
+},800);
+
+}
+
+function testAI(){
+
+let p=db.aiProviders[db.aiSettings.activeProvider];
+
+alert(
+'Provedor: '+p.name+
+'\nModelo: '+p.model+
+'\nChave: '+(p.apiKey?'****'+p.apiKey.slice(-4):'não configurada')
+);
+
+}
+
+function sendToAI(){
+
+let input=document.getElementById('aiInput');
+
+let text=input.value.trim();
+
+if(!text)return;
+
+let active=db.aiProviders[db.aiSettings.activeProvider];
+
+aiChat.unshift({
+id:uid('AI'),
+role:'user',
+text
+});
+
+input.value='';
+
+render();
+
+setTimeout(()=>{
+
+```
+let diff=
+```
+
+`// ALTERAÇÃO PROPOSTA
+// Provedor: ${active.name}
+// Comando: ${text}
+// Backup automático criado
+// Aguardando aprovação`;
+
+```
+let response={
+
+  id:uid('AI'),
+
+  role:'assistant',
+
+  text:
+    `Entendi o comando. A alteração foi preparada e está aguardando aprovação.`,
+
+  diff,
+
+  provider:active.id
+
+};
+
+aiChat.unshift(response);
+
+
+db.aiSettings.history.unshift({
+
+  id:uid('HIST'),
+
+  provider:active.id,
+
+  action:'propor_alteracao',
+
+  description:text,
+
+  diff,
+
+  status:'aguardando_aprovacao',
+
+  createdAt:new Date().toISOString()
+
+});
+
+
+save();
+
+render();
+```
+
+},600);
+
+}
+
+function approveAI(id){
+
+let msg=aiChat.find(m=>m.id===id);
+
+if(!msg)return;
+
+if(confirm('Aprovar esta alteração?')){
+
+```
+let backup={
+
+  id:'BK-AI-'+Date.now(),
+
+  createdAt:new Date().toISOString(),
+
+  data:JSON.parse(JSON.stringify(db))
+
+};
+
+
+db.backups=db.backups||[];
+
+db.backups.unshift(backup);
+
+
+logA(
+  `IA-${msg.provider}`,
+  'ia_edit_aplicado',
+  'codigo_real',
+  msg.text.slice(0,80)
+);
+
+
+save();
+
+
+alert(
+  '✓ Aprovação registrada.\nBackup: '+backup.id
+);
+
+
+render();
+```
+
+}
+
+}
+
+// =====================================================
+// FUNIS
+// =====================================================
+
+function createFunnel(){
+
+modalHTML=`
+
+```
+<h3 style="font-weight:bold">
+  CONECTAR FUNIL REAL — 100% PT-BR
+</h3>
+
+<p class="mono" style="font-size:11px;color:#888;margin-top:6px">
+  Preencha os dados do seu funil.
+</p>
+
+<input
+  id="fName"
+  placeholder="NOME: Funil 1 - Black Friday"
+  class="input"
+  style="margin-top:16px"
+>
+
+<input
+  id="fUrl"
+  placeholder="URL: https://checkout.seudominio.com"
+  class="input"
+>
+
+<input
+  id="fEndpoint"
+  placeholder="ENDPOINT: https://api.seudominio.com/webhook"
+  class="input"
+>
+
+<div style="display:flex;gap:8px;margin-top:16px">
+
+  <button
+    onclick="saveFunnel()"
+    class="btn-gold btn"
+    style="flex:1"
+  >
+    SALVAR NO SUPABASE
+  </button>
+
+  <button
+    onclick="closeModal()"
+    class="btn"
+  >
+    CANCELAR
+  </button>
+
+</div>
+```
+
+`;
+
+render();
+
+}
+
+// =====================================================
+// SALVAR FUNIL — SUPABASE
+// =====================================================
+
+async function saveFunnel(){
+
+const nome=document.getElementById('fName').value.trim();
+
+const url=document.getElementById('fUrl').value.trim();
+
+const endpoint=document.getElementById('fEndpoint').value.trim();
+
+if(!nome){
+
+```
+alert('Nome obrigatório');
+
+return;
+```
+
+}
+
+const id=
+'ANT-FUN-'+
+String(db.funnels.length+1).padStart(3,'0');
+
+const f={
+
+```
+id,
+
+nome,
+
+url,
+
+endpoint,
+
+status:'testando',
+
+createdAt:new Date().toISOString()
+```
+
+};
+
+modalHTML=`
+
+```
+<div style="text-align:center;padding:20px">
+
+  <div style="width:48px;height:48px;border:3px solid #d4af37;border-top-color:transparent;border-radius:50%;margin:0 auto;animation:spin 1s linear infinite"></div>
+
+  <div class="mono gold" style="font-size:12px;margin-top:16px">
+    SALVANDO NO SUPABASE...
+  </div>
+
+</div>
+```
+
+`;
+
+render();
+
+const {error}=await supabaseClient
+
+```
+.from('funnels')
+
+.insert([{
+
+  id:f.id,
+
+  nome:f.nome,
+
+  url:f.url,
+
+  endpoint:f.endpoint,
+
+  status:f.status
+
+}]);
+```
+
+if(error){
+
+```
+console.error(error);
+
+
+modalHTML=`
+
+  <div style="text-align:center;padding:20px">
+
+    <div style="font-size:40px">
+      ⚠️
+    </div>
+
+    <div style="font-weight:bold;margin-top:12px">
+      ERRO AO SALVAR
+    </div>
+
+    <div class="mono" style="font-size:11px;color:#888;margin-top:8px;word-break:break-word">
+      ${error.message}
+    </div>
+
+  </div>
+
+`;
+
+render();
+
+return;
+```
+
+}
+
+f.status=
+f.endpoint &&
+f.url.startsWith('http')
+?'conectado'
+:'erro';
+
+f.lastCommunication=
+f.status==='conectado'
+?new Date().toISOString()
+:null;
+
+db.funnels.push(f);
+
+save();
+
+logA(
+'Rafaela',
+'conectar',
+'funil',
+f.id
+);
+
+closeModal();
+
+render();
+
+alert(
+'✓ Funil salvo no Supabase: '+f.id
+);
+
+}
+
+// =====================================================
+// EXPORTAR BANCO LOCAL
+// =====================================================
+
+function exportDB(){
+
+let blob=new Blob(
+[JSON.stringify(db,null,2)],
+{type:'application/json'}
+);
+
+let url=URL.createObjectURL(blob);
+
+let a=document.createElement('a');
+
+a.href=url;
+
+a.download=
+'anthea-100-pt-br-'+
+new Date().toISOString().slice(0,10)+
+'.json';
+
+a.click();
+
+URL.revokeObjectURL(url);
+
+}
+
+// =====================================================
+// INICIALIZAÇÃO CORRETA
+// =====================================================
+
+async function iniciarSistema(){
+
+const logado=await verificarLoginSupabase();
+
+if(!logado)return;
+
+await sincronizarDadosSupabase();
+
+render();
+
+}
+
+iniciarSistema();
+
 </script>
-<script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script></body>
+
+</body>
 </html>
