@@ -1,18 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function proxy(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-  const isLogin = request.nextUrl.pathname === '/login'
+const DEFAULT_SUPABASE_URL = 'https://hkraryqoziravulvqkid.supabase.co'
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl'
 
-  if (!url || !key) {
-    if (isLogin) return NextResponse.next()
-    const target = request.nextUrl.clone()
-    target.pathname = '/login'
-    target.searchParams.set('next', request.nextUrl.pathname)
-    return NextResponse.redirect(target)
-  }
+export async function proxy(request: NextRequest) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_PUBLISHABLE_KEY
+  const isLogin = request.nextUrl.pathname === '/login'
 
   let response = NextResponse.next({ request })
   const supabase = createServerClient(url, key, {
