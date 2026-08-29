@@ -23,7 +23,7 @@ export default function LoginPage() {
     setMessage('')
 
     if (!supabase) {
-      setError('Supabase não está configurado. Confira as variáveis de ambiente.')
+      setError('O ALTHEA PAY ainda não está conectado ao Supabase neste ambiente. Configure NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.')
       return
     }
 
@@ -35,7 +35,7 @@ export default function LoginPage() {
     if (result.error) {
       setError(result.error.message)
     } else if (mode === 'signup' && !result.data.session) {
-      setMessage('Cadastro criado. Confirme seu e-mail para entrar no Anthea Pay.')
+      setMessage('Cadastro criado. Confirme seu e-mail para entrar no ALTHEA PAY.')
     } else {
       router.replace(next)
       router.refresh()
@@ -47,7 +47,7 @@ export default function LoginPage() {
   return (
     <main className="auth-shell">
       <section className="auth-card">
-        <div className="althea-brand auth-brand">ANTHEA PAY<span>Control Center</span></div>
+        <div className="althea-brand auth-brand">ALTHEA PAY<span>Control Center</span></div>
         <div className="auth-heading">
           <span>ACESSO SEGURO</span>
           <h1>{mode === 'login' ? 'Entrar no painel' : 'Criar sua conta'}</h1>
