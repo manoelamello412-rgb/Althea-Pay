@@ -1,0 +1,10 @@
+project_id = "althea-pay"
+
+[functions.health]
+verify_jwt = false
+
+[functions.integration-webhook]
+verify_jwt = false
+
+[functions.api]
+verify_jwt = true
