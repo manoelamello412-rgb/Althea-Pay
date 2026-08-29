@@ -1,77 +1,39 @@
-const metrics = [
-  ['Funis conectados', '0', 'Pronto para receber seus primeiros funis'],
-  ['Vendas espelhadas', '0', 'Nenhum evento de gateway ainda'],
-  ['Conversas abertas', '0', 'O inbox aparecerá aqui em tempo real'],
-  ['Gateways', '0', 'Conecte as gateways dos seus produtos'],
+'use client'
+
+import { useMemo, useState } from 'react'
+import { ALTHEA_PAY, type FunnelSummary } from '@/lib/althea'
+
+const demoFunnels: FunnelSummary[] = [
+  { id: 'demo-1', name: 'Nenhum funil conectado', status: 'draft', gatewayName: 'Aguardando conexão' },
 ]
 
-const modules = [
-  ['Funis', 'Gerencie estruturas, conexões, versões e integrações dos seus funis.'],
-  ['Gateways', 'Conecte gateways externas sem mover o dinheiro pelo ALTHEA PAY.'],
-  ['Vendas', 'Espelhe pagamentos, status, eventos e reconciliação.'],
-  ['Chats', 'Centralize conversas dos seus futuros funis em um único inbox.'],
-]
+export default function DashboardPage() {
+  const [active, setActive] = useState('Visão geral')
+  const funnels = useMemo(() => demoFunnels, [])
+  const navigation = ['Visão geral', 'Funis', 'Produtos', 'Gateways', 'Vendas', 'Clientes', 'Chats', 'Analytics', 'Integrações', 'Configurações']
 
-export default function Home() {
   return (
-    <div className="althea-shell">
+    <main className="althea-app">
       <aside className="althea-sidebar">
-        <div className="althea-brand">ALTHEA PAY<span>CONTROL CENTER</span></div>
+        <div className="althea-brand">{ALTHEA_PAY.name}<span>{ALTHEA_PAY.tagline}</span></div>
         <nav className="althea-nav" aria-label="Navegação principal">
-          {['Visão geral', 'Funis', 'Produtos', 'Gateways', 'Vendas', 'Clientes', 'Chats', 'Analytics', 'Integrações', 'Configurações'].map((item) => (
-            <a href="#" key={item}>{item}</a>
-          ))}
+          {navigation.map((item) => <button key={item} className={active === item ? 'active' : ''} onClick={() => setActive(item)}>{item}</button>)}
         </nav>
       </aside>
-
-      <main className="althea-main">
+      <section className="althea-main">
         <header className="althea-header">
-          <div>
-            <div className="althea-kicker">Control Center</div>
-            <h1 className="althea-title">Sua operação, em um só lugar.</h1>
-            <div className="althea-subtitle">
-              O núcleo do ALTHEA PAY está preparado para conectar seus funis independentes,
-              espelhar gateways, centralizar chats e transformar eventos em inteligência operacional.
-            </div>
-          </div>
-          <div className="althea-status">● Core preparado</div>
+          <div><div className="althea-kicker">{ALTHEA_PAY.tagline}</div><h1>{active}</h1><p>{ALTHEA_PAY.description}</p></div>
+          <div className="althea-status">● Sistema preparado</div>
         </header>
-
-        <section className="althea-grid" aria-label="Indicadores">
-          {metrics.map(([label, value, note]) => (
-            <article className="althea-card" key={label}>
-              <div className="althea-card-label">{label}</div>
-              <div className="althea-card-value">{value}</div>
-              <div className="althea-card-note">{note}</div>
-            </article>
-          ))}
+        <div className="althea-metrics">
+          {['Visitas', 'Leads', 'Vendas', 'Receita', 'Chats abertos'].map((label) => <article className="althea-card" key={label}><span>{label}</span><strong>0</strong><small>Aguardando dados reais</small></article>)}
+        </div>
+        <section className="althea-card althea-panel">
+          <div className="panel-heading"><div><span>OPERAÇÃO</span><h2>Funis conectados</h2></div><button className="primary">+ Conectar funil</button></div>
+          {funnels.map((funnel) => <div className="funnel-row" key={funnel.id}><div><strong>{funnel.name}</strong><small>{funnel.gatewayName}</small></div><span className="althea-pill">{funnel.status}</span></div>)}
         </section>
-
-        <section className="althea-section">
-          <h2>Módulos do ALTHEA PAY</h2>
-          <div className="althea-grid">
-            {modules.map(([title, description]) => (
-              <article className="althea-card" key={title}>
-                <div className="althea-card-label">MÓDULO</div>
-                <div className="althea-card-value" style={{ fontSize: 20 }}>{title}</div>
-                <div className="althea-card-note" style={{ lineHeight: 1.5 }}>{description}</div>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="althea-section althea-card">
-          <h2>Atividade operacional</h2>
-          <table className="althea-table">
-            <thead><tr><th>Evento</th><th>Origem</th><th>Status</th></tr></thead>
-            <tbody>
-              <tr><td>Core inicializado</td><td>ALTHEA PAY</td><td><span className="althea-pill">Pronto</span></td></tr>
-              <tr><td>Banco operacional</td><td>Supabase</td><td><span className="althea-pill">Aguardando conexão</span></td></tr>
-              <tr><td>Primeiro funil</td><td>Externo</td><td><span className="althea-pill">Aguardando</span></td></tr>
-            </tbody>
-          </table>
-        </section>
-      </main>
-    </div>
+        <section className="althea-card althea-panel"><div className="panel-heading"><div><span>ATIVIDADE</span><h2>Timeline operacional</h2></div></div><div className="empty-state"><strong>Seu centro de controle está pronto.</strong><p>Quando o primeiro funil e as primeiras integrações forem conectados, eventos, vendas espelhadas e conversas aparecerão aqui em tempo real.</p></div></section>
+      </section>
+    </main>
   )
 }
