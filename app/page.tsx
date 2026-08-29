@@ -7,7 +7,7 @@ const metrics = [
 
 const modules = [
   ['Funis', 'Gerencie estruturas, conexões, versões e integrações dos seus funis.'],
-  ['Gateways', 'Conecte gateways externas sem mover o dinheiro pelo ALTHEA.'],
+  ['Gateways', 'Conecte gateways externas sem mover o dinheiro pelo ALTHEA PAY.'],
   ['Vendas', 'Espelhe pagamentos, status, eventos e reconciliação.'],
   ['Chats', 'Centralize conversas dos seus futuros funis em um único inbox.'],
 ]
@@ -16,7 +16,7 @@ export default function Home() {
   return (
     <div className="althea-shell">
       <aside className="althea-sidebar">
-        <div className="althea-brand">ALTHEA<span>CONTROL CENTER</span></div>
+        <div className="althea-brand">ALTHEA PAY<span>CONTROL CENTER</span></div>
         <nav className="althea-nav" aria-label="Navegação principal">
           {['Visão geral', 'Funis', 'Produtos', 'Gateways', 'Vendas', 'Clientes', 'Chats', 'Analytics', 'Integrações', 'Configurações'].map((item) => (
             <a href="#" key={item}>{item}</a>
@@ -30,7 +30,7 @@ export default function Home() {
             <div className="althea-kicker">Control Center</div>
             <h1 className="althea-title">Sua operação, em um só lugar.</h1>
             <div className="althea-subtitle">
-              O núcleo do ALTHEA está preparado para conectar seus funis independentes,
+              O núcleo do ALTHEA PAY está preparado para conectar seus funis independentes,
               espelhar gateways, centralizar chats e transformar eventos em inteligência operacional.
             </div>
           </div>
@@ -48,7 +48,7 @@ export default function Home() {
         </section>
 
         <section className="althea-section">
-          <h2>Módulos do ALTHEA</h2>
+          <h2>Módulos do ALTHEA PAY</h2>
           <div className="althea-grid">
             {modules.map(([title, description]) => (
               <article className="althea-card" key={title}>
@@ -65,7 +65,7 @@ export default function Home() {
           <table className="althea-table">
             <thead><tr><th>Evento</th><th>Origem</th><th>Status</th></tr></thead>
             <tbody>
-              <tr><td>Core inicializado</td><td>ALTHEA</td><td><span className="althea-pill">Pronto</span></td></tr>
+              <tr><td>Core inicializado</td><td>ALTHEA PAY</td><td><span className="althea-pill">Pronto</span></td></tr>
               <tr><td>Banco operacional</td><td>Supabase</td><td><span className="althea-pill">Aguardando conexão</span></td></tr>
               <tr><td>Primeiro funil</td><td>Externo</td><td><span className="althea-pill">Aguardando</span></td></tr>
             </tbody>
