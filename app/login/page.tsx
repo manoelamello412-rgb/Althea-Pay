@@ -1,13 +1,14 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createSupabaseBrowserClient } from '../../lib/supabase/client'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const next = searchParams.get('next') || '/'
+  const requestedNext = searchParams.get('next') || '/'
+  const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/'
   const supabase = createSupabaseBrowserClient()
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
@@ -70,5 +71,13 @@ export default function LoginPage() {
         </button>
       </section>
     </main>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<main className="auth-shell"><section className="auth-card"><div className="althea-brand auth-brand">ALTHEA PAY<span>Control Center</span></div><div className="auth-heading"><span>ACESSO SEGURO</span><h1>Carregando acesso</h1><p>Preparando o ambiente seguro.</p></div></section></main>}>
+      <LoginForm />
+    </Suspense>
   )
 }
