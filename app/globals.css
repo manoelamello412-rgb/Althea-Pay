@@ -23,12 +23,29 @@ button { font: inherit; }
 .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .panel-heading h2 { margin: 5px 0 0; font-size: 17px; }
 .primary { border: 1px solid #353c4b; background: #f3f5f8; color: #080a0f; border-radius: 10px; padding: 9px 12px; cursor: pointer; font-weight: 650; }
+.primary:disabled { opacity: .55; cursor: wait; }
 .funnel-row { display: flex; align-items: center; justify-content: space-between; gap: 15px; border-top: 1px solid #202632; margin-top: 16px; padding-top: 16px; }
 .funnel-row strong, .funnel-row small { display: block; }
 .funnel-row small { color: #747d8c; margin-top: 4px; font-size: 12px; }
 .althea-pill { border: 1px solid #293241; background: #111720; border-radius: 999px; padding: 5px 9px; color: #b9c2d0; font-size: 11px; }
 .empty-state { border-top: 1px solid #202632; margin-top: 16px; padding-top: 20px; color: #b6bfcc; }
 .empty-state p { color: #727b89; max-width: 720px; line-height: 1.6; margin-bottom: 0; }
+.auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 50% -10%, rgba(105,72,255,.2), transparent 42%), #07090d; }
+.auth-card { width: min(100%, 440px); border: 1px solid #202632; border-radius: 20px; padding: 30px; background: rgba(14,18,26,.9); box-shadow: 0 25px 80px rgba(0,0,0,.35); }
+.auth-brand { margin: 0 0 42px; text-align: center; }
+.auth-heading span { color: #8d96a6; font-size: 10px; letter-spacing: .16em; }
+.auth-heading h1 { margin: 8px 0; font-size: 30px; letter-spacing: -.04em; }
+.auth-heading p { margin: 0 0 24px; color: #7e8796; line-height: 1.5; }
+.auth-form { display: grid; gap: 15px; }
+.auth-form label { display: grid; gap: 7px; color: #b8c0cd; font-size: 12px; }
+.auth-form input { width: 100%; border: 1px solid #29303c; outline: none; border-radius: 10px; background: #0a0d13; color: #fff; padding: 12px 13px; }
+.auth-form input:focus { border-color: #596273; }
+.auth-submit { width: 100%; padding: 12px; margin-top: 4px; }
+.auth-error, .auth-message { border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.45; }
+.auth-error { border: 1px solid #5a3038; background: #211216; color: #ffb9c2; }
+.auth-message { border: 1px solid #304f3d; background: #101b15; color: #b8e2c8; }
+.auth-switch { width: 100%; border: 0; background: transparent; color: #8e98a8; cursor: pointer; margin-top: 18px; font-size: 12px; }
+.auth-switch:hover { color: #fff; }
 @media (max-width: 1050px) { .althea-metrics { grid-template-columns: repeat(3,1fr); } }
 @media (max-width: 800px) { .althea-app { grid-template-columns: 1fr; } .althea-sidebar { display: none; } .althea-main { padding: 20px; } }
-@media (max-width: 600px) { .althea-metrics { grid-template-columns: repeat(2,1fr); } .althea-header { flex-direction: column; } }
+@media (max-width: 600px) { .althea-metrics { grid-template-columns: repeat(2,1fr); } .althea-header { flex-direction: column; } .auth-card { padding: 22px; } }
