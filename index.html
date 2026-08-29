@@ -188,6 +188,124 @@ const KEY='anthea_final_pt_v1';
 function empty(){return {funnels:[],products:[],pixConfigs:[],pixHistory:[],gateways:[],clients:[],sales:[],chats:[],messages:[],collaborators:[{id:'COL-001',name:'Rafaela Julio',email:'rafaela@anthea.pay',role:'ADMIN CORE'}],logs:[],backups:[],lang:'pt',aiProviders:{meta:{id:'meta',name:'Meta AI',model:'Llama 3.1',apiKey:'',active:true},openai:{id:'openai',name:'OpenAI',model:'gpt-4o',apiKey:'',active:false},claude:{id:'claude',name:'Claude',model:'claude-3-5-sonnet',apiKey:'',active:false},gemini:{id:'gemini',name:'Gemini',model:'gemini-2.0',apiKey:'',active:false},grok:{id:'grok',name:'Grok',model:'grok-2',apiKey:'',active:false},custom:{id:'custom',name:'API Personalizada',model:'custom',apiKey:'',active:false}},aiSettings:{activeProvider:'meta',history:[]}}}
 function load(){try{let d=localStorage.getItem(KEY); if(!d){let e=empty(); localStorage.setItem(KEY,JSON.stringify(e)); return e;} return JSON.parse(d);}catch{return empty();}}
 function save(){localStorage.setItem(KEY,JSON.stringify(db));}
+  // ===============================
+// CLIENTES — SUPABASE
+// ===============================
+
+async function salvarClienteSupabase(cliente) {
+  const { data, error } = await supabaseClient
+    .from('clients')
+    .insert([{
+      id: cliente.id || uid('CLI'),
+      nome: cliente.nome || '',
+      email: cliente.email || '',
+      telefone: cliente.telefone || '',
+      status: cliente.status || 'ativo'
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Erro ao salvar cliente:', error);
+    alert('Erro ao salvar cliente: ' + error.message);
+    return null;
+  }
+
+  return data;
+}
+
+async function carregarClientesSupabase() {
+  const { data, error } = await supabaseClient
+    .from('clients')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Erro ao carregar clientes:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+
+// ===============================
+// VENDAS — SUPABASE
+// ===============================
+
+async function salvarVendaSupabase(venda) {
+  const { data, error } = await supabaseClient
+    .from('sales')
+    .insert([{
+      id: venda.id || uid('VEN'),
+      client_id: venda.client_id || null,
+      funnel_id: venda.funnel_id || null,
+      produto: venda.produto || '',
+      valor: Number(venda.valor || 0),
+      status: venda.status || 'pendente'
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Erro ao salvar venda:', error);
+    alert('Erro ao salvar venda: ' + error.message);
+    return null;
+  }
+
+  return data;
+}
+
+async function carregarVendasSupabase()
+// ===============================
+// CARREGAR DADOS REAIS DO SUPABASE
+// ===============================
+
+async function sincronizarDadosSupabase() {
+  try {
+    const clientes = await carregarClientesSupabase();
+    const vendas = await carregarVendasSupabase();
+
+    db.clients = clientes.map(c => ({
+      id: c.id,
+      nome: c.nome,
+      email: c.email,
+      telefone: c.telefone,
+      status: c.status,
+      createdAt: c.created_at
+    }));
+
+    db.sales = vendas.map(v => ({
+      id: v.id,
+      client_id: v.client_id,
+      funnel_id: v.funnel_id,
+      produto: v.produto,
+      valor: Number(v.valor || 0),
+      status: v.status,
+      createdAt: v.created_at
+    }));
+
+    save();
+
+    console.log('✓ Clientes e vendas sincronizados com Supabase');
+    render();
+
+  } catch (error) {
+    console.error('Erro na sincronização:', error);
+  }
+}
+  const { data, error } = await supabaseClient
+    .from('sales')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Erro ao carregar vendas:', error);
+    return [];
+  }
+
+  return data || [];
+}
 function uid(p){return p+'-'+Math.random().toString(36).slice(2,6).toUpperCase()+'-'+Date.now().toString().slice(-4);}
 function logA(u,a,r,d){db.logs.unshift({id:uid('LOG'),user:u,action:a,resource:r,details:d||'',createdAt:new Date().toISOString()}); save();}
 let db=load();
