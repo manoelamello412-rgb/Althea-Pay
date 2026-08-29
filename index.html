@@ -1,40 +1,95 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
-<head><style>
-@font-face {
-  font-family: "Optimistic";
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Optimistic Mono";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
-}
-:where(html) {
-  font-family: "Optimistic", system-ui, sans-serif;
-}
-:where(code, pre, kbd, samp) {
-  font-family: "Optimistic Mono", ui-monospace, monospace;
-}
-</style>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ALTHEA PAY - Centro de Controle Real</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>body{font-family:Inter,sans-serif} .mono{font-family:'JetBrains Mono',monospace} ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:10px}</style>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#09090b">
+  <title>ALTHEA PAY — Centro de Controle</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root{--bg:#09090b;--panel:#111113;--panel2:#17171a;--line:#27272a;--text:#fafafa;--muted:#a1a1aa;--accent:#8b5cf6;--accent2:#a78bfa;--danger:#ef4444;--ok:#22c55e}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+    button,input{font:inherit}button{cursor:pointer}.hidden{display:none!important}
+    .shell{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 0,#24133f 0,#09090b 42%)}
+    .login{width:min(440px,100%);padding:34px;border:1px solid var(--line);border-radius:24px;background:rgba(17,17,19,.94);box-shadow:0 30px 100px rgba(0,0,0,.45)}
+    .brand{display:flex;align-items:center;gap:12px;margin-bottom:30px}.mark{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#c084fc);display:grid;place-items:center;font-weight:900;box-shadow:0 10px 30px #7c3aed55}.brand strong{font-size:20px;letter-spacing:.08em}.brand span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+    h1{font-size:28px;margin:0 0 8px}.subtitle{color:var(--muted);line-height:1.5;margin:0 0 26px}.field{margin:14px 0}.field label{display:block;font-size:12px;color:#d4d4d8;margin-bottom:7px}.field input{width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:#09090b;color:#fff;outline:none}.field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #8b5cf622}
+    .primary{width:100%;border:0;border-radius:12px;padding:13px 16px;background:linear-gradient(135deg,#7c3aed,#8b5cf6);color:#fff;font-weight:700}.secondary{border:1px solid var(--line);border-radius:12px;padding:11px 14px;background:#18181b;color:#fff}.switch{margin-top:16px;text-align:center;color:var(--muted);font-size:13px}.link{border:0;background:none;color:var(--accent2);padding:0;font-weight:700}.notice{margin-top:14px;padding:11px 12px;border-radius:12px;background:#18181b;border:1px solid var(--line);font-size:12px;color:var(--muted);line-height:1.45}.error{color:#fecaca;background:#3f1515;border-color:#7f1d1d}.ok{color:#bbf7d0;background:#0d2a19;border-color:#166534}
+    .app{min-height:100vh;display:grid;grid-template-columns:250px 1fr}.sidebar{border-right:1px solid var(--line);background:#0d0d0f;padding:20px;position:sticky;top:0;height:100vh}.nav{margin-top:30px;display:grid;gap:5px}.nav button{border:0;background:transparent;color:#a1a1aa;text-align:left;padding:11px 12px;border-radius:10px}.nav button.active,.nav button:hover{background:#1b1723;color:#fff}.sidebottom{position:absolute;left:20px;right:20px;bottom:20px}.main{padding:28px 34px;overflow:auto}.top{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:28px}.top h2{margin:0;font-size:26px}.top p{margin:5px 0 0;color:var(--muted);font-size:13px}.user{display:flex;gap:10px;align-items:center}.avatar{width:38px;height:38px;border-radius:50%;background:#27272a;display:grid;place-items:center;font-weight:800}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}.label{color:var(--muted);font-size:12px}.value{font-size:25px;font-weight:800;margin-top:8px}.grid{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-top:16px}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:13px 10px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}.table th{color:var(--muted);font-weight:600}.empty{text-align:center;color:var(--muted);padding:35px}.badge{display:inline-flex;padding:5px 8px;border-radius:999px;background:#17251b;color:#86efac;font-size:11px}.section{display:none}.section.active{display:block}.mobile-nav{display:none}
+    @media(max-width:900px){.app{grid-template-columns:1fr}.sidebar{display:none}.mobile-nav{display:flex;gap:5px;overflow:auto;padding:10px;border-bottom:1px solid var(--line);background:#0d0d0f}.mobile-nav button{white-space:nowrap;background:#18181b;color:#a1a1aa;border:1px solid var(--line);border-radius:9px;padding:8px 11px}.main{padding:20px}.cards{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
+    @media(max-width:520px){.cards{grid-template-columns:1fr}.login{padding:25px}.top{align-items:flex-start}.user .email{display:none}}
+  </style>
 </head>
-<body class="bg-[#f6f6f7] text-zinc-900">
-<div id="app"></div>
-<div id="modalRoot" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] hidden"></div>
-<script>
-const KEY='althea_pay_v3_real';
-function emptyDB(){return {funnels:[],products:[],pixConfigs:[],pixHistory:[],gateways:[],clients:[],leads:[],sales:[],chats:[],messages:[],collaborators:[{id:'COL-001',name:'Administrador',email:'admin@althea.pay',role:'Administrador',status:'ativo',permissions:{all:true},createdAt:new Date().toISOString()}],apiKeys:[],webhooks:[],logs:[],backups:[],settings:{appName:'ALTHEA PAY',domain:''}}}
-function loadDB(){try{let d=localStorage.getItem(KEY); if(!d){let e=emptyDB(); localStorage.setItem(KEY,JSON.stringify(e)); return e;} return JSON.parse(d);}catch(e){return emptyDB();}}
-function saveDB(){localStorage.setItem(KEY,JSON.stringify(db));}
-function uid(p){return p+'-'+Math.random().toString(36).slice(2,7).toUpperCase()+'-'+Date.now().toString().slice(-4);}
+<body>
+  <div id="root"></div>
+  <script>
+    const SUPABASE_URL = 'https://hkraryqoziravulvqkid.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    const root = document.getElementById('root');
+    let currentUser = null;
+
+    function esc(v){return String(v ?? '').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+    function notice(msg,kind=''){const el=document.getElementById('notice');if(el){el.className='notice '+kind;el.textContent=msg;el.classList.remove('hidden')}}
+    function loginView(mode='login'){
+      const signup=mode==='signup';
+      root.innerHTML=`<main class="shell"><section class="login">
+        <div class="brand"><div class="mark">A</div><div><strong>ALTHEA PAY</strong><span>Centro de Controle</span></div></div>
+        <h1>${signup?'Criar acesso':'Entrar no ALTHEA PAY'}</h1>
+        <p class="subtitle">${signup?'Crie o acesso do operador principal para começar a configurar sua plataforma.':'Acesse o centro de controle dos seus funis, gateways, vendas e chats.'}</p>
+        <form id="authForm">
+          <div class="field"><label>E-mail</label><input id="email" type="email" autocomplete="email" required placeholder="seu@email.com"></div>
+          <div class="field"><label>Senha</label><input id="password" type="password" autocomplete="${signup?'new-password':'current-password'}" minlength="6" required placeholder="Mínimo de 6 caracteres"></div>
+          <button class="primary" type="submit">${signup?'Criar minha conta':'Entrar'}</button>
+        </form>
+        <div id="notice" class="notice hidden"></div>
+        <div class="switch">${signup?'Já possui acesso?':'Ainda não possui acesso?'} <button id="toggle" class="link">${signup?'Entrar':'Criar acesso'}</button></div>
+      </section></main>`;
+      document.getElementById('toggle').onclick=()=>loginView(signup?'login':'signup');
+      document.getElementById('authForm').onsubmit=async e=>{
+        e.preventDefault();
+        const email=document.getElementById('email').value.trim();const password=document.getElementById('password').value;
+        const btn=e.submitter;btn.disabled=true;btn.textContent='Processando...';
+        try{
+          const result=signup?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});
+          if(result.error) throw result.error;
+          if(signup && !result.data.session){notice('Conta criada. Verifique seu e-mail para confirmar o acesso.','ok');}
+          else renderApp(result.data.user);
+        }catch(err){notice(err.message||'Não foi possível concluir a operação.','error');}
+        finally{btn.disabled=false;btn.textContent=signup?'Criar minha conta':'Entrar';}
+      };
+    }
+
+    function renderApp(user){
+      currentUser=user;
+      root.innerHTML=`<div class="app">
+        <aside class="sidebar"><div class="brand"><div class="mark">A</div><div><strong>ALTHEA PAY</strong><span>Centro de Controle</span></div></div>
+          <nav class="nav" id="nav">
+            <button class="active" data-section="overview">Visão geral</button><button data-section="funnels">Funis</button><button data-section="products">Produtos</button><button data-section="gateways">Gateways</button><button data-section="sales">Vendas</button><button data-section="clients">Clientes</button><button data-section="chats">Chats</button><button data-section="analytics">Analytics</button><button data-section="integrations">Integrações</button>
+          </nav><div class="sidebottom"><button class="secondary" style="width:100%" id="logout">Sair</button></div>
+        </aside>
+        <div><div class="mobile-nav" id="mobileNav"></div><main class="main"><div class="top"><div><h2 id="title">Visão geral</h2><p id="subtitle">Controle central da sua operação.</p></div><div class="user"><div class="email">${esc(user.email)}</div><div class="avatar">${esc((user.email||'A')[0].toUpperCase())}</div></div></div>
+          <section class="section active" id="overview"><div class="cards"><div class="card"><div class="label">Funis</div><div class="value" id="countFunnels">0</div></div><div class="card"><div class="label">Produtos</div><div class="value" id="countProducts">0</div></div><div class="card"><div class="label">Vendas espelhadas</div><div class="value" id="countSales">0</div></div><div class="card"><div class="label">Chats</div><div class="value" id="countChats">0</div></div></div><div class="grid"><div class="card"><h3>Atividade recente</h3><div id="activity" class="empty">Nenhuma atividade registrada ainda.</div></div><div class="card"><h3>Estado da plataforma</h3><p><span class="badge">Supabase conectado</span></p><p style="color:var(--muted);font-size:13px;line-height:1.6">O painel está conectado ao projeto real do ALTHEA PAY. Os módulos serão preenchidos conforme a operação for configurada.</p></div></div></section>
+          ${['funnels','products','gateways','sales','clients','chats','analytics','integrations'].map(id=>`<section class="section" id="${id}"><div class="card"><h3>${label(id)}</h3><p style="color:var(--muted);line-height:1.6">Módulo do ALTHEA PAY preparado para receber os dados reais do Supabase. A base de navegação está funcionando; a operação deste módulo será ligada ao Core em seguida.</p></div></section>`).join('')}
+        </main></div></div>`;
+      document.querySelectorAll('[data-section]').forEach(b=>b.onclick=()=>activate(b.dataset.section));
+      document.getElementById('logout').onclick=async()=>{await sb.auth.signOut();loginView('login')};
+      document.getElementById('mobileNav').innerHTML=[...document.querySelectorAll('[data-section]')].map(b=>`<button data-section="${b.dataset.section}">${b.textContent}</button>`).join('');
+      document.querySelectorAll('#mobileNav [data-section]').forEach(b=>b.onclick=()=>activate(b.dataset.section));
+      loadCounts();
+    }
+    function label(id){return ({funnels:'Funis',products:'Produtos',gateways:'Gateways',sales:'Vendas',clients:'Clientes',chats:'Chats',analytics:'Analytics',integrations:'Integrações'})[id]||id}
+    function activate(id){document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id===id));document.querySelectorAll('[data-section]').forEach(b=>b.classList.toggle('active',b.dataset.section===id));document.getElementById('title').textContent=id==='overview'?'Visão geral':label(id);document.getElementById('subtitle').textContent=id==='overview'?'Controle central da sua operação.':'Gerencie este módulo do ALTHEA PAY.'}
+    async function loadCounts(){
+      const maps=[['funnels','countFunnels'],['products','countProducts'],['sales','countSales'],['chats','countChats']];
+      for(const [table,id] of maps){try{const {count,error}=await sb.from(table).select('*',{count:'exact',head:true});if(!error)document.getElementById(id).textContent=count??0;}catch(e){}}
+    }
+    async function boot(){
+      try{const {data}=await sb.auth.getSession();if(data.session)renderApp(data.session.user);else loginView('login');
+        sb.auth.onAuthStateChange((_event,session)=>{if(session && !currentUser)renderApp(session.user);});
+      }catch(e){loginView('login');notice('O ALTHEA PAY abriu, mas a autenticação não pôde ser inicializada.','error')}
+    }
+    boot();
+  </script>
+</body>
+</html>
