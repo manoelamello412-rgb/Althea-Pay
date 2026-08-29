@@ -220,7 +220,83 @@ function testAI(){let p=db.aiProviders[db.aiSettings.activeProvider]; alert('Tes
 function sendToAI(){let input=document.getElementById('aiInput'); let text=input.value.trim(); if(!text) return; let active=db.aiProviders[db.aiSettings.activeProvider]; aiChat.unshift({id:uid('AI'), role:'user', text}); input.value=''; render(); setTimeout(()=>{let diff=`// ALTERAÇÃO REAL - ${active.name}\n// Comando: ${text}\n// 100% PT-BR\n// Backup automático criado`; let response={id:uid('AI'), role:'assistant', text:`Entendi. Vou alterar no código REAL em 100% PT-BR. Backup criado, log auditado, rollback disponível.`, diff, provider:active.id}; aiChat.unshift(response); db.aiSettings.history.unshift({id:uid('HIST'), provider:active.id, action:'propor_alteracao', description:text, diff, status:'aguardando_aprovacao', createdAt:new Date().toISOString()}); save(); render();},600);}
 function approveAI(id){let msg=aiChat.find(m=>m.id===id); if(!msg) return; if(confirm('Aprovar alteração em 100% PT-BR?')){let backup={id:'BK-AI-'+Date.now(), createdAt:new Date().toISOString(), data:JSON.parse(JSON.stringify(db))}; db.backups=db.backups||[]; db.backups.unshift(backup); logA(`IA-${msg.provider}`, 'ia_edit_aplicado', 'codigo_real', msg.text.slice(0,80)); save(); alert('✓ Alteração aplicada 100% PT-BR real — Backup: '+backup.id); render();}}
 function createFunnel(){modalHTML=`<h3 style="font-weight:bold">CONECTAR FUNIL REAL — 100% PT-BR</h3><p class="mono" style="font-size:11px;color:#888;margin-top:6px">Só fica CONECTADO após teste real. Gera ID ANT-FUN-001</p><input id="fName" placeholder="NOME: Funil 1 - Black Friday" class="input" style="margin-top:16px"><input id="fUrl" placeholder="URL: https://checkout.seudominio.com" class="input"><input id="fEndpoint" placeholder="ENDPOINT REAL: https://api.seudominio.com/webhook" class="input"><div style="display:flex;gap:8px;margin-top:16px"><button onclick="saveFunnel()" class="btn-gold btn" style="flex:1">SALVAR E TESTAR CONEXÃO REAL</button><button onclick="closeModal()" class="btn">CANCELAR</button></div>`; render();}
-function saveFunnel(){let nome=document.getElementById('fName').value.trim(); if(!nome) return alert('Nome obrigatório'); let f={id:'ANT-FUN-'+String(db.funnels.length+1).padStart(3,'0'), nome, url:document.getElementById('fUrl').value.trim(), endpoint:document.getElementById('fEndpoint').value.trim(), status:'testando', createdAt:new Date().toISOString()}; db.funnels.push(f); save(); modalHTML=`<div style="text-align:center;padding:20px"><div style="width:48px;height:48px;border:3px solid #d4af37;border-top-color:transparent;border-radius:50%;margin:0 auto;animation:spin 1s linear infinite"></div><div class="mono gold" style="font-size:12px;margin-top:16px">TESTANDO CONEXÃO REAL...</div></div>`; render(); setTimeout(()=>{f.status=f.endpoint&&f.url.startsWith('http')?'conectado':'erro'; f.lastCommunication=f.status==='conectado'?new Date().toISOString():null; logA('Rafaela','conectar','funil',f.id); save(); closeModal(); render();},1200);}
+async function saveFunnel(){
+  const nome = document.getElementById('fName').value.trim();
+  const url = document.getElementById('fUrl').value.trim();
+  const endpoint = document.getElementById('fEndpoint').value.trim();
+
+  if(!nome) return alert('Nome obrigatório');
+
+  const id = 'ANT-FUN-' + String(db.funnels.length + 1).padStart(3,'0');
+
+  const f = {
+    id,
+    nome,
+    url,
+    endpoint,
+    status:'testando',
+    createdAt:new Date().toISOString()
+  };
+
+  modalHTML = `
+    <div style="text-align:center;padding:20px">
+      <div style="width:48px;height:48px;border:3px solid #d4af37;border-top-color:transparent;border-radius:50%;margin:0 auto;animation:spin 1s linear infinite"></div>
+      <div class="mono gold" style="font-size:12px;margin-top:16px">
+        SALVANDO NO BANCO DE DADOS...
+      </div>
+    </div>
+  `;
+
+  render();
+
+  const { error } = await supabaseClient
+    .from('funnels')
+    .insert([{
+      id: f.id,
+      nome: f.nome,
+      url: f.url,
+      endpoint: f.endpoint,
+      status: f.status
+    }]);
+
+  if(error){
+    console.error(error);
+    modalHTML = `
+      <div style="text-align:center;padding:20px">
+        <div style="font-size:40px">⚠️</div>
+        <div style="font-weight:bold;margin-top:12px">
+          ERRO AO SALVAR
+        </div>
+        <div class="mono" style="font-size:11px;color:#888;margin-top:8px">
+          ${error.message}
+        </div>
+        <button onclick="closeModal()" class="btn" style="margin-top:16px">
+          FECHAR
+        </button>
+      </div>
+    `;
+    render();
+    return;
+  }
+
+  f.status = f.endpoint && f.url.startsWith('http')
+    ? 'conectado'
+    : 'erro';
+
+  f.lastCommunication = f.status === 'conectado'
+    ? new Date().toISOString()
+    : null;
+
+  db.funnels.push(f);
+  save();
+
+  logA('Rafaela','conectar','funil',f.id);
+
+  closeModal();
+  render();
+
+  alert('✓ Funil salvo no Supabase: ' + f.id);
+}
 function exportDB(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}); let url=URL.createObjectURL(blob); let a=document.createElement('a'); a.href=url; a.download='anthea-100-pt-br-'+new Date().toISOString().slice(0,10)+'.json'; a.click();}
 render();
 </script>
