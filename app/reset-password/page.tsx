@@ -16,10 +16,20 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const supabase = createSupabaseBrowserClient()
     if (!supabase) { setError('O ALTHEA PAY ainda não está conectado ao Supabase neste ambiente.'); return }
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true)
-      else setError('Este link de recuperação é inválido ou expirou. Solicite um novo link.')
+    let active = true
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return
+      if (event === 'PASSWORD_RECOVERY' && session) setReady(true)
+      else if (event === 'SIGNED_IN' && session) setReady(true)
     })
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return
+      if (data.session) setReady(true)
+    })
+    const timer = window.setTimeout(() => {
+      if (active) setError(current => current || 'Este link de recuperação é inválido ou expirou. Solicite um novo link.')
+    }, 2500)
+    return () => { active = false; window.clearTimeout(timer); listener.subscription.unsubscribe() }
   }, [])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -31,7 +41,7 @@ export default function ResetPasswordPage() {
     setLoading(true)
     const { error } = await supabase.auth.updateUser({ password })
     if (error) setError(error.message)
-    else { setMessage('Senha atualizada com sucesso. Redirecionando para o login...'); await supabase.auth.signOut(); setTimeout(() => router.replace('/login'), 1200) }
+    else { setMessage('Senha atualizada com sucesso. Redirecionando para o login...'); await supabase.auth.signOut(); window.setTimeout(() => router.replace('/login'), 1200) }
     setLoading(false)
   }
 
