@@ -1,7 +1,7 @@
 export const ALTHEA_PAY = {
   name: 'ALTHEA PAY',
-  tagline: 'Control Center',
-  description: 'Central de controle para funis, gateways, vendas espelhadas e atendimento em tempo real.',
+  tagline: 'Onde você constrói sua raiz financeira',
+  description: 'Uma nova geração de infraestrutura financeira para operar, crescer e construir patrimônio.',
 } as const
 
 export type FunnelStatus = 'draft' | 'active' | 'paused' | 'archived'
