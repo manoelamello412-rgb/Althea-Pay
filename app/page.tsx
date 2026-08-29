@@ -28,7 +28,6 @@ export default function DashboardPage() {
   const [loading,setLoading]=useState(true)
   const [message,setMessage]=useState('')
   const [error,setError]=useState('')
-
   const supabase=useMemo(()=>createSupabaseBrowserClient(),[])
 
   async function loadAll() {
@@ -92,7 +91,6 @@ export default function DashboardPage() {
 
   async function logout(){ if(!supabase) return; await supabase.auth.signOut(); router.replace('/login'); router.refresh() }
 
-  const title=active
   const descriptions:Record<Module,string>={
     'Visão geral':'Seu centro de controle operacional, conectado ao Supabase.',
     'Funis':'Crie, acompanhe e remova seus funis conectados.',
@@ -107,39 +105,19 @@ export default function DashboardPage() {
   }
 
   return <main className="althea-app">
-    <aside className="althea-sidebar">
-      <div className="althea-brand">{ALTHEA_PAY.name}<span>{ALTHEA_PAY.tagline}</span></div>
-      <nav className="althea-nav">{nav.map(item=><button key={item} className={active===item?'active':''} onClick={()=>{setActive(item);setMessage('');setError('')}}>{item}</button>)}</nav>
-      <button className="auth-switch sidebar-logout" onClick={logout}>Sair da conta</button>
-    </aside>
+    <aside className="althea-sidebar"><div className="althea-brand">{ALTHEA_PAY.name}<span>{ALTHEA_PAY.tagline}</span></div><nav className="althea-nav">{nav.map(item=><button key={item} className={active===item?'active':''} onClick={()=>{setActive(item);setMessage('');setError('')}}>{item}</button>)}</nav><button className="auth-switch sidebar-logout" onClick={logout}>Sair da conta</button></aside>
     <section className="althea-main">
-      <header className="althea-header"><div><div className="althea-kicker">{ALTHEA_PAY.tagline}</div><h1>{title}</h1><p>{descriptions[active]}</p></div><div className="althea-status">● {loading?'Sincronizando':'Conta protegida'}</div></header>
+      <header className="althea-header"><div><div className="althea-kicker">{ALTHEA_PAY.tagline}</div><h1>{active}</h1><p>{descriptions[active]}</p></div><div className="althea-status">● {loading?'Sincronizando':'Conta protegida'}</div></header>
       {error&&<div className="auth-error" role="alert">{error}</div>}{message&&<div className="auth-message" role="status">{message}</div>}
-
       <div className="althea-metrics">{[['Funis','funnels'],['Produtos','products'],['Gateways','gateways'],['Vendas','sales'],['Clientes','clients'],['Chats','chats']].map(([label,key])=><article className="althea-card" key={key}><span>{label}</span><strong>{loading?'—':counts[key]||0}</strong><small>Dados da conta autenticada</small></article>)}</div>
-
-      {active==='Visão geral'&&<>
-        <section className="althea-card althea-panel"><div className="panel-heading"><div><span>OPERAÇÃO</span><h2>Funis conectados</h2></div><button className="primary" onClick={()=>setActive('Funis')}>+ Novo funil</button></div>{funnels.length===0?<div className="empty-state"><strong>Nenhum funil disponível</strong><p>Crie o primeiro funil para sua conta. O RLS impede acesso a dados de outros usuários.</p></div>:funnels.map(f=><div className="funnel-row" key={f.id}><div><strong>{String(f.nome)}</strong><small>{String(f.url||'Sem URL')}</small></div><span className="althea-pill">{String(f.status||'draft')}</span></div>)}</section>
-        <section className="althea-card althea-panel"><div className="panel-heading"><div><span>RESUMO</span><h2>Saúde da operação</h2></div></div><div className="empty-state"><strong>Autenticação e banco ativos</strong><p>Você está operando dentro do seu espaço protegido. Os módulos abaixo gravam registros usando o usuário autenticado.</p></div></section>
-      </>}
-
-      {active==='Funis'&&<>
-        <section className="althea-card althea-panel"><div className="panel-heading"><div><span>NOVO FUNIL</span><h2>Conectar funil</h2></div></div><form className="auth-form" onSubmit={createFunnel}><label>Nome<input value={funnelName} onChange={e=>setFunnelName(e.target.value)} required placeholder="Meu funil"/></label><label>URL<input type="url" value={funnelUrl} onChange={e=>setFunnelUrl(e.target.value)} placeholder="https://..."/></label><label>Status<select value={funnelStatus} onChange={e=>setFunnelStatus(e.target.value)}><option value="draft">Rascunho</option><option value="active">Ativo</option><option value="paused">Pausado</option><option value="archived">Arquivado</option></select></label><button className="primary" disabled={saving}>{saving?'Salvando...':'Criar funil'}</button></form></section>
-        <List table="funnels" rows={funnels} onDelete={deleteRow} />
-      </>}
-
-      {tableMap[active]&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>REGISTROS</span><h2>{labels[tableMap[active]!]}</h2></div></div><form className="auth-form" onSubmit={createGeneric}><label>Dados do registro (JSON)<textarea className="json-input" value={json} onChange={e=>setJson(e.target.value)} rows={8}/></label><button className="primary" disabled={saving}>{saving?'Salvando...':`Criar ${labels[tableMap[active]!]}`}</button></form><List table={tableMap[active]!} rows={rows} onDelete={deleteRow}/></section>}
-
+      {active==='Visão geral'&&<><section className="althea-card althea-panel"><div className="panel-heading"><div><span>OPERAÇÃO</span><h2>Funis conectados</h2></div><button className="primary" onClick={()=>setActive('Funis')}>+ Novo funil</button></div>{funnels.length===0?<div className="empty-state"><strong>Nenhum funil disponível</strong><p>Crie o primeiro funil para sua conta. O RLS impede acesso a dados de outros usuários.</p></div>:funnels.map(f=><div className="funnel-row" key={f.id}><div><strong>{String(f.nome)}</strong><small>{String(f.url||'Sem URL')}</small></div><span className="althea-pill">{String(f.status||'draft')}</span></div>)}</section><section className="althea-card althea-panel"><div className="panel-heading"><div><span>RESUMO</span><h2>Saúde da operação</h2></div></div><div className="empty-state"><strong>Autenticação e banco ativos</strong><p>Você está operando dentro do seu espaço protegido. Os módulos abaixo gravam registros usando o usuário autenticado.</p></div></section></>}
+      {active==='Funis'&&<><section className="althea-card althea-panel"><div className="panel-heading"><div><span>NOVO FUNIL</span><h2>Conectar funil</h2></div></div><form className="auth-form" onSubmit={createFunnel}><label>Nome<input value={funnelName} onChange={e=>setFunnelName(e.target.value)} required placeholder="Meu funil"/></label><label>URL<input type="url" value={funnelUrl} onChange={e=>setFunnelUrl(e.target.value)} placeholder="https://..."/></label><label>Status<select value={funnelStatus} onChange={e=>setFunnelStatus(e.target.value)}><option value="draft">Rascunho</option><option value="active">Ativo</option><option value="paused">Pausado</option><option value="archived">Arquivado</option></select></label><button className="primary" disabled={saving}>{saving?'Salvando...':'Criar funil'}</button></form></section><List table="funnels" rows={funnels} onDelete={deleteRow}/></>}
+      {tableMap[active]&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>REGISTROS</span><h2>{labels[tableMap[active]!]}</h2></div></div><form className="auth-form" onSubmit={createGeneric}><label>Dados do registro (JSON)<textarea value={json} onChange={e=>setJson(e.target.value)} rows={8}/></label><button className="primary" disabled={saving}>{saving?'Salvando...':`Criar ${labels[tableMap[active]!]}`}</button></form><List table={tableMap[active]!} rows={rows} onDelete={deleteRow}/></section>}
       {active==='Analytics'&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>ANALYTICS</span><h2>Indicadores</h2></div></div><div className="analytics-grid">{Object.entries(counts).map(([k,v])=><article className="althea-card" key={k}><span>{k}</span><strong>{v}</strong><small>Contagem atual</small></article>)}</div></section>}
-
-      {active==='Integrações'&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>INTEGRAÇÕES</span><h2>Conectividade</h2></div></div><div className="empty-state"><strong>Arquitetura pronta</strong><p>O projeto já possui Supabase e Edge Functions. Use os campos de gateway e funil para registrar endpoints; credenciais secretas devem permanecer no servidor.</p></div></section>}
-
+      {active==='Integrações'&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>INTEGRAÇÕES</span><h2>Conectividade</h2></div></div><div className="empty-state"><strong>Arquitetura pronta</strong><p>O projeto já possui Supabase e Edge Functions. Credenciais secretas devem permanecer no servidor.</p></div></section>}
       {active==='Configurações'&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>PERFIL</span><h2>Configurações da conta</h2></div></div><form className="auth-form" onSubmit={saveProfile}><label>E-mail<input value={email} disabled/></label><label>Nome<input value={fullName} onChange={e=>setFullName(e.target.value)} placeholder="Seu nome"/></label><button className="primary" disabled={saving}>{saving?'Salvando...':'Salvar configurações'}</button></form></section>}
     </section>
   </main>
 }
 
-function List({table,rows,onDelete}:{table:string;rows:Row[];onDelete:(table:string,id:string)=>void}){
-  if(!rows.length) return <div className="empty-state"><strong>Nenhum registro</strong><p>Crie um registro acima para começar.</p></div>
-  return <div className="records">{rows.map(row=><article className="record" key={row.id}><div><strong>{row.id}</strong><small>{row.created_at?new Date(row.created_at).toLocaleString('pt-BR'):''}</small><pre>{JSON.stringify(row.data||row,null,2)}</pre></div><button className="danger" onClick={()=>onDelete(table,row.id)}>Excluir</button></article>)}</div>
-}
+function List({table,rows,onDelete}:{table:string;rows:Row[];onDelete:(table:string,id:string)=>void}){ if(!rows.length) return <div className="empty-state"><strong>Nenhum registro</strong><p>Crie um registro acima para começar.</p></div>; return <div className="records">{rows.map(row=><article className="record" key={row.id}><div><strong>{row.id}</strong><small>{row.created_at?new Date(row.created_at).toLocaleString('pt-BR'):''}</small><pre>{JSON.stringify(row.data||row,null,2)}</pre></div><button className="danger" onClick={()=>onDelete(table,row.id)}>Excluir</button></article>)}</div> }
