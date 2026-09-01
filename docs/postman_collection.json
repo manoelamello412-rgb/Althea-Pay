@@ -1,26 +1,9 @@
 {
-  "info": {
-    "name": "Althea Pay E2E Smoke",
-    "description": "Minimal Postman collection for sandbox quickstart"
-  },
-  "item": [
-    {
-      "name": "Charge (sandbox)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{ \"amount\": 1000, \"currency\": \"BRL\" }"
-        },
-        "url": {
-          "raw": "https://api.example.com/functions/v1/gateway-orchestrator",
-          "host": ["https://api.example.com"],
-          "path": ["functions","v1","gateway-orchestrator"]
-        }
-      }
-    }
+  "info": {"name":"Althea Pay API","schema":"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "variable":[{"key":"baseUrl","value":"https://hkraryqoziravulvqkid.supabase.co/functions/v1"},{"key":"apiKey","value":""},{"key":"idempotencyKey","value":"{{$guid}}"}],
+  "item":[
+    {"name":"Health","request":{"method":"GET","url":"{{baseUrl}}/health"}},
+    {"name":"Sandbox charge","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{supabaseAccessToken}}"},{"key":"Content-Type","value":"application/json"},{"key":"X-Idempotency-Key","value":"{{idempotencyKey}}"}],"body":{"mode":"raw","raw":"{\n  \"funnel_id\": \"{{funnelId}}\",\n  \"amount\": 1000,\n  \"currency\": \"BRL\",\n  \"scenario\": \"approved\"\n}"},"url":"{{baseUrl}}/gateway-sandbox"}},
+    {"name":"Public API — funnels","request":{"method":"GET","header":[{"key":"x-althea-api-key","value":"{{apiKey}}"}],"url":"{{baseUrl}}/althea-public-api/v1/funnels"}}
   ]
 }
