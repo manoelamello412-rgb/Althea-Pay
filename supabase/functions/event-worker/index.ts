@@ -21,9 +21,24 @@ export default async function handler(req: any, res: any) {
       const { id, event_id, payload, attempts } = row;
       logJSON('info','worker.processing',{requestId,event_id,attempts});
       try {
-        // TODO: route to proper handler based on payload.type — for now we just mark processed
+        // route by payload type
+        if (payload && payload.type) {
+          if (payload.type === 'payment_intent.succeeded' || payload.type === 'charge.succeeded') {
+            // extract gateway tx id and amount
+            const gatewayTxId = payload.data?.object?.id || payload.data?.object?.charge || null;
+            const amount = payload.data?.object?.amount || 0;
+            const currency = (payload.data?.object?.currency || 'USD').toUpperCase();
+
+            // insert into ledger
+            try {
+              await query(`INSERT INTO ledger_transactions(gateway_tx_id, amount, gross, fees, net, currency, status) VALUES($1,$2,$3,$4,$5,$6,$7)`, [gatewayTxId, amount, amount, 0, amount, currency, 'settled']);
+            } catch (ledgerErr) {
+              logJSON('warn','worker.ledger_insert_failed',{requestId,event_id,error:String(ledgerErr)});
+            }
+          }
+        }
+
         await query(`UPDATE webhook_events SET processed = true WHERE id = $1`, [id]);
-        // Insert into ledger or route further as needed
         logJSON('info','worker.processed',{requestId,event_id});
       } catch (procErr) {
         const newAttempts = (attempts || 0) + 1;
