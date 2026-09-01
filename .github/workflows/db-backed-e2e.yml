@@ -1,0 +1,29 @@
+name: db-backed-e2e
+on:
+  workflow_dispatch:
+  push:
+    branches: [ ci-security-hardening ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  e2e-db:
+    runs-on: ubuntu-latest
+    if: startsWith(secrets.DATABASE_URL, 'postgres')
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install
+        run: npm ci
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "Applying migrations"
+          psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql
+      - name: Run tests
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm test --if-present
