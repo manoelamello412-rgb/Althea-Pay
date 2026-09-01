@@ -1,47 +1,33 @@
-import { query } from '../../lib/db';
-import { logJSON, genRequestId } from '../../lib/logging';
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { withSupabase } from "npm:@supabase/server";
 
-// Reconciliation worker skeleton: ingest settlement file and attempt to match ledger_transactions
-export default async function handler(req: any, res: any) {
-  const requestId = genRequestId();
-  logJSON('info','reconciliation.start',{requestId});
+const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"content-type,x-internal-secret"}})
 
-  try {
-    // TODO: support file upload / S3 ingestion
-    // For now, expect a JSON array in body with settlement records: [{gateway_tx_id, amount, currency, reference}]
-    const body = req.body || (await req.text());
-    const parsed = typeof body === 'string' ? JSON.parse(body) : body;
-    if (!Array.isArray(parsed)) {
-      return res.status(400).json({ ok: false, error: 'expected array of settlement records' });
+Deno.serve(withSupabase({auth:'none'},async(req,ctx)=>{
+  if(req.method==='OPTIONS')return new Response('ok',{headers:{"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"content-type,x-internal-secret"}})
+  const provided=req.headers.get('x-internal-secret')
+  const {data:secret}=await ctx.supabaseAdmin.rpc('get_althea_internal_secret')
+  if(!secret || !provided || provided!==secret)return json({error:'unauthorized'},401)
+  if(req.method!=='POST')return json({error:'method_not_allowed'},405)
+  let body:any;try{body=await req.json()}catch{return json({error:'invalid_json'},400)}
+  const userId=String(body.user_id??'');const rows=Array.isArray(body.settlement_rows)?body.settlement_rows:[];const gatewayId=body.gateway_id?String(body.gateway_id):null
+  if(!userId||!rows.length)return json({error:'user_id_and_settlement_rows_required'},400)
+  const start=body.period_start?new Date(body.period_start).toISOString():new Date(Date.now()-86400000).toISOString();const end=body.period_end?new Date(body.period_end).toISOString():new Date().toISOString()
+  const {data:run,error:runError}=await ctx.supabaseAdmin.from('reconciliation_runs').insert({user_id:userId,gateway_id:gatewayId,period_start:start,period_end:end,status:'running',source_type:'gateway_report',source_reference:body.source_reference??null,started_at:new Date().toISOString()}).select().single()
+  if(runError)return json({error:'run_create_failed',detail:runError.message},500)
+  let matched=0,mismatch=0,grossExpected=0,grossReported=0
+  try{
+    for(const row of rows){
+      const external=String(row.external_transaction_id??row.transaction_id??'');const reported=Number(row.amount??row.gross??0);grossReported+=reported
+      let q=ctx.supabaseAdmin.from('gateway_transactions').select('id,amount,external_id,gateway_id').eq('user_id',userId).limit(1);if(external)q=q.eq('external_id',external);if(gatewayId)q=q.eq('gateway_id',gatewayId)
+      const {data:tx,error}=await q.maybeSingle();if(error)throw error
+      if(!tx){mismatch++;await ctx.supabaseAdmin.from('reconciliation_items').insert({user_id:userId,run_id:run.id,external_transaction_id:external||null,status:'missing_internal',reported_amount:reported,discrepancy_amount:reported,mismatch_reason:'transaction_not_found',gateway_payload:row});continue}
+      const expected=Number(tx.amount);grossExpected+=expected;const diff=Math.round((expected-reported)*100)/100
+      const status=Math.abs(diff)<0.01?'matched':'amount_mismatch';if(status==='matched')matched++;else mismatch++
+      await ctx.supabaseAdmin.from('reconciliation_items').insert({user_id:userId,run_id:run.id,transaction_id:tx.id,external_transaction_id:external||tx.external_id,status,expected_amount:expected,reported_amount:reported,discrepancy_amount:diff,mismatch_reason:status==='matched'?null:'amount_difference',gateway_payload:row})
     }
-
-    let matched = 0;
-    for (const rec of parsed) {
-      try {
-        const r = await query(`SELECT id, amount, currency FROM ledger_transactions WHERE gateway_tx_id = $1 LIMIT 1`, [rec.gateway_tx_id]);
-        if (r.rows.length) {
-          const ledgerId = r.rows[0].id;
-          await query(`INSERT INTO reconciliations(ledger_tx_id, settlement_reference, matched) VALUES($1,$2,true)`, [ledgerId, rec.reference || null]);
-          matched++;
-        } else {
-          // heuristic: try match by amount & currency within 1-day window
-          const heuristic = await query(`SELECT id FROM ledger_transactions WHERE amount = $1 AND currency = $2 ORDER BY created_at DESC LIMIT 1`, [rec.amount, rec.currency]);
-          if (heuristic.rows.length) {
-            await query(`INSERT INTO reconciliations(ledger_tx_id, settlement_reference, matched) VALUES($1,$2,true)`, [heuristic.rows[0].id, rec.reference || null]);
-            matched++;
-          } else {
-            await query(`INSERT INTO reconciliations(ledger_tx_id, settlement_reference, matched) VALUES($1,$2,false)`, [null, rec.reference || null]);
-          }
-        }
-      } catch (e) {
-        logJSON('warn','reconciliation.record_error',{requestId, error: String(e), record: rec});
-      }
-    }
-
-    logJSON('info','reconciliation.finished',{requestId, matched, total: parsed.length});
-    return res.status(200).json({ ok: true, matched, total: parsed.length });
-  } catch (err) {
-    logJSON('error','reconciliation.error',{requestId, error: String(err)});
-    return res.status(500).json({ ok: false });
-  }
-}
+    const discrepancy=Math.round((grossExpected-grossReported)*100)/100
+    await ctx.supabaseAdmin.from('reconciliation_runs').update({status:'completed',matched_count:matched,mismatch_count:mismatch,gross_expected:grossExpected,gross_reported:grossReported,discrepancy_amount:discrepancy,completed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',run.id)
+    return json({run_id:run.id,status:'completed',matched_count:matched,mismatch_count:mismatch,gross_expected:grossExpected,gross_reported:grossReported,discrepancy_amount:discrepancy})
+  }catch(e){await ctx.supabaseAdmin.from('reconciliation_runs').update({status:'failed',error_message:String(e),completed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',run.id);return json({error:'reconciliation_failed',detail:String(e),run_id:run.id},500)}
+}))
