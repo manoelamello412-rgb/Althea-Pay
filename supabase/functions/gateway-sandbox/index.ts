@@ -35,7 +35,8 @@ Deno.serve(async (request) => {
   }
 
   const scenario = body.scenario ?? 'approved'
-  const externalId = body.external_id ?? `sandbox_${crypto.randomUUID()}`
+  // Deterministic by idempotency key so a retry can reproduce the same sandbox transaction.
+  const externalId = body.external_id ?? `sandbox_${body.idempotency_key}`
   const now = new Date().toISOString()
 
   if (scenario === 'declined') {
