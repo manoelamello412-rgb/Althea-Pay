@@ -1,0 +1,41 @@
+name: Apply migrations & RLS
+
+on:
+  push:
+    branches: [ ci-security-hardening ]
+  workflow_dispatch: {}
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Validate secrets
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "DATABASE_URL not set"; exit 1; fi
+          if [ -z "$SUPABASE_SERVICE_ROLE" ]; then echo "SUPABASE_SERVICE_ROLE not set"; exit 1; fi
+
+      - name: Install psql
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Apply initial migrations
+        run: |
+          echo "Applying migrations: supabase/migrations/0001_init.sql"
+          psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql
+
+      - name: Apply RLS policies (policies.sql)
+        run: |
+          echo "Applying RLS policies: supabase/migrations/policies.sql"
+          psql "$DATABASE_URL" -f supabase/migrations/policies.sql
+
+      - name: Success
+        run: echo "Migrations and RLS applied successfully"
