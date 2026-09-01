@@ -1,34 +1,50 @@
-import request from 'supertest'
-import gatewaySandbox from '../supabase/functions/gateway-sandbox/index'
-
-// We'll call the handler directly by mocking req/res
-
-function makeRes() {
-  const r: any = {}
-  r.status = (s: number) => { r._status = s; return r }
-  r.json = (j: any) => { r._json = j; return r }
-  return r
-}
+import { describe, expect, it } from 'vitest'
+import { simulateGatewaySandbox } from '../_shared/gateway-sandbox-sim'
 
 describe('Gateway Sandbox', () => {
-  it('approves a payment', async () => {
-    const req: any = { method: 'POST', headers: {}, body: { amount: 1000, currency: 'BRL', scenario: 'approved' } }
-    const res = makeRes()
-    await gatewaySandbox(req, res)
-    expect(res._status).toBe(200)
-    expect(res._json.result.status).toBe('approved')
+  it('approves a payment deterministically', async () => {
+    const result = await simulateGatewaySandbox({
+      amount: 1000,
+      currency: 'BRL',
+      scenario: 'approved',
+      idempotencyKey: 'sandbox-approved-1',
+    })
+
+    expect(result.status).toBe('approved')
+    expect(result.transaction_id).toContain('sandbox_tx_')
   })
 
-  it('returns duplicate when same idempotency-key used', async () => {
-    const headers = { 'idempotency-key': 'dup-key-1' }
-    const req1: any = { method: 'POST', headers, body: { amount: 1000, scenario: 'approved' } }
-    const res1 = makeRes()
-    await gatewaySandbox(req1, res1)
-    expect(res1._status).toBe(200)
-    const req2: any = { method: 'POST', headers, body: { amount: 1000, scenario: 'approved' } }
-    const res2 = makeRes()
-    await gatewaySandbox(req2, res2)
-    expect(res2._status).toBe(200)
-    expect(res2._json.duplicate).toBe(true)
+  it('returns stable transaction ids for the same idempotency key', async () => {
+    const first = await simulateGatewaySandbox({
+      amount: 1000,
+      currency: 'BRL',
+      scenario: 'approved',
+      idempotencyKey: 'sandbox-duplicate-1',
+    })
+    const second = await simulateGatewaySandbox({
+      amount: 1000,
+      currency: 'BRL',
+      scenario: 'approved',
+      idempotencyKey: 'sandbox-duplicate-1',
+    })
+
+    expect(second.transaction_id).toBe(first.transaction_id)
+    expect(second.status).toBe('approved')
+  })
+
+  it.each([
+    ['declined', 'declined'],
+    ['error', 'error'],
+    ['refund', 'refunded'],
+    ['chargeback', 'chargeback'],
+  ] as const)('simulates %s', async (scenario, expectedStatus) => {
+    const result = await simulateGatewaySandbox({
+      amount: 1000,
+      currency: 'BRL',
+      scenario,
+      idempotencyKey: `sandbox-${scenario}-1`,
+    })
+
+    expect(result.status).toBe(expectedStatus)
   })
 })
