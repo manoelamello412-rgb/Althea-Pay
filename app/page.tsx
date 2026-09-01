@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ALTHEA_PAY } from '@/lib/althea'
+import { BrandKit, hydrateAltheaBrand } from '@/components/brand-kit'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Row = { id: string; data?: Record<string, unknown>; created_at?: string; [key: string]: unknown }
@@ -29,6 +30,8 @@ export default function DashboardPage() {
   const [message,setMessage]=useState('')
   const [error,setError]=useState('')
   const supabase=useMemo(()=>createSupabaseBrowserClient(),[])
+
+  useEffect(()=>{ hydrateAltheaBrand() },[])
 
   async function loadAll() {
     if (!supabase) { setError('Supabase não configurado.'); setLoading(false); return }
@@ -101,7 +104,7 @@ export default function DashboardPage() {
     'Chats':'Acompanhe os registros de atendimento e conversas.',
     'Analytics':'Indicadores calculados diretamente dos dados disponíveis.',
     'Integrações':'Base de integrações pronta para endpoints e webhooks.',
-    'Configurações':'Dados do perfil e informações da conta.'
+    'Configurações':'Perfil, conta e identidade visual da Althea Pay.'
   }
 
   return <main className="althea-app">
@@ -115,7 +118,7 @@ export default function DashboardPage() {
       {tableMap[active]&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>REGISTROS</span><h2>{labels[tableMap[active]!]}</h2></div></div><form className="auth-form" onSubmit={createGeneric}><label>Dados do registro (JSON)<textarea value={json} onChange={e=>setJson(e.target.value)} rows={8}/></label><button className="primary" disabled={saving}>{saving?'Salvando...':`Criar ${labels[tableMap[active]!]}`}</button></form><List table={tableMap[active]!} rows={rows} onDelete={deleteRow}/></section>}
       {active==='Analytics'&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>ANALYTICS</span><h2>Indicadores</h2></div></div><div className="analytics-grid">{Object.entries(counts).map(([k,v])=><article className="althea-card" key={k}><span>{k}</span><strong>{v}</strong><small>Contagem atual</small></article>)}</div></section>}
       {active==='Integrações'&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>INTEGRAÇÕES</span><h2>Conectividade</h2></div></div><div className="empty-state"><strong>Arquitetura pronta</strong><p>O projeto já possui Supabase e Edge Functions. Credenciais secretas devem permanecer no servidor.</p></div></section>}
-      {active==='Configurações'&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>PERFIL</span><h2>Configurações da conta</h2></div></div><form className="auth-form" onSubmit={saveProfile}><label>E-mail<input value={email} disabled/></label><label>Nome<input value={fullName} onChange={e=>setFullName(e.target.value)} placeholder="Seu nome"/></label><button className="primary" disabled={saving}>{saving?'Salvando...':'Salvar configurações'}</button></form></section>}
+      {active==='Configurações'&&<><section className="althea-card althea-panel"><div className="panel-heading"><div><span>PERFIL</span><h2>Configurações da conta</h2></div></div><form className="auth-form" onSubmit={saveProfile}><label>E-mail<input value={email} disabled/></label><label>Nome<input value={fullName} onChange={e=>setFullName(e.target.value)} placeholder="Seu nome"/></label><button className="primary" disabled={saving}>{saving?'Salvando...':'Salvar configurações'}</button></form></section><BrandKit/></>}
     </section>
   </main>
 }
