@@ -1,22 +1,35 @@
 name: CI
+
 on:
   push:
-    branches: [ main, ci-security-hardening ]
+    branches: [main, ci-security-hardening]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
       - name: Install
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
-      - name: Run tests
+      - name: Lint
+        run: npm run lint
+      - name: Tests
         run: npm test
+      - name: Build
+        run: npm run build
