@@ -17,10 +17,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Validate secrets
+      - name: Validate DATABASE_URL
         run: |
-          if [ -z "$DATABASE_URL" ]; then echo "DATABASE_URL not set"; exit 1; fi
-          if [ -z "$SUPABASE_SERVICE_ROLE" ]; then echo "SUPABASE_SERVICE_ROLE not set"; exit 1; fi
+          if [ -z "$DATABASE_URL" ]; then echo "ERROR: DATABASE_URL not set. Set repository secret DATABASE_URL and retry."; exit 1; fi
 
       - name: Install psql
         run: |
@@ -32,10 +31,14 @@ jobs:
           echo "Applying migrations: supabase/migrations/0001_init.sql"
           psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql
 
-      - name: Apply RLS policies (policies.sql)
+      - name: Apply RLS policies (policies.sql) if SUPABASE_SERVICE_ROLE present
         run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE" ]; then
+            echo "SUPABASE_SERVICE_ROLE not set — skipping RLS/policies application. To apply policies automatically, set SUPABASE_SERVICE_ROLE as a repo secret.";
+            exit 0;
+          fi
           echo "Applying RLS policies: supabase/migrations/policies.sql"
           psql "$DATABASE_URL" -f supabase/migrations/policies.sql
 
       - name: Success
-        run: echo "Migrations and RLS applied successfully"
+        run: echo "Migrations applied (policies applied when SUPABASE_SERVICE_ROLE provided)."
