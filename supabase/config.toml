@@ -12,6 +12,9 @@ verify_jwt = true
 [functions.althea-api]
 verify_jwt = true
 
+[functions.althea-public-api]
+verify_jwt = false
+
 [functions.api]
 verify_jwt = true
 
