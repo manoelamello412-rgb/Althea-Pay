@@ -1,75 +1,98 @@
 openapi: 3.1.0
 info:
-  title: ALTHEA PAY Public API
-  version: 1.0.0
-  description: Control-plane API for funnels, products, sales, transactions and event ingestion.
+  title: Althea Pay Public API
+  version: 3.0.0
+  description: |
+    Control-plane API for funnels, products, sales, gateway transactions and event ingestion.
+    Althea Pay does not store PAN/CVC and does not hold merchant sales funds.
 servers:
-  - url: https://YOUR_ALTHEA_API_HOST
+  - url: https://hkraryqoziravulvqkid.supabase.co/functions/v1/althea-public-api
 security:
-  - ApiKeyAuth: []
+  - AltheaApiKey: []
 paths:
   /v1/funnels:
     get:
       summary: List funnels
-      responses:
-        '200': { description: OK }
+      parameters: [{ $ref: '#/components/parameters/Limit' }]
+      responses: {'200': { $ref: '#/components/responses/Success' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }}
   /v1/funnels/{id}:
     get:
       summary: Get funnel
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: string } }
-      responses:
-        '200': { description: OK }
+      parameters: [{ $ref: '#/components/parameters/FunnelId' }]
+      responses: {'200': { $ref: '#/components/responses/Success' }, '404': { $ref: '#/components/responses/NotFound' }}
   /v1/products:
     get:
       summary: List products
-      responses:
-        '200': { description: OK }
+      parameters: [{ $ref: '#/components/parameters/Limit' }]
+      responses: {'200': { $ref: '#/components/responses/Success' }, '403': { $ref: '#/components/responses/Forbidden' }}
   /v1/products/{id}:
     get:
       summary: Get product
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: string } }
-      responses:
-        '200': { description: OK }
+      parameters: [{ $ref: '#/components/parameters/ProductId' }]
+      responses: {'200': { $ref: '#/components/responses/Success' }, '404': { $ref: '#/components/responses/NotFound' }}
   /v1/sales:
     get:
       summary: List sales
-      responses:
-        '200': { description: OK }
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { in: query, name: funnel_id, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string } }
+      responses: {'200': { $ref: '#/components/responses/Success' }, '403': { $ref: '#/components/responses/Forbidden' }}
   /v1/transactions:
     get:
       summary: List gateway transactions
-      responses:
-        '200': { description: OK }
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { in: query, name: funnel_id, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string } }
+      responses: {'200': { $ref: '#/components/responses/Success' }, '403': { $ref: '#/components/responses/Forbidden' }}
   /v1/events:
     post:
-      summary: Ingest a funnel event
+      summary: Ingest an event
+      description: Requires events:write. external_id is deduplicated per merchant.
+      parameters: [{ $ref: '#/components/parameters/RequestId' }]
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/Event'
-      responses:
-        '200': { description: Processed or accepted }
-        '400': { description: Invalid event }
-        '401': { description: Invalid API key }
-        '403': { description: Missing events:write scope }
-        '409': { description: Duplicate event }
+            schema: { $ref: '#/components/schemas/Event' }
+            example:
+              event_type: purchase
+              external_id: order_123
+              funnel_id: funnel_123
+              occurred_at: '2026-09-01T18:00:00Z'
+              payload: { amount: 199.90, currency: BRL, transaction_id: tx_123 }
+      responses: {'202': { $ref: '#/components/responses/Accepted' }, '400': { $ref: '#/components/responses/BadRequest' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '429': { $ref: '#/components/responses/RateLimited' }}
 components:
   securitySchemes:
-    ApiKeyAuth:
+    AltheaApiKey:
       type: apiKey
       in: header
       name: x-althea-api-key
+      description: Merchant API key. Never expose in browser code.
+  parameters:
+    Limit: { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+    FunnelId: { in: path, name: id, required: true, schema: { type: string } }
+    ProductId: { in: path, name: id, required: true, schema: { type: string } }
+    RequestId: { in: header, name: x-request-id, schema: { type: string, maxLength: 200 } }
   schemas:
     Event:
       type: object
-      required: [event_type, funnel_id]
+      required: [event_type]
       properties:
-        event_type: { type: string }
+        event_type: { type: string, maxLength: 120 }
+        external_id: { type: string, maxLength: 255 }
         funnel_id: { type: string }
-        external_id: { type: string }
-        session_key: { type: string }
+        transaction_id: { type: string }
+        checkout_id: { type: string }
+        sale_id: { type: string }
+        occurred_at: { type: string, format: date-time }
         payload: { type: object, additionalProperties: true }
+  responses:
+    Success: { description: Successful request, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+    Accepted: { description: Event accepted for processing, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+    Unauthorized: { description: Missing or invalid API key }
+    Forbidden: { description: API key lacks the required scope }
+    NotFound: { description: Resource not found }
+    BadRequest: { description: Invalid request }
+    RateLimited: { description: Rate limit exceeded }
