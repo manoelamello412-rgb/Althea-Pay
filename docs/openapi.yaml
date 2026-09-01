@@ -1,0 +1,75 @@
+openapi: 3.1.0
+info:
+  title: ALTHEA PAY Public API
+  version: 1.0.0
+  description: Control-plane API for funnels, products, sales, transactions and event ingestion.
+servers:
+  - url: https://YOUR_ALTHEA_API_HOST
+security:
+  - ApiKeyAuth: []
+paths:
+  /v1/funnels:
+    get:
+      summary: List funnels
+      responses:
+        '200': { description: OK }
+  /v1/funnels/{id}:
+    get:
+      summary: Get funnel
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+  /v1/products:
+    get:
+      summary: List products
+      responses:
+        '200': { description: OK }
+  /v1/products/{id}:
+    get:
+      summary: Get product
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+  /v1/sales:
+    get:
+      summary: List sales
+      responses:
+        '200': { description: OK }
+  /v1/transactions:
+    get:
+      summary: List gateway transactions
+      responses:
+        '200': { description: OK }
+  /v1/events:
+    post:
+      summary: Ingest a funnel event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+      responses:
+        '200': { description: Processed or accepted }
+        '400': { description: Invalid event }
+        '401': { description: Invalid API key }
+        '403': { description: Missing events:write scope }
+        '409': { description: Duplicate event }
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-althea-api-key
+  schemas:
+    Event:
+      type: object
+      required: [event_type, funnel_id]
+      properties:
+        event_type: { type: string }
+        funnel_id: { type: string }
+        external_id: { type: string }
+        session_key: { type: string }
+        payload: { type: object, additionalProperties: true }
