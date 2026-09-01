@@ -1,56 +1,21 @@
 # ALTHEA PAY — Architecture
 
-ALTHEA PAY is a control-plane and intelligence layer for digital sales. It does **not** custody customer sales funds.
+This document describes the high-level architecture of Althea Pay and how components interact.
 
-## Main flow
+Architecture overview
 
-```text
-Traffic / Funnel
-      ↓
-Event ingestion → idempotency → processing/retry
-      ↓
-Checkout session
-      ↓
-Gateway Orchestrator
-      ├─ route by funnel/product/priority
-      ├─ health guard
-      └─ fallback for technical failures
-      ↓
-External gateway / Sandbox adapter
-      ↓
-Transaction projection → Sale projection
-      ↓
-Attribution + analytics + automations + realtime
-```
+- Independent Funnel -> External Gateway
+- Funnels send events / webhooks -> ALTHEA PAY public API
+- ALTHEA PAY orchestrates gateways via Gateway Orchestrator
+- Sandbox Gateway used for testing payment flows (approved, declined, error, fallback, refund, chargeback)
+- Supabase stores operational data (transactions, idempotency keys, audit logs, reconciliation)
+- Edge Functions host gateway orchestrator, gateway sandbox, webhook ingestion and health endpoints
 
-## Gateway model
-`gateway_routes` defines ordered routes by funnel/product. The orchestrator records every attempt in `gateway_operation_logs` and resulting state in `gateway_transactions`.
+Security principles
 
-Technical failures may trigger fallback according to route configuration. A definitive customer/payment decline must not be blindly retried.
+- ALTHEA PAY is a CONTROL PLANE (does not custody funds).
+- PAN and CVC are never stored. Use hosted fields or gateway tokenization.
+- Secrets (gateway keys, service_role) must live in env (Supabase/Vercel) and not in repo.
 
-## Checkout model
-`checkout_sessions` is the session aggregate. `checkout_items` represents products and future order-bump/upsell items. `checkout_offers` stores offer rules. `checkout_events` is the checkout event stream.
-
-## Attribution
-`attribution_sessions` stores source/medium/campaign/content/term and click identifiers so acquisition can be connected to funnel, checkout and sale events.
-
-## Integrations
-External funnel providers send signed events to the ingestion/webhook layer. Events are persisted in `integration_events`, keyed for idempotent processing, with retry/error metadata.
-
-## Security boundaries
-- Browser code never receives service-role credentials, gateway secrets, PAN or CVC.
-- Business tables are protected by RLS.
-- User-facing Edge Functions validate JWTs.
-- Public webhook/ingestion functions use explicit signature/token/API-key validation.
-- Internal workers use an internal secret and must not be made anonymous just to satisfy a scheduler.
-
-## Reliability invariants
-1. External events are deduplicated whenever an external ID/event key is available.
-2. Payment commands use idempotency keys.
-3. Technical failures may fallback; definitive declines do not silently cascade.
-4. Webhooks use timestamp/replay protection and signature validation.
-5. Retries are bounded and observable.
-6. Disconnecting a funnel preserves historical ALTHEA data.
-
-## Production blockers
-`BLOQUEIO EXTERNO`: real gateway contracts/credentials, 3DS certification, PCI evidence, KYC/AML policy and production infrastructure credentials are outside source control and must be configured separately.
+Files added in this commit:
+- docs/ARCHITECTURE.md

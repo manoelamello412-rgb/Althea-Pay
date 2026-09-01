@@ -1,38 +1,17 @@
-# ALTHEA PAY Public API
+# API Documentation
 
-Base path: `/v1`
+This file contains basic information about public endpoints that Althea Pay exposes for funnels and integrators.
 
-Authentication uses an ALTHEA API key. Never send a service-role key from a browser.
+Endpoints (present in repo as Edge Functions under supabase/functions)
 
-## Read endpoints
-- `GET /v1/funnels`
-- `GET /v1/funnels/:id`
-- `GET /v1/products`
-- `GET /v1/products/:id`
-- `GET /v1/sales`
-- `GET /v1/transactions`
+GET /health
+POST /gateway-orchestrator/charge
+POST /gateway-sandbox/charge
+POST /integration-webhook
 
-## Event ingestion
-`POST /v1/events`
+API versioning
 
-Example:
+- Use /v1/ prefix for public APIs.
 
-```json
-{
-  "event_type": "checkout_started",
-  "funnel_id": "funnel-id",
-  "external_id": "provider-event-123",
-  "session_key": "session-123",
-  "payload": { "checkout_id": "checkout-id" }
-}
-```
-
-The ingestion layer validates the API key scope, checks tenant ownership, applies rate limiting and deduplicates external IDs.
-
-## API key lifecycle
-`BLOQUEIO EXTERNO`: production secret provisioning/rotation policy must be configured in the deployment environment. Keys must be shown only at creation/rotation time and stored as hashes server-side.
-
-## Safety
-- Do not put PAN/CVC in API payloads.
-- Use idempotency/external IDs for retriable commands/events.
-- Treat all inbound fields as untrusted.
+Files added:
+- docs/API.md

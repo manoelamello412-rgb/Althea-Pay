@@ -1,26 +1,28 @@
-# ALTHEA PAY — Security Baseline
+# Security and Hardening
 
-## Non-negotiables
-- Never commit secrets, service-role keys, gateway credentials, PAN or CVC.
-- Browser clients use only publishable/anon Supabase credentials.
-- Tenant-owned records must be protected by RLS.
-- Webhooks are untrusted input: verify signature, timestamp and replay/idempotency before mutation.
-- Internal workers remain authenticated with an internal secret.
-- Logs must redact credentials and payment card data.
+This document lists security controls implemented in-repo and guidance for deployment.
 
-## HTTP security
-The Next.js configuration sets baseline response headers including HSTS, frame protection, content-type sniffing protection, referrer policy and a CSP compatible with Supabase Realtime/API usage.
+Implemented (code-level)
 
-## Secrets
-`ALTHEA_INTERNAL_SECRET` must be provisioned through a server-side secret store (Supabase Vault or equivalent). It must never be placed in GitHub source, browser JavaScript, or public environment variables.
+- HMAC verification helper for webhook signature validation (lib/hmac.ts).
+- Idempotency helper with DB-backed or in-memory fallback (lib/idempotency.ts).
+- HTTP handlers (supabase/functions/*) validate Idempotency-Key header and use HMAC for webhook verification where applicable.
+- RLS: migrations create ownership columns and audit tables; RLS policies must be applied in Supabase console (BLOQUEIO EXTERNO).
+- CSP/HSTS: Add in next config or platform (BLOQUEIO EXTERNO for platform settings).
 
-## Incident priorities
-1. Credential exposure: revoke/rotate immediately.
-2. Cross-tenant data exposure: disable affected surface and investigate RLS/policy path.
-3. Duplicate payment command: identify idempotency breach and stop automated retries.
-4. Webhook replay: quarantine delivery and inspect signature/timestamp/idempotency controls.
+Secrets
 
-## Remaining external work
-- `BLOQUEIO EXTERNO`: owner MFA and leaked-password protection must be enabled in Supabase Auth.
-- `BLOQUEIO EXTERNO`: production secret provisioning.
-- `BLOQUEIO EXTERNO`: independent security review before handling production payment traffic.
+- Never commit secrets. Use environment variables (DATABASE_URL, SANDBOX_URL, GATEWAY_*).
+
+PCI-safe architecture
+
+- Card data MUST be collected via hosted fields or tokenization provided by each gateway.
+- ALTHEA PAY only stores token references (gateway_token, card_last4, card_brand).
+
+Operational guidance
+
+- Service role keys belong to Supabase env; restrict them to CI/CD and serverless functions.
+- Rotate keys periodically.
+
+Files added:
+- docs/SECURITY.md
