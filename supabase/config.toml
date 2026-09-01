@@ -9,6 +9,9 @@ verify_jwt = true
 [functions.checkout-engine]
 verify_jwt = true
 
+[functions.checkout-engine-v2]
+verify_jwt = true
+
 [functions.althea-api]
 verify_jwt = true
 
@@ -27,5 +30,23 @@ verify_jwt = false
 [functions.integration-webhook]
 verify_jwt = false
 
+[functions.webhook-integrations]
+verify_jwt = true
+
 [functions.automation-engine]
 verify_jwt = false
+
+[functions.automation-engine-v2]
+verify_jwt = false
+
+[functions.event-worker]
+verify_jwt = false
+
+[functions.funnel-events]
+verify_jwt = false
+
+[functions.funnel-events-secure]
+verify_jwt = false
+
+[functions.althea-gateway-orchestrator]
+verify_jwt = true
