@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.integration-webhook]
 verify_jwt = false
+
+[functions.automation-engine]
+verify_jwt = false
