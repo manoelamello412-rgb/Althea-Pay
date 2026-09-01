@@ -1,9 +1,9 @@
-import crypto from 'crypto';
+import { getIdempotency, saveIdempotency } from '../../lib/idempotency';
+import { query } from '../../lib/db';
 import { WebhookEventSchema } from '../../lib/validation';
 import { verifyHmac } from '../../lib/hmac';
 import { logJSON, genRequestId } from '../../lib/logging';
 
-// Minimal Supabase Edge Function style handler
 export default async function handler(req: any, res: any) {
   const requestId = genRequestId();
   try {
@@ -19,12 +19,6 @@ export default async function handler(req: any, res: any) {
     }
 
     const secret = process.env.ALTHEA_WEBHOOK_SECRET || '';
-    if (!secret) {
-      logJSON('warn','webhook.no_secret',{requestId});
-      // Accept but mark as not verified in tests
-    }
-
-    // verify HMAC if secret present
     if (secret) {
       const payload = `${timestamp}.${body}`;
       const ok = verifyHmac(payload, signature, secret);
@@ -34,7 +28,6 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // basic timestamp replay protection
     const tsNum = Number(timestamp);
     if (!Number.isNaN(tsNum)) {
       const now = Date.now();
@@ -59,8 +52,21 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ ok: false, error: 'schema mismatch' });
     }
 
-    // Persist to DB ideally; for now write to console and return 200 to be idempotent
-    logJSON('info','webhook.persist',{requestId, event: validated.data});
+    const eventId = validated.data.id || `evt_${Math.random().toString(36).slice(2,9)}`;
+
+    // Persist into DB if available, else log and return 200
+    try {
+      await query(
+        `INSERT INTO webhook_events(event_id, payload) VALUES($1,$2) ON CONFLICT (event_id) DO NOTHING`,
+        [eventId, validated.data]
+      );
+      logJSON('info','webhook.persisted',{requestId,eventId});
+    } catch (dbErr) {
+      logJSON('warn','webhook.persist_db_error',{requestId,error:String(dbErr)});
+      // fallback: keep in-memory idempotency store
+      await saveIdempotency(`webhook:${eventId}`, validated.data);
+      logJSON('info','webhook.persisted_in_memory',{requestId,eventId});
+    }
 
     return res.status(200).json({ ok: true });
   } catch (err) {

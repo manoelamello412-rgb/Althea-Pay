@@ -1,70 +1,52 @@
--- 0001_init.sql
+-- Initial migrations for Althea Pay
 
--- Core tables for Althea Pay. These are intentionally minimal and focused on operational data.
-
-CREATE TABLE IF NOT EXISTS merchants (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS gateways (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  merchant_id uuid REFERENCES merchants(id),
-  name text NOT NULL,
-  type text,
-  config jsonb,
-  status text DEFAULT 'disconnected',
-  created_at timestamptz DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS transactions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  merchant_id uuid REFERENCES merchants(id),
-  funnel_id uuid,
-  gateway_transaction_id text,
-  gateway text,
-  amount bigint,
-  currency text,
-  status text,
-  result jsonb,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
+-- Table: idempotency_keys
 CREATE TABLE IF NOT EXISTS idempotency_keys (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  idempotency_key text UNIQUE NOT NULL,
-  response jsonb,
-  created_at timestamptz DEFAULT now()
+  key TEXT PRIMARY KEY,
+  response JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- Table: webhook_events
 CREATE TABLE IF NOT EXISTS webhook_events (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_id text UNIQUE,
-  received_at timestamptz DEFAULT now(),
-  payload jsonb,
-  processed boolean DEFAULT false
+  id BIGSERIAL PRIMARY KEY,
+  event_id TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  received_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  processed BOOLEAN DEFAULT FALSE,
+  attempts INTEGER DEFAULT 0,
+  next_attempt_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE(event_id)
 );
 
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  entity_type text,
-  entity_id text,
-  action text,
-  data jsonb,
-  created_at timestamptz DEFAULT now()
+-- Table: webhook_events_dlq
+CREATE TABLE IF NOT EXISTS webhook_events_dlq (
+  id BIGSERIAL PRIMARY KEY,
+  event_id TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  moved_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  reason TEXT
 );
 
-CREATE TABLE IF NOT EXISTS kyc_statuses (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  merchant_id uuid REFERENCES merchants(id),
-  status text,
-  evidence jsonb,
-  updated_at timestamptz DEFAULT now()
+-- Table: ledger_transactions (POC)
+CREATE TABLE IF NOT EXISTS ledger_transactions (
+  id BIGSERIAL PRIMARY KEY,
+  gateway_tx_id TEXT,
+  merchant_id UUID,
+  amount BIGINT NOT NULL,
+  gross BIGINT,
+  fees BIGINT,
+  net BIGINT,
+  currency TEXT,
+  status TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
-CREATE INDEX IF NOT EXISTS idx_idempotency_key ON idempotency_keys(idempotency_key);
+-- Table: reconciliations (POC)
+CREATE TABLE IF NOT EXISTS reconciliations (
+  id BIGSERIAL PRIMARY KEY,
+  ledger_tx_id BIGINT REFERENCES ledger_transactions(id),
+  settlement_reference TEXT,
+  matched BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
