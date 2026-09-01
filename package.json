@@ -6,9 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "test": "jest --runInBand",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/ssr": "latest",
@@ -23,9 +23,8 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "typescript": "latest",
-    "jest": "latest",
-    "ts-jest": "latest",
-    "@types/jest": "latest",
-    "supertest": "latest"
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "vitest": "latest"
   }
 }
