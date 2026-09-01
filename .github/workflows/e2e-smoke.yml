@@ -7,14 +7,15 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
       - name: Install
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck --if-present
       - name: Run tests
