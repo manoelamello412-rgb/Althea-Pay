@@ -3,11 +3,23 @@ project_id = "hkraryqoziravulvqkid"
 [functions.gateway-orchestrator]
 verify_jwt = true
 
+[functions.althea-gateway-orchestrator]
+verify_jwt = true
+
 [functions.gateway-sandbox]
 verify_jwt = true
 
 [functions.checkout-engine]
 verify_jwt = true
+
+[functions.althea-api]
+verify_jwt = true
+
+[functions.api]
+verify_jwt = true
+
+[functions.health]
+verify_jwt = false
 
 [functions.althea-webhook]
 verify_jwt = false
