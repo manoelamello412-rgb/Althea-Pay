@@ -1,11 +1,15 @@
+import { describe, expect, it } from 'vitest'
 import { IdempotencyStore } from '../lib/idempotency'
 
 describe('IdempotencyStore', () => {
-  it('stores and retrieves from memory when DATABASE_URL not set', async () => {
-    const s = new IdempotencyStore()
-    const key = 'test-key-1'
-    await s.set(key, { ok: true })
-    const v = await s.get(key)
-    expect(v).toEqual({ ok: true })
+  it('stores and retrieves values in the application fallback', async () => {
+    const store = new IdempotencyStore()
+    await store.set('test-key-1', { ok: true })
+    await expect(store.get('test-key-1')).resolves.toEqual({ ok: true })
+  })
+
+  it('returns null for an empty key', async () => {
+    const store = new IdempotencyStore()
+    await expect(store.get('')).resolves.toBeNull()
   })
 })
