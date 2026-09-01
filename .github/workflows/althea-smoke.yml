@@ -1,0 +1,52 @@
+name: ALTHEA PAY Smoke Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+      - 'tests/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate function configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f supabase/config.toml
+          test -f supabase/functions/gateway-orchestrator/index.ts
+          test -f supabase/functions/checkout-engine/index.ts
+          test -f supabase/functions/health/index.ts
+          grep -q 'verify_jwt = true' supabase/config.toml
+          grep -q '\[functions.gateway-orchestrator\]' supabase/config.toml
+          grep -q '\[functions.checkout-engine\]' supabase/config.toml
+
+      - name: Health endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(curl -fsS https://hkraryqoziravulvqkid.supabase.co/functions/v1/health)"
+          echo "$body"
+          echo "$body" | grep -q '"ok":true'
+          echo "$body" | grep -q '"service":"althea-api"'
+
+      - name: Verify protected function rejects anonymous calls
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /tmp/gateway-response.json -w '%{http_code}' -X POST \
+            https://hkraryqoziravulvqkid.supabase.co/functions/v1/gateway-orchestrator \
+            -H 'Content-Type: application/json' \
+            --data '{"funnel_id":"smoke","amount":1,"idempotency_key":"smoke-anonymous"}')"
+          cat /tmp/gateway-response.json
+          test "$code" = "401"
