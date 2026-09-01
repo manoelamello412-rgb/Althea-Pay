@@ -3,9 +3,6 @@ project_id = "hkraryqoziravulvqkid"
 [functions.gateway-orchestrator]
 verify_jwt = true
 
-[functions.althea-gateway-orchestrator]
-verify_jwt = true
-
 [functions.gateway-sandbox]
 verify_jwt = true
 
