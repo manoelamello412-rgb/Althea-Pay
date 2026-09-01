@@ -1,14 +1,28 @@
 import crypto from 'crypto'
 
-export function verifyHMAC(payload: string | Buffer, signature: string, secret: string) {
-  const h = crypto.createHmac('sha256', secret)
-  h.update(payload)
-  const digest = `sha256=${h.digest('hex')}`
-  // safe compare
-  return timingSafeEqual(Buffer.from(digest), Buffer.from(signature))
+const DEFAULT_TOLERANCE_MS = 5 * 60 * 1000
+
+export function signWebhook(body: string | Buffer, timestampMs: number, secret: string) {
+  return `sha256=${crypto.createHmac('sha256', secret).update(`${timestampMs}.${body}`).digest('hex')}`
 }
 
-function timingSafeEqual(a: Buffer, b: Buffer) {
-  if (a.length !== b.length) return false
-  return crypto.timingSafeEqual(a, b)
+export function verifyHMAC(
+  body: string | Buffer,
+  signature: string,
+  secret: string,
+  timestampMs?: number,
+  nowMs = Date.now(),
+  toleranceMs = DEFAULT_TOLERANCE_MS,
+) {
+  if (!secret || !signature) return false
+  if (timestampMs !== undefined && Math.abs(nowMs - timestampMs) > toleranceMs) return false
+  const expected = signWebhook(body, timestampMs ?? nowMs, secret)
+  return timingSafeEqual(expected, signature)
+}
+
+function timingSafeEqual(a: string, b: string) {
+  const left = Buffer.from(a)
+  const right = Buffer.from(b)
+  if (left.length !== right.length) return false
+  return crypto.timingSafeEqual(left, right)
 }
