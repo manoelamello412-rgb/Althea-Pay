@@ -1,18 +1,20 @@
-import { z } from 'zod';
+import { z } from 'zod'
+
+const JsonRecord = z.record(z.string(), z.unknown())
 
 export const ChargeSchema = z.object({
-  amount: z.number().int().positive(),
+  amount: z.number().positive(),
   currency: z.string().length(3),
   merchant_id: z.string().uuid().optional(),
-  metadata: z.record(z.any()).optional(),
-  idempotency_key: z.string().optional(),
-});
+  metadata: JsonRecord.optional(),
+  idempotency_key: z.string().min(1).optional(),
+})
 
 export const WebhookEventSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  data: z.record(z.any()).optional(),
-});
+  id: z.string().min(1),
+  type: z.string().min(1),
+  data: JsonRecord.optional(),
+})
 
-export type Charge = z.infer<typeof ChargeSchema>;
-export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
+export type Charge = z.infer<typeof ChargeSchema>
+export type WebhookEvent = z.infer<typeof WebhookEventSchema>
