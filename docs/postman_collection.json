@@ -1,0 +1,26 @@
+{
+  "info": {
+    "name": "Althea Pay E2E Smoke",
+    "description": "Minimal Postman collection for sandbox quickstart"
+  },
+  "item": [
+    {
+      "name": "Charge (sandbox)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"amount\": 1000, \"currency\": \"BRL\" }"
+        },
+        "url": {
+          "raw": "https://api.example.com/functions/v1/gateway-orchestrator",
+          "host": ["https://api.example.com"],
+          "path": ["functions","v1","gateway-orchestrator"]
+        }
+      }
+    }
+  ]
+}
