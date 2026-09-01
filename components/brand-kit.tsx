@@ -3,76 +3,28 @@
 import { useEffect, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-export const DEFAULT_ALTHEA_BRAND = {
-  ink: '#0B0B0D', forest: '#0F1A16', deep: '#0D362D', green: '#1DB854', gold: '#D4AF37', silver: '#A6A6A6', logo: '/althea-mark.svg',
-} as const
+export const DEFAULT_ALTHEA_BRAND = { ink:'#0B0B0D', forest:'#0F1A16', deep:'#0D362D', green:'#1DB854', gold:'#D4AF37', silver:'#A6A6A6', logo:'/althea-mark.svg', logo_light:'/althea-mark.svg', logo_dark:'/althea-mark.svg', favicon:'/althea-mark.svg' } as const
+type Brand=typeof DEFAULT_ALTHEA_BRAND
+type BrandRow=Record<string,string>
+const STORAGE_KEY='althea-brand-kit-v1'
 
-type Brand = typeof DEFAULT_ALTHEA_BRAND
-type BrandRow = { user_id: string; logo_url: string; ink: string; forest: string; deep: string; green: string; gold: string; silver: string }
-const STORAGE_KEY = 'althea-brand-kit-v1'
+export function applyBrand(brand:Brand){const r=document.documentElement;r.style.setProperty('--althea-ink',brand.ink);r.style.setProperty('--althea-forest',brand.forest);r.style.setProperty('--althea-deep',brand.deep);r.style.setProperty('--althea-green',brand.green);r.style.setProperty('--althea-gold',brand.gold);r.style.setProperty('--althea-silver',brand.silver);r.style.setProperty('--althea-brand-logo',`url(${brand.logo})`)}
+function cache(b:Brand){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(b))}catch{}}
+function rowToBrand(row:BrandRow):Brand{return {...DEFAULT_ALTHEA_BRAND,ink:row.ink,forest:row.forest,deep:row.deep,green:row.green,gold:row.gold,silver:row.silver,logo:row.logo_url||DEFAULT_ALTHEA_BRAND.logo,logo_light:row.logo_light_url||row.logo_url||DEFAULT_ALTHEA_BRAND.logo,logo_dark:row.logo_dark_url||row.logo_url||DEFAULT_ALTHEA_BRAND.logo,favicon:row.favicon_url||row.logo_url||DEFAULT_ALTHEA_BRAND.favicon}}
+export function hydrateAltheaBrand(){try{const s=localStorage.getItem(STORAGE_KEY);applyBrand(s?{...DEFAULT_ALTHEA_BRAND,...JSON.parse(s)}:DEFAULT_ALTHEA_BRAND)}catch{applyBrand(DEFAULT_ALTHEA_BRAND)}}
 
-export function applyBrand(brand: Brand) {
-  const root = document.documentElement
-  root.style.setProperty('--althea-ink', brand.ink); root.style.setProperty('--althea-forest', brand.forest); root.style.setProperty('--althea-deep', brand.deep); root.style.setProperty('--althea-green', brand.green); root.style.setProperty('--althea-gold', brand.gold); root.style.setProperty('--althea-silver', brand.silver); root.style.setProperty('--althea-brand-logo', `url(${brand.logo})`)
-}
-
-function rowToBrand(row: BrandRow): Brand { return { ink: row.ink, forest: row.forest, deep: row.deep, green: row.green, gold: row.gold, silver: row.silver, logo: row.logo_url } }
-function cacheBrand(brand: Brand) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(brand)) } catch {} }
-
-export function hydrateAltheaBrand() {
-  try { const stored = localStorage.getItem(STORAGE_KEY); applyBrand(stored ? { ...DEFAULT_ALTHEA_BRAND, ...JSON.parse(stored) } : DEFAULT_ALTHEA_BRAND) } catch { applyBrand(DEFAULT_ALTHEA_BRAND) }
-}
-
-export function BrandKit() {
-  const [brand, setBrand] = useState<Brand>(DEFAULT_ALTHEA_BRAND)
-  const [saved, setSaved] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const supabase = createSupabaseBrowserClient()
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true); setError('')
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
-      const { data, error: dbError } = await supabase.from('brand_identity_settings').select('user_id,logo_url,ink,forest,deep,green,gold,silver').eq('user_id', user.id).maybeSingle()
-      if (cancelled) return
-      if (dbError) { setError('Não foi possível carregar a identidade salva.'); hydrateAltheaBrand(); setLoading(false); return }
-      const next = data ? rowToBrand(data as BrandRow) : DEFAULT_ALTHEA_BRAND
-      setBrand(next); applyBrand(next); cacheBrand(next); setLoading(false)
-    }
-    load()
-    return () => { cancelled = true }
-  }, [supabase])
-
-  function update(key: keyof Brand, value: string) { setSaved(false); setBrand(current => { const next = { ...current, [key]: value }; applyBrand(next); return next }) }
-
-  async function save() {
-    setError(''); setSaved(false)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError('Sua sessão expirou. Entre novamente para salvar.'); return }
-    const payload = { user_id: user.id, logo_url: brand.logo, ink: brand.ink, forest: brand.forest, deep: brand.deep, green: brand.green, gold: brand.gold, silver: brand.silver }
-    const { error: dbError } = await supabase.from('brand_identity_settings').upsert(payload, { onConflict: 'user_id' })
-    if (dbError) { setError('Não foi possível salvar a identidade.'); return }
-    cacheBrand(brand); applyBrand(brand); setSaved(true); window.setTimeout(() => setSaved(false), 2200)
-  }
-
-  async function reset() {
-    setError('')
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) { const { error: dbError } = await supabase.from('brand_identity_settings').delete().eq('user_id', user.id); if (dbError) { setError('Não foi possível restaurar a identidade.'); return } }
-    setBrand(DEFAULT_ALTHEA_BRAND); applyBrand(DEFAULT_ALTHEA_BRAND); try { localStorage.removeItem(STORAGE_KEY) } catch {}; setSaved(false)
-  }
-
-  const swatches: Array<[keyof Brand, string]> = [['ink','Preto'],['forest','Verde profundo'],['deep','Verde institucional'],['green','Verde principal'],['gold','Dourado'],['silver','Cinza']]
-
-  return <div className="brand-kit">
-    <div className="brand-kit-hero"><div><span className="brand-kit-kicker">BRAND KIT · ALTHEA PAY</span><h2>Marca e Identidade</h2><p>Identidade individual por conta, sincronizada com o Supabase e aplicada em toda a experiência digital.</p></div><div className="brand-kit-mark"><img src={brand.logo} alt="Símbolo Althea Pay" /></div></div>
-    {error && <div className="auth-error" role="alert">{error}</div>}
-    <section className="brand-kit-section"><div className="brand-kit-section-head"><div><span>LOGOTIPO</span><h3>Assinatura da marca</h3></div></div><div className="brand-logo-preview"><img src={brand.logo} alt="Althea Pay" /><div><strong>ALTHEA <em>PAY</em></strong><small>Onde você constrói sua raiz financeira</small></div></div><label className="brand-upload">URL do símbolo<input value={brand.logo} onChange={e=>update('logo',e.target.value)} placeholder="/althea-mark.svg" /></label></section>
-    <section className="brand-kit-section"><div className="brand-kit-section-head"><div><span>PALETA OFICIAL</span><h3>Suas cores</h3></div></div><div className="brand-swatches">{swatches.map(([key,label])=><label className="brand-swatch" key={key}><input type="color" value={brand[key]} onChange={e=>update(key,e.target.value)} aria-label={`Cor ${label}`} /><span className="brand-color-chip" style={{background:brand[key]}} /><strong>{label}</strong><code>{brand[key].toUpperCase()}</code></label>)}</div></section>
-    <section className="brand-kit-section"><div className="brand-kit-section-head"><div><span>PRÉ-VISUALIZAÇÃO</span><h3>Sistema aplicado</h3></div></div><div className="brand-preview-grid"><div className="brand-preview-card"><span>Dashboard</span><strong>Seu crescimento</strong><small>Identidade aplicada aos cartões, estados e ações.</small><button className="brand-preview-button">Acessar plataforma</button></div><div className="brand-preview-card brand-preview-checkout"><span>Checkout</span><strong>Compra segura</strong><small>O mesmo sistema visual acompanha seus clientes.</small><button className="brand-preview-button">Continuar</button></div></div></section>
-    <div className="brand-kit-actions"><button className="brand-reset" onClick={reset} disabled={loading}>Restaurar padrão</button><button className="primary" onClick={save} disabled={loading}>{loading?'Carregando...':saved?'Identidade salva ✓':'Salvar identidade'}</button></div>
-  </div>
+export function BrandKit(){
+ const [brand,setBrand]=useState<Brand>(DEFAULT_ALTHEA_BRAND),[saved,setSaved]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState(''),[uploading,setUploading]=useState<string|null>(null)
+ const supabase=createSupabaseBrowserClient()
+ useEffect(()=>{let cancelled=false;(async()=>{const {data:{user}}=await supabase.auth.getUser();if(!user){setLoading(false);return}const {data,error:e}=await supabase.from('brand_identity_settings').select('*').eq('user_id',user.id).maybeSingle();if(cancelled)return;if(e)setError('Não foi possível carregar a identidade salva.');const next=data?rowToBrand(data as BrandRow):DEFAULT_ALTHEA_BRAND;setBrand(next);applyBrand(next);cache(next);setLoading(false)})();return()=>{cancelled=true}},[supabase])
+ function update(k:keyof Brand,v:string){setSaved(false);setBrand(c=>{const n={...c,[k]:v};applyBrand(n);return n})}
+ async function upload(kind:'logo'|'logo_light'|'logo_dark'|'favicon',file:File){if(!file.type.startsWith('image/')){setError('Envie um arquivo de imagem.');return}if(file.size>5*1024*1024){setError('A imagem deve ter no máximo 5 MB.');return}setUploading(kind);setError('');const {data:{user}}=await supabase.auth.getUser();if(!user){setError('Sua sessão expirou.');setUploading(null);return}const ext=file.name.split('.').pop()?.toLowerCase()||'png';const path=`${user.id}/${kind}-${Date.now()}.${ext}`;const {error:e}=await supabase.storage.from('brand-assets').upload(path,file,{upsert:false,contentType:file.type,cacheControl:'3600'});if(e){setError(`Upload não realizado: ${e.message}`);setUploading(null);return}const {data}=supabase.storage.from('brand-assets').getPublicUrl(path);update(kind==='logo'?'logo':kind,data.publicUrl);setUploading(null)}
+ async function save(){setError('');const {data:{user}}=await supabase.auth.getUser();if(!user){setError('Sua sessão expirou.');return}const p={user_id:user.id,logo_url:brand.logo,logo_light_url:brand.logo_light,logo_dark_url:brand.logo_dark,favicon_url:brand.favicon,ink:brand.ink,forest:brand.forest,deep:brand.deep,green:brand.green,gold:brand.gold,silver:brand.silver};const {error:e}=await supabase.from('brand_identity_settings').upsert(p,{onConflict:'user_id'});if(e){setError(`Não foi possível salvar: ${e.message}`);return}cache(brand);applyBrand(brand);setSaved(true);window.setTimeout(()=>setSaved(false),2200)}
+ async function reset(){const {data:{user}}=await supabase.auth.getUser();if(user)await supabase.from('brand_identity_settings').delete().eq('user_id',user.id);setBrand(DEFAULT_ALTHEA_BRAND);applyBrand(DEFAULT_ALTHEA_BRAND);try{localStorage.removeItem(STORAGE_KEY)}catch{}setSaved(false)}
+ const uploads:[keyof Brand,string][]=[['logo','Logo principal'],['logo_light','Logo fundo claro'],['logo_dark','Logo fundo escuro'],['favicon','Favicon']]
+ return <div className="brand-kit"><div className="brand-kit-hero"><div><span className="brand-kit-kicker">BRAND KIT · ALTHEA PAY</span><h2>Marca e Identidade</h2><p>Identidade individual por conta, sincronizada com o Supabase.</p></div><div className="brand-kit-mark"><img src={brand.logo} alt="Símbolo Althea Pay"/></div></div>{error&&<div className="auth-error" role="alert">{error}</div>}
+ <section className="brand-kit-section"><div className="brand-kit-section-head"><div><span>LOGOTIPOS</span><h3>Arquivos da marca</h3></div></div><div className="brand-upload-grid">{uploads.map(([key,label])=><div className="brand-upload-card" key={key}><div className="brand-upload-preview"><img src={brand[key]} alt=""/></div><strong>{label}</strong><label className="primary brand-file-button">{uploading===key?'Enviando...':'Enviar imagem'}<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/x-icon" hidden onChange={e=>{const f=e.target.files?.[0];if(f)upload(key,f)}}/></label></div>)}</div></section>
+ <section className="brand-kit-section"><div className="brand-kit-section-head"><div><span>PALETA OFICIAL</span><h3>Suas cores</h3></div></div><div className="brand-swatches">{(['ink','forest','deep','green','gold','silver'] as const).map(k=><label className="brand-swatch" key={k}><input type="color" value={brand[k]} onChange={e=>update(k,e.target.value)}/><span className="brand-color-chip" style={{background:brand[k]}}/><strong>{{ink:'Preto',forest:'Verde profundo',deep:'Verde institucional',green:'Verde principal',gold:'Dourado',silver:'Cinza'}[k]}</strong><code>{brand[k].toUpperCase()}</code></label>)}</div></section>
+ <section className="brand-kit-section"><div className="brand-kit-section-head"><div><span>PRÉ-VISUALIZAÇÃO</span><h3>Sistema aplicado</h3></div></div><div className="brand-preview-grid"><div className="brand-preview-card"><span>Dashboard</span><strong>Seu crescimento</strong><small>Identidade aplicada aos componentes.</small><button className="brand-preview-button">Acessar plataforma</button></div><div className="brand-preview-card brand-preview-checkout"><span>Checkout</span><strong>Compra segura</strong><small>A mesma identidade acompanha seus clientes.</small><button className="brand-preview-button">Continuar</button></div></div></section>
+ <div className="brand-kit-actions"><button className="brand-reset" onClick={reset} disabled={loading}>Restaurar padrão</button><button className="primary" onClick={save} disabled={loading||!!uploading}>{loading?'Carregando...':saved?'Identidade salva ✓':'Salvar identidade'}</button></div></div>
 }
