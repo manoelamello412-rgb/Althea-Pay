@@ -28,7 +28,8 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"event_type\": \"purchase\",\n  \"external_id\": \"postman-{{$guid}}\",\n  \"funnel_id\": \"{{funnelId}}\",\n  \"payload\": {\n    \"amount\": 199.90,\n    \"currency\": \"BRL\",\n    \"scenario\": \"approved\"\n  }"
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"event_type\": \"purchase\",\n  \"external_id\": \"postman-{{$guid}}\",\n  \"funnel_id\": \"{{funnelId}}\",\n  \"payload\": {\n    \"amount\": 199.90,\n    \"currency\": \"BRL\",\n    \"scenario\": \"approved\"\n  }\n}"
         },
         "url": { "raw": "{{baseUrl}}/v1/events", "host": ["{{baseUrl}}"], "path": ["v1", "events"] }
       }
