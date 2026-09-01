@@ -1,26 +1,87 @@
-openapi: 3.0.0
+openapi: 3.1.0
 info:
-  title: Althea Pay (sandbox) API
-  version: '0.1.0'
+  title: Althea Pay API
+  version: 1.0.0
+  description: Unified control-plane API for funnels, products, sales and gateway transactions. Althea Pay does not hold customer funds.
+servers:
+  - url: https://hkraryqoziravulvqkid.supabase.co/functions/v1/althea-public-api
+security:
+  - AltheaApiKey: []
 paths:
-  /gateway-orchestrator:
+  /v1/funnels:
+    get:
+      summary: List funnels
+      responses: {'200': {description: OK}}
+  /v1/products:
+    get:
+      summary: List products
+      responses: {'200': {description: OK}}
+  /v1/sales:
+    get:
+      summary: List sales
+      responses: {'200': {description: OK}}
+  /v1/transactions:
+    get:
+      summary: List gateway transactions
+      responses: {'200': {description: OK}}
+  /v1/events:
     post:
-      summary: Orchestrate a charge through sandbox gateways
+      summary: Ingest a funnel event
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 8}
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/Charge'
+            schema: {$ref: '#/components/schemas/Event'}
       responses:
-        '200':
-          description: OK
+        '201': {description: Event accepted}
+        '403': {description: Missing events:write scope}
+        '429': {description: Rate limit exceeded}
+  /v1/charge:
+    post:
+      summary: Create a routed payment command
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, minLength: 8}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Charge'}
+      responses:
+        '200': {description: Transaction created or replayed}
+        '400': {description: Validation error}
+        '402': {description: Payment declined}
+        '409': {description: No active route}
 components:
+  securitySchemes:
+    AltheaApiKey:
+      type: apiKey
+      in: header
+      name: x-althea-api-key
   schemas:
     Charge:
       type: object
+      required: [funnel_id, amount, currency]
       properties:
-        amount:
-          type: integer
-        currency:
-          type: string
+        funnel_id: {type: string}
+        product_id: {type: string}
+        amount: {type: number, exclusiveMinimum: 0}
+        currency: {type: string, minLength: 3, maxLength: 3, example: BRL}
+        customer: {type: object, additionalProperties: true}
+        metadata: {type: object, additionalProperties: true}
+    Event:
+      type: object
+      required: [event_type, funnel_id]
+      properties:
+        event_type: {type: string}
+        funnel_id: {type: string}
+        external_id: {type: string}
+        session_key: {type: string}
+        payload: {type: object, additionalProperties: true}
