@@ -1,27 +1,24 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
-// Canonical funnel event ingestion endpoint.
-// Production design: browser-safe publishable event envelope/API key only; never expose service-role keys.
-// This source mirrors the deployed function and is kept in Git for reproducible deployments.
-
-const EVENTS = new Set([
-  "page_view", "quiz_started", "quiz_answered", "lead_created", "chat_started",
-  "chat_message", "checkout_started", "purchase", "upsell", "refund",
-  "chargeback", "checkout_abandoned",
-]);
-
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { status: 204 });
-  if (req.method !== "POST") return Response.json({ error: "method_not_allowed" }, { status: 405 });
-
-  const body = await req.json().catch(() => null) as Record<string, unknown> | null;
-  const eventType = typeof body?.event_type === "string" ? body.event_type.trim() : "";
-  const funnelId = typeof body?.funnel_id === "string" ? body.funnel_id.trim() : "";
-
-  if (!EVENTS.has(eventType)) return Response.json({ error: "invalid_event_type" }, { status: 400 });
-  if (!funnelId) return Response.json({ error: "funnel_id_required" }, { status: 400 });
-
-  // Runtime deployment is the authoritative implementation. This checked-in contract
-  // intentionally contains no secrets and documents the accepted public event surface.
-  return Response.json({ accepted: true, contract: "althea-funnel-events-v1", event_type: eventType, funnel_id: funnelId }, { status: 202 });
+const URL=Deno.env.get("SUPABASE_URL")??""; const KEY=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??""; const SECRET=Deno.env.get("ALTHEA_INTERNAL_SECRET")??"";
+const db=createClient(URL,KEY,{auth:{persistSession:false}});
+const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"apikey, authorization, content-type, x-althea-api-key, x-api-key, x-internal-secret, x-request-id","Access-Control-Allow-Methods":"POST,OPTIONS"};
+const out=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{...CORS,"Content-Type":"application/json"}});
+const allowed=(x:string)=>['page_view','quiz_started','quiz_answered','lead_created','chat_started','chat_message','checkout_started','purchase','upsell','refund','chargeback','checkout_abandoned'].includes(x);
+async function apiKey(req:Request){const k=req.headers.get('x-althea-api-key')||req.headers.get('x-api-key')||req.headers.get('apikey'); if(!k)return null; const {data}=await db.rpc('authenticate_althea_api_key',{p_key:k}).maybeSingle(); return data??null;}
+Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{status:204,headers:CORS}); if(req.method!=='POST')return out({error:'method_not_allowed'},405); if(!URL||!KEY)return out({error:'server_not_configured'},500);
+ const internal=SECRET&&req.headers.get('x-internal-secret')===SECRET; const key=internal?null:await apiKey(req); if(!internal&&!key)return out({error:'unauthorized'},401);
+ const body=await req.json().catch(()=>null) as Record<string,unknown>|null; const type=typeof body?.event_type==='string'?body.event_type.trim():''; const funnelId=typeof body?.funnel_id==='string'?body.funnel_id:null; const externalId=typeof body?.external_id==='string'?body.external_id.trim().slice(0,255):null;
+ if(!type||!allowed(type))return out({error:'invalid_event_type'},400); if(!funnelId)return out({error:'funnel_id_required'},400);
+ const uid=internal?(typeof body?.user_id==='string'?body.user_id:null):key.user_id; if(!uid)return out({error:'user_id_required'},400);
+ const {data:funnel,error:fe}=await db.from('funnels').select('id').eq('id',funnelId).eq('user_id',uid).maybeSingle(); if(fe)return out({error:'database_error'},500); if(!funnel)return out({error:'funnel_not_found'},404);
+ if(!internal){const scopes=Array.isArray(key.scopes)?key.scopes.map(String):[]; if(!(scopes.includes('*')||scopes.includes('events:write')))return out({error:'insufficient_scope'},403); const rl=await db.rpc('consume_althea_api_rate_limit',{p_api_key_id:key.api_key_id,p_limit:120}); const st=Array.isArray(rl.data)?rl.data[0]:rl.data; if(rl.error)return out({error:'rate_limit_unavailable'},503); if(!st?.allowed)return out({error:'rate_limited',reset_at:st.reset_at},429); }
+ if(externalId){const {data:dup}=await db.from('integration_events').select('id,event_type,status,created_at').eq('user_id',uid).eq('external_id',externalId).maybeSingle(); if(dup)return out({accepted:true,duplicate:true,event_id:dup.id,status:dup.status},200);}
+ const {data:event,error}=await db.from('integration_events').insert({user_id:uid,funnel_id:funnelId,event_type:type,external_id:externalId,status:'pending',payload:body?.payload&&typeof body.payload==='object'?body.payload:body,occurred_at:typeof body?.occurred_at==='string'?body.occurred_at:new Date().toISOString()}).select('id,event_type,status,external_id,occurred_at,created_at').single();
+ if(error)return out({error:error.code==='23505'?'duplicate_event':'event_rejected'},error.code==='23505'?200:400);
+ const claimed=await db.rpc('claim_integration_event',{p_event_id:event.id}); if(claimed.error||claimed.data!==true)return out({accepted:true,event_id:event.id,status:'pending'},202);
+ let automation='not_configured'; if(SECRET){const r=await fetch(`${URL}/functions/v1/automation-engine-v2`,{method:'POST',headers:{'content-type':'application/json','x-internal-secret':SECRET},body:JSON.stringify({user_id:uid,funnel_id:funnelId,event_id:event.id,event_type:type,transaction_id:body?.transaction_id,checkout_id:body?.checkout_id,sale_id:body?.sale_id,external_id:externalId,payload:body?.payload??body})}); automation=r.ok?'triggered':`failed_${r.status}`;}
+ const status=automation==='triggered'||automation==='not_configured'?'processed':'retry'; await db.from('integration_events').update({status,processed_at:status==='processed'?new Date().toISOString():null,error_message:status==='retry'?automation:null,next_retry_at:status==='retry'?new Date(Date.now()+60000).toISOString():null}).eq('id',event.id);
+ return out({accepted:true,event_id:event.id,status,automation},202);
 });
