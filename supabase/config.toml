@@ -1,13 +1,16 @@
-project_id = "althea-pay"
+project_id = "hkraryqoziravulvqkid"
 
-[functions.health]
+[functions.gateway-orchestrator]
+verify_jwt = true
+
+[functions.gateway-sandbox]
+verify_jwt = true
+
+[functions.checkout-engine]
+verify_jwt = true
+
+[functions.althea-webhook]
 verify_jwt = false
 
 [functions.integration-webhook]
-verify_jwt = false
-
-[functions.api]
-verify_jwt = true
-
-[functions.gateway-webhook]
 verify_jwt = false
