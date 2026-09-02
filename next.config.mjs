@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async rewrites() {
+    return [
+      { source: '/althea-logo.png', destination: '/althea-logo.png.PNG' },
+    ]
+  },
   async headers() {
     return [
       {
