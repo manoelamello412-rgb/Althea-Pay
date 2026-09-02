@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { createSupabaseBrowserClient } from '../../lib/supabase/client'
 
 export default function ResetPasswordPage() {
@@ -18,7 +19,7 @@ export default function ResetPasswordPage() {
     const supabase = createSupabaseBrowserClient()
     if (!supabase) { setError('O ALTHEA PAY ainda não está conectado ao Supabase neste ambiente.'); return }
     let active = true
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (!active) return
       if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) setReady(true)
     })
