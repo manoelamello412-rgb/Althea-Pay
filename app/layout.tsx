@@ -8,6 +8,8 @@ import './dashboard-responsive.css'
 import './official-brand.css'
 import './dashboard-polish.css'
 import './sales-center.css'
+import './session-actions.css'
+import DashboardSessionActions from '@/components/dashboard-session-actions'
 
 export const metadata: Metadata = {
   title: 'ALTHEA PAY — Control Center',
@@ -22,7 +24,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        {children}
+        <DashboardSessionActions />
+      </body>
     </html>
   )
 }
