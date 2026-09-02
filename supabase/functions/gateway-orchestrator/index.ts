@@ -1,52 +1,7 @@
-import handler from '../gateway-sandbox'
-import { IdempotencyStore } from '../../../lib/idempotency'
-
-const store = new IdempotencyStore()
-
-// Orchestrator: receives a payment request and routes to the appropriate gateway.
-// For now, default gateway is sandbox. Supports basic fallback: if primary returns error, try sandbox.
-export default async function handlerOrchestrator(req: any, res: any) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' })
-
-  const body = req.body || {}
-  const idempotencyKey = req.headers['idempotency-key'] || req.headers['Idempotency-Key']
-
-  // Idempotency guard
-  if (idempotencyKey) {
-    const existing = await store.get(idempotencyKey)
-    if (existing) return res.status(200).json({ duplicate: true, result: existing })
-  }
-
-  // route: for now we only have sandbox. Keep interface to add real gateway adapters.
-  try {
-    // call sandbox handler directly to avoid external HTTP in tests
-    // build a fake req/res for the sandbox handler
-    const sandboxReq = { method: 'POST', headers: req.headers, body }
-    const sandboxRes = createFakeRes()
-    await handler(sandboxReq, sandboxRes)
-    const sandboxJson = sandboxRes._json
-
-    if (sandboxJson?.result?.status === 'error') {
-      // fallback logic could call trailing gateways — for now respond with error
-      // If there was a configured primary that failed, here we could try fallback.
-      const fallbackAttempt = sandboxJson
-      if (idempotencyKey) await store.set(idempotencyKey, fallbackAttempt)
-      return res.status(502).json({ error: 'gateway_failure', details: fallbackAttempt })
-    }
-
-    if (idempotencyKey) await store.set(idempotencyKey, sandboxJson.result)
-    return res.status(200).json({ result: sandboxJson.result })
-  } catch (err: any) {
-    console.error('orchestrator.error', err)
-    return res.status(500).json({ error: 'internal_error', message: String(err?.message || err) })
-  }
-}
-
-function createFakeRes() {
-  const r: any = {}
-  r._status = 200
-  r._json = null
-  r.status = (s: number) => { r._status = s; return r }
-  r.json = (j: any) => { r._json = j; return r }
-  return r
-}
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type, x-idempotency-key, idempotency-key","Access-Control-Allow-Methods":"POST,OPTIONS"};
+const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,"Content-Type":"application/json"}});
+Deno.serve(async(req)=>{if(req.method==='OPTIONS')return new Response('ok',{headers:cors});if(req.method!=='POST')return json({error:'method_not_allowed'},405);const auth=req.headers.get('Authorization')??'';const supabase=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_ANON_KEY')??Deno.env.get('SUPABASE_PUBLISHABLE_KEY')!,{global:{headers:{Authorization:auth}}});const admin=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);const {data:{user},error:ae}=await supabase.auth.getUser();if(ae||!user)return json({error:'unauthorized'},401);let b:any;try{b=await req.json()}catch{return json({error:'invalid_json'},400)}const funnelId=String(b.funnel_id??''),amount=Number(b.amount??0),currency=String(b.currency??'BRL'),operation=String(b.operation??'create_payment'),productId=b.product_id?String(b.product_id):null,idem=String(b.idempotency_key??req.headers.get('x-idempotency-key')??req.headers.get('idempotency-key')??''),metadata=b.metadata&&typeof b.metadata==='object'?b.metadata:{},customer=b.customer&&typeof b.customer==='object'?b.customer:{};if(!funnelId||amount<=0||!idem)return json({error:'funnel_id_positive_amount_and_idempotency_key_required'},400);const {data:existing}=await supabase.from('gateway_transactions').select('*').eq('user_id',user.id).eq('idempotency_key',idem).maybeSingle();if(existing)return json({transaction:existing,replayed:true});let routeQuery=supabase.from('gateway_routes').select('*').eq('user_id',user.id).eq('funnel_id',funnelId).eq('enabled',true).order('priority',{ascending:true});if(productId)routeQuery=routeQuery.or(`product_id.eq.${productId},product_id.is.null`);const {data:routes,error:routesError}=await routeQuery;if(routesError)return json({error:'route_lookup_failed',detail:routesError.message},500);if(!routes?.length)return json({error:'no_active_gateway_route'},409);
+ const gatewayIds=routes.map((r:any)=>r.gateway_id);const {data:healthRows}=await admin.from('gateway_operation_logs').select('gateway_id,status,response_meta,created_at').eq('user_id',user.id).in('gateway_id',gatewayIds).gte('created_at',new Date(Date.now()-60*60*1000).toISOString()).order('created_at',{ascending:false}).limit(500);const health=new Map<string,{total:number,ok:number}>();for(const row of healthRows??[]){const h=health.get(row.gateway_id)||{total:0,ok:0};h.total++;if(['success','approved','completed'].includes(String(row.status)))h.ok++;health.set(row.gateway_id,h);}
+ const attempts:any[]=[];let transaction:any=null;let lastTechnicalError:string|null=null;for(let i=0;i<routes.length;i++){const route=routes[i];const h=health.get(route.gateway_id)||{total:0,ok:0};const successRate=h.total?Math.round((h.ok/h.total)*10000)/100:null;const guard=route.conditions?.health_guard!==false;if(guard&&route.fallback_enabled&&h.total>=5&&successRate!==null&&successRate<50){attempts.push({gateway_id:route.gateway_id,priority:route.priority,attempt:i+1,outcome:'health_guard_skip',reason:'gateway_degraded',health:{total:h.total,success_rate:successRate}});continue;}const {data:gateway}=await supabase.from('gateways').select('*').eq('user_id',user.id).eq('id',route.gateway_id).maybeSingle();if(!gateway){attempts.push({gateway_id:route.gateway_id,priority:route.priority,outcome:'technical_failure',reason:'gateway_not_found',health:{total:h.total,success_rate:successRate}});continue}const provider=String(gateway.provider??gateway.type??gateway.name??'unknown').toLowerCase(),environment=String(gateway.environment??gateway.env??'sandbox').toLowerCase(),isSandbox=environment!=='production'||provider==='sandbox',simulated=String(metadata.simulate_failure??'').toLowerCase();let outcome:'approved'|'technical_failure'|'card_decline'='approved',reason='sandbox_approved';if(isSandbox&&simulated==='technical'){outcome='technical_failure';reason='simulated_technical_failure'}if(isSandbox&&simulated==='card_decline'){outcome='card_decline';reason='simulated_card_decline'}if(!isSandbox){outcome='technical_failure';reason='provider_adapter_not_configured'}const attempt=i+1;attempts.push({gateway_id:route.gateway_id,priority:route.priority,attempt,outcome,reason,health:{total:h.total,success_rate:successRate}});await admin.from('gateway_operation_logs').insert({user_id:user.id,gateway_id:route.gateway_id,operation,status:outcome==='approved'?'success':'failed',attempt,request_meta:{funnel_id:funnelId,product_id:productId,amount,currency,provider,environment},response_meta:{outcome,reason,health:{total:h.total,success_rate:successRate}},error_message:outcome==='approved'?null:reason});if(outcome==='card_decline'){lastTechnicalError=reason;break}if(outcome==='technical_failure'){lastTechnicalError=reason;if(!route.fallback_enabled)break;continue}const externalId=`sbx_${crypto.randomUUID()}`;const {data:tx,error:txError}=await admin.from('gateway_transactions').insert({user_id:user.id,funnel_id:funnelId,product_id:productId,gateway_id:route.gateway_id,external_id:externalId,idempotency_key:idem,amount,currency,status:operation==='refund'?'refunded':'approved',customer,metadata:{...metadata,sandbox:isSandbox,operation},attempt_count:attempt,completed_at:new Date().toISOString(),routing_metadata:{selected_priority:route.priority,attempts,health:{total:h.total,success_rate:successRate}}}).select().single();if(txError){if(txError.code==='23505'){const {data:replay}=await supabase.from('gateway_transactions').select('*').eq('user_id',user.id).eq('idempotency_key',idem).maybeSingle();if(replay)return json({transaction:replay,replayed:true});}return json({error:'transaction_create_failed',detail:txError.message},500)}transaction=tx;break}if(!transaction){const {data:failedTx}=await admin.from('gateway_transactions').insert({user_id:user.id,funnel_id:funnelId,product_id:productId,gateway_id:attempts.at(-1)?.gateway_id??routes[0].gateway_id,external_id:`failed_${crypto.randomUUID()}`,idempotency_key:idem,amount,currency,status:'failed',customer,metadata:{...metadata,operation},error_message:lastTechnicalError??'gateway_failure',failure_code:attempts.at(-1)?.outcome==='card_decline'?'card_decline':'technical_failure',attempt_count:attempts.length,routing_metadata:{attempts}}).select().single();return json({transaction:failedTx,attempts,fallback_used:attempts.length>1},402)}let projection:any=null;if(transaction.status==='approved'&&metadata.checkout_id){const p=await admin.rpc('project_checkout_purchase',{p_checkout_id:String(metadata.checkout_id)});projection=p.error?{ok:false,reason:'projection_failed'}:p.data}return json({transaction,attempts,fallback_used:attempts.length>1,sandbox:true,projection});});
