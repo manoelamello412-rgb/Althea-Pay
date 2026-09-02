@@ -9,11 +9,13 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Module = 'Visão geral' | 'Funis' | 'Produtos' | 'Gateways' | 'Vendas' | 'Clientes' | 'Chats' | 'Analytics' | 'Integrações' | 'Configurações'
 type Transaction = { id: string; amount: number | null; status: string | null; currency: string | null; created_at?: string; gateway_id?: string | null; funnel_id?: string | null; customer?: Record<string, unknown> | null }
-type Row = { id: string; data?: Record<string, unknown>; created_at?: string; [key: string]: unknown }
+type Row = { id: string; name?: string | null; provider?: string | null; status?: string | null; created_at?: string; metadata?: Record<string, unknown>; [key: string]: unknown }
+
+type DbResult<T> = { data: T[] | null; error: { message: string } | null }
 
 const nav: Module[] = ['Visão geral', 'Funis', 'Produtos', 'Gateways', 'Vendas', 'Clientes', 'Chats', 'Analytics', 'Integrações', 'Configurações']
-const tableMap: Partial<Record<Module, string>> = { Produtos: 'products', Gateways: 'gateways', Clientes: 'clients', Chats: 'chats' }
-const labels: Record<string, string> = { products: 'Produtos', gateways: 'Gateways', clients: 'Clientes', chats: 'Chats' }
+const tableMap: Partial<Record<Module, 'products' | 'gateway_connections' | 'customers' | 'chat_conversations'>> = { Produtos: 'products', Gateways: 'gateway_connections', Clientes: 'customers', Chats: 'chat_conversations' }
+const labels: Record<string, string> = { products: 'Produtos', gateway_connections: 'Gateways', customers: 'Clientes', chat_conversations: 'Chats' }
 const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 })
 const dateTime = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
@@ -39,11 +41,20 @@ function customerName(customer?: Record<string, unknown> | null) {
   return String(customer.name || customer.full_name || customer.nome || customer.email || 'Cliente')
 }
 
+function slugify(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70) || 'funil'
+}
+
+function jsonObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
   const [active, setActive] = useState<Module>('Visão geral')
   const [userId, setUserId] = useState('')
+  const [organizationId, setOrganizationId] = useState('')
   const [fullName, setFullName] = useState('')
   const [rows, setRows] = useState<Row[]>([])
   const [funnels, setFunnels] = useState<Row[]>([])
@@ -60,7 +71,7 @@ export default function DashboardPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [funnelName, setFunnelName] = useState('')
   const [funnelUrl, setFunnelUrl] = useState('')
-  const [json, setJson] = useState('{\n  "nome": "",\n  "descricao": ""\n}')
+  const [json, setJson] = useState('{\n  "name": "",\n  "metadata": {}\n}')
   const [saving, setSaving] = useState(false)
 
   async function loadAll() {
@@ -70,81 +81,119 @@ export default function DashboardPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.replace('/login'); return }
     setUserId(user.id)
-    const profile = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
-    setFullName(profile.data?.full_name || user.user_metadata?.full_name || '')
-    const [f, p, g, s, c, ch, tx, conn, events] = await Promise.all([
-      supabase.from('funnels').select('id,nome,url,status,created_at,last_communication').order('created_at', { ascending: false }),
-      supabase.from('products').select('id,data,created_at').order('created_at', { ascending: false }),
-      supabase.from('gateways').select('id,data,created_at').order('created_at', { ascending: false }),
-      supabase.from('sales').select('id,data,created_at,amount,status,occurred_at,currency,gateway_id,funnel_id,transaction_id').order('created_at', { ascending: false }).limit(100),
-      supabase.from('clients').select('id,data,created_at').order('created_at', { ascending: false }),
-      supabase.from('chats').select('id,data,created_at').order('created_at', { ascending: false }),
-      supabase.from('gateway_transactions').select('id,amount,status,currency,created_at,completed_at,gateway_id,funnel_id,customer').order('created_at', { ascending: false }).limit(100),
-      supabase.from('funnel_connections').select('id,status,health_status,event_count').order('created_at', { ascending: false }),
-      supabase.from('integration_events').select('id,created_at,status').order('created_at', { ascending: false }).limit(100),
+
+    const profile = await supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
+    setFullName(profile.data?.display_name || user.user_metadata?.display_name || user.user_metadata?.full_name || '')
+
+    const membership = await supabase.from('organization_members').select('organization_id').eq('user_id', user.id).order('created_at', { ascending: true }).limit(1).maybeSingle()
+    const orgId = membership.data?.organization_id || ''
+    setOrganizationId(orgId)
+    if (!orgId) {
+      setError('Sua conta ainda não possui uma organização ativa.')
+      setFunnels([]); setRows([]); setTransactions([]); setLoading(false)
+      return
+    }
+
+    const [f, p, g, s, c, ch, activeConnections, events] = await Promise.all([
+      supabase.from('funnels').select('id,name,external_url,status,connection_status,created_at').eq('organization_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('products').select('id,name,currency,metadata,created_at').eq('organization_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('gateway_connections').select('id,name,provider,status,public_config,created_at').eq('organization_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('sales').select('id,amount,status,currency,occurred_at,created_at,gateway_connection_id,funnel_id,customer_id,external_payment_id,external_order_id,metadata,customers(name,email,phone)').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(100),
+      supabase.from('customers').select('id,name,email,phone,metadata,created_at').eq('organization_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('chat_conversations').select('id,status,priority,last_message_at,created_at,customer_id,funnel_id,metadata').eq('organization_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('funnel_gateway_connections').select('funnel_id,is_active').eq('is_active', true),
+      supabase.from('integration_events').select('id,created_at,status:event_type,provider,processed_at').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(100),
     ])
-    const firstError = [f, p, g, s, c, ch, tx, conn, events].find(x => x.error)
+
+    const results: Array<{ data: unknown[] | null; error: { message: string } | null }> = [f, p, g, s, c, ch, activeConnections, events]
+    const firstError = results.find(x => x.error)
     if (firstError?.error) setError(firstError.error.message)
+
     setFunnels((f.data || []) as Row[])
     setCounts({ funnels: f.data?.length || 0, products: p.data?.length || 0, gateways: g.data?.length || 0, sales: s.data?.length || 0, clients: c.data?.length || 0, chats: ch.data?.length || 0 })
-    const mapped = (tx.data || []) as Transaction[]
-    const fallback = (s.data || []).map((item: any): Transaction => ({
-      id: item.id,
-      amount: item.amount ?? (Number(item.data?.amount || 0) || null),
-      status: item.status ?? item.data?.status ?? null,
-      currency: item.currency ?? 'BRL',
-      created_at: item.occurred_at || item.created_at,
-      gateway_id: item.gateway_id,
-      funnel_id: item.funnel_id,
-      customer: item.data?.customer || null,
+
+    const fallback = (s.data || []).map((item: Record<string, unknown>): Transaction => ({
+      id: String(item.id),
+      amount: item.amount == null ? null : Number(item.amount),
+      status: item.status == null ? null : String(item.status),
+      currency: item.currency == null ? 'BRL' : String(item.currency),
+      created_at: String(item.occurred_at || item.created_at || ''),
+      gateway_id: item.gateway_connection_id == null ? null : String(item.gateway_connection_id),
+      funnel_id: item.funnel_id == null ? null : String(item.funnel_id),
+      customer: jsonObject(item.customers),
     }))
-    setTransactions(mapped.length ? mapped : fallback)
-    setConnectedFunnels((conn.data || []).filter((item: any) => ['active', 'healthy', 'connected'].includes(String(item.status || item.health_status || '').toLowerCase())).length)
+    setTransactions(fallback)
+    setConnectedFunnels(new Set((activeConnections.data || []).map((item: Record<string, unknown>) => String(item.funnel_id))).size)
     setIntegrationEvents(events.data?.length || 0)
+
     const activeTable = tableMap[active]
     if (activeTable) {
-      const source: Record<string, any> = { products: p, gateways: g, clients: c, chats: ch }
-      setRows((source[activeTable]?.data || []) as Row[])
+      const source: Record<string, DbResult<Row>> = {
+        products: p as DbResult<Row>,
+        gateway_connections: g as DbResult<Row>,
+        customers: c as DbResult<Row>,
+        chat_conversations: ch as DbResult<Row>,
+      }
+      setRows(source[activeTable]?.data || [])
     }
     setLoading(false)
   }
 
   useEffect(() => { hydrateAltheaBrand(); loadAll() }, [active])
   useEffect(() => {
-    if (!supabase || !userId) return
+    if (!supabase || !userId || !organizationId) return
     const channel = supabase.channel(`althea-dashboard-${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_transactions' }, loadAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, loadAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'funnels' }, loadAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'funnel_connections' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales', filter: `organization_id=eq.${organizationId}` }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'funnels', filter: `organization_id=eq.${organizationId}` }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products', filter: `organization_id=eq.${organizationId}` }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_connections', filter: `organization_id=eq.${organizationId}` }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers', filter: `organization_id=eq.${organizationId}` }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations', filter: `organization_id=eq.${organizationId}` }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'integration_events', filter: `organization_id=eq.${organizationId}` }, loadAll)
       .subscribe()
     const interval = window.setInterval(loadAll, 30000)
     return () => { window.clearInterval(interval); supabase.removeChannel(channel) }
-  }, [supabase, userId])
+  }, [supabase, userId, organizationId])
 
   async function createFunnel(e: FormEvent) {
-    e.preventDefault(); if (!supabase || !userId) return
+    e.preventDefault(); if (!supabase || !organizationId || !funnelName.trim()) return
     setSaving(true); setError(''); setMessage('')
-    const { error: insertError } = await supabase.from('funnels').insert({ id: `ANT-${Date.now()}`, nome: funnelName, url: funnelUrl || null, status: 'draft', user_id: userId })
-    if (insertError) setError(insertError.message); else { setMessage('Funil criado com sucesso.'); setFunnelName(''); setFunnelUrl(''); await loadAll() }
+    const baseSlug = slugify(funnelName)
+    const slug = `${baseSlug}-${Date.now().toString(36)}`.slice(0, 80)
+    const { error: insertError } = await supabase.from('funnels').insert({ organization_id: organizationId, name: funnelName.trim(), slug, external_url: funnelUrl.trim() || null, status: 'draft', connection_status: 'pending' })
+    if (insertError) setError(insertError.message)
+    else { setMessage('Funil criado com sucesso.'); setFunnelName(''); setFunnelUrl(''); await loadAll() }
     setSaving(false)
   }
 
   async function createGeneric(e: FormEvent) {
-    e.preventDefault(); if (!supabase || !userId || !tableMap[active]) return
+    e.preventDefault(); if (!supabase || !organizationId || !tableMap[active]) return
     setSaving(true); setError(''); setMessage('')
-    let data: Record<string, unknown>
-    try { data = JSON.parse(json) } catch { setError('O JSON informado é inválido.'); setSaving(false); return }
+    let input: Record<string, unknown>
+    try { input = JSON.parse(json) } catch { setError('O JSON informado é inválido.'); setSaving(false); return }
     const table = tableMap[active]!
-    const { error: insertError } = await supabase.from(table).insert({ id: `${table.slice(0, 3).toUpperCase()}-${Date.now()}`, data, user_id: userId })
-    if (insertError) setError(insertError.message); else { setMessage(`${labels[table]} criado com sucesso.`); await loadAll() }
+    const metadata = jsonObject(input.metadata)
+    let payload: Record<string, unknown>
+    if (table === 'products') {
+      payload = { organization_id: organizationId, name: String(input.name || input.nome || 'Produto'), currency: String(input.currency || 'BRL'), external_reference: input.external_reference || null, metadata }
+    } else if (table === 'gateway_connections') {
+      payload = { organization_id: organizationId, name: String(input.name || input.nome || 'Gateway'), provider: String(input.provider || 'custom'), public_config: jsonObject(input.public_config), capabilities: jsonObject(input.capabilities) }
+    } else if (table === 'customers') {
+      payload = { organization_id: organizationId, name: input.name || input.nome || null, email: input.email || null, phone: input.phone || input.telefone || null, external_reference: input.external_reference || null, metadata }
+    } else {
+      payload = { organization_id: organizationId, status: input.status || 'open', priority: Number(input.priority || 0), visitor_reference: input.visitor_reference || null, funnel_id: input.funnel_id || null, customer_id: input.customer_id || null, metadata }
+    }
+    const { error: insertError } = await supabase.from(table).insert(payload)
+    if (insertError) setError(insertError.message)
+    else { setMessage(`${labels[table]} criado com sucesso.`); await loadAll() }
     setSaving(false)
   }
 
   async function deleteRow(table: string, id: string) {
-    if (!supabase || !confirm('Excluir este registro?')) return
-    const { error: deleteError } = await supabase.from(table).delete().eq('id', id)
-    if (deleteError) setError(deleteError.message); else { setMessage('Registro excluído.'); await loadAll() }
+    if (!supabase || !organizationId || !confirm('Excluir este registro?')) return
+    const { error: deleteError } = await supabase.from(table).delete().eq('id', id).eq('organization_id', organizationId)
+    if (deleteError) setError(deleteError.message)
+    else { setMessage('Registro excluído.'); await loadAll() }
   }
 
   async function logout() { if (!supabase) return; await supabase.auth.signOut(); router.replace('/login'); router.refresh() }
@@ -211,9 +260,9 @@ export default function DashboardPage() {
 
         {active === 'Vendas' && <section className="althea-card sales-module"><div className="module-toolbar"><input value={salesQuery} onChange={e => setSalesQuery(e.target.value)} placeholder="Buscar venda, cliente, gateway..." /><select value={salesStatus} onChange={e => setSalesStatus(e.target.value)}><option value="all">Todos</option><option value="ok">Aprovadas</option><option value="pending">Pendentes</option><option value="warning">Reembolsadas</option><option value="danger">Falhas</option></select></div><div className="sales-table-wrap"><table className="sales-table"><thead><tr><th>Transação</th><th>Cliente</th><th>Status</th><th>Valor</th><th>Data</th></tr></thead><tbody>{sales.map(t => <tr key={t.id} onClick={() => setSelectedTransaction(t)}><td>{t.id}</td><td>{customerName(t.customer)}</td><td><span className={`status-badge ${statusClass(t.status)}`}>{statusLabel(t.status)}</span></td><td>{money.format(Number(t.amount) || 0)}</td><td>{t.created_at ? dateTime.format(new Date(t.created_at)) : '—'}</td></tr>)}</tbody></table>{!sales.length && <div className="empty-state">Nenhuma venda encontrada.</div>}</div></section>}
 
-        {active === 'Funis' && <section className="module-grid"><form className="althea-card form-card" onSubmit={createFunnel}><span>NOVO FUNIL</span><input value={funnelName} onChange={e => setFunnelName(e.target.value)} placeholder="Nome do funil" required /><input value={funnelUrl} onChange={e => setFunnelUrl(e.target.value)} placeholder="URL do funil" /><button disabled={saving}>{saving ? 'Salvando...' : 'Criar funil'}</button></form><div className="althea-card"><span>FUNIS CONECTADOS</span>{funnels.map(f => <div className="list-row" key={f.id}><div><strong>{String(f.nome || f.id)}</strong><small>{String(f.status || 'draft')}</small></div><button onClick={() => deleteRow('funnels', f.id)}>Excluir</button></div>)}{!funnels.length && <div className="empty-state">Nenhum funil cadastrado.</div>}</div></section>}
+        {active === 'Funis' && <section className="module-grid"><form className="althea-card form-card" onSubmit={createFunnel}><span>NOVO FUNIL</span><input value={funnelName} onChange={e => setFunnelName(e.target.value)} placeholder="Nome do funil" required /><input value={funnelUrl} onChange={e => setFunnelUrl(e.target.value)} placeholder="URL do funil" /><button disabled={saving}>{saving ? 'Salvando...' : 'Criar funil'}</button></form><div className="althea-card"><span>FUNIS CONECTADOS</span>{funnels.map(f => <div className="list-row" key={f.id}><div><strong>{String(f.name || f.id)}</strong><small>{String(f.status || 'draft')}</small></div><button onClick={() => deleteRow('funnels', f.id)}>Excluir</button></div>)}{!funnels.length && <div className="empty-state">Nenhum funil cadastrado.</div>}</div></section>}
 
-        {['Produtos', 'Gateways', 'Clientes', 'Chats'].includes(active) && <section className="module-grid"><form className="althea-card form-card" onSubmit={createGeneric}><span>NOVO {labels[tableMap[active]!]?.toUpperCase()}</span><textarea value={json} onChange={e => setJson(e.target.value)} rows={8} /><button disabled={saving}>{saving ? 'Salvando...' : 'Criar registro'}</button></form><div className="althea-card"><span>{labels[tableMap[active]!]?.toUpperCase()}</span>{rows.map(row => <div className="list-row" key={row.id}><div><strong>{row.id}</strong><small>{row.created_at ? dateTime.format(new Date(row.created_at)) : '—'}</small></div><button onClick={() => deleteRow(tableMap[active]!, row.id)}>Excluir</button></div>)}{!rows.length && <div className="empty-state">Nenhum registro encontrado.</div>}</div></section>}
+        {['Produtos', 'Gateways', 'Clientes', 'Chats'].includes(active) && <section className="module-grid"><form className="althea-card form-card" onSubmit={createGeneric}><span>NOVO {labels[tableMap[active]!]?.toUpperCase()}</span><textarea value={json} onChange={e => setJson(e.target.value)} rows={8} /><button disabled={saving}>{saving ? 'Salvando...' : 'Criar registro'}</button></form><div className="althea-card"><span>{labels[tableMap[active]!]?.toUpperCase()}</span>{rows.map(row => <div className="list-row" key={row.id}><div><strong>{String(row.name || row.provider || row.id)}</strong><small>{row.created_at ? dateTime.format(new Date(row.created_at)) : '—'}</small></div><button onClick={() => deleteRow(tableMap[active]!, row.id)}>Excluir</button></div>)}{!rows.length && <div className="empty-state">Nenhum registro encontrado.</div>}</div></section>}
 
         {['Analytics', 'Integrações', 'Configurações'].includes(active) && <section className="module-grid"><div className="althea-card info-card"><span>{active.toUpperCase()}</span><h2>{active === 'Analytics' ? 'Performance em tempo real' : active === 'Integrações' ? 'Central de integrações' : 'Configurações da conta'}</h2><p>{descriptions[active]}</p><div className="summary-grid"><div><strong>{counts.sales || 0}</strong><small>vendas</small></div><div><strong>{counts.clients || 0}</strong><small>clientes</small></div><div><strong>{counts.products || 0}</strong><small>produtos</small></div><div><strong>{integrationEvents}</strong><small>eventos</small></div></div></div></section>}
       </section>
