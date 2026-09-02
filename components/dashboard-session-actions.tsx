@@ -6,6 +6,7 @@ import { LogOut, ShieldCheck } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 const AUTH_ROUTES = new Set(['/login', '/forgot-password', '/reset-password'])
+type AuthUser = { id: string; email?: string | null; user_metadata?: Record<string, unknown> }
 
 export default function DashboardSessionActions() {
   const pathname = usePathname()
@@ -18,7 +19,7 @@ export default function DashboardSessionActions() {
   useEffect(() => {
     if (AUTH_ROUTES.has(pathname)) return
     let active = true
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(({ data }: { data: { user: AuthUser | null } }) => {
       if (!active || !data.user) return
       setName(String(data.user.user_metadata?.full_name || data.user.user_metadata?.display_name || data.user.email?.split('@')[0] || 'Althea'))
       setAvatarUrl(String(data.user.user_metadata?.avatar_url || ''))
