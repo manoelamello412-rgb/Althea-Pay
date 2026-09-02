@@ -6,13 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 const encoder = new TextEncoder()
-const APPROVED = ['approved', 'paid', 'completed', 'success']
-const REFUNDED = ['refunded', 'refund']
-const CHARGEBACK = ['chargeback']
+const SUCCESS = ['approved', 'paid', 'completed', 'success']
+const REVERSAL = ['refunded', 'refund', 'chargeback']
 
-function hex(value: ArrayBuffer) {
-  return [...new Uint8Array(value)].map((x) => x.toString(16).padStart(2, '0')).join('')
-}
+function hex(value: ArrayBuffer) { return [...new Uint8Array(value)].map(x => x.toString(16).padStart(2, '0')).join('') }
 async function hmac(secret: string, value: string) {
   const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
   return hex(await crypto.subtle.sign('HMAC', key, encoder.encode(value)))
@@ -24,151 +21,162 @@ function safeEqual(a: string, b: string) {
   return result === 0
 }
 function norm(value: unknown) { return String(value ?? '').trim().toLowerCase() }
-function iso(value: unknown) {
-  if (!value) return new Date().toISOString()
-  const date = new Date(String(value))
-  if (Number.isNaN(date.getTime())) throw new Error('invalid_occurred_at')
-  return date.toISOString()
+function endpointKey(req: Request) {
+  const parts = new URL(req.url).pathname.split('/').filter(Boolean)
+  const i = parts.indexOf('althea-webhook')
+  return i >= 0 ? parts[i + 1] ?? '' : ''
 }
 
 Deno.serve(withSupabase({ auth: 'none' }, async (req, ctx) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return Response.json({ ok: false, error: 'method_not_allowed' }, { status: 405, headers: corsHeaders })
 
+  const started = Date.now()
   const raw = await req.text()
   const signature = req.headers.get('x-althea-signature') ?? ''
   const eventId = req.headers.get('x-althea-event-id') ?? ''
   const timestamp = req.headers.get('x-althea-timestamp') ?? ''
-  const secret = Deno.env.get('ALTHEA_WEBHOOK_SECRET') ?? ''
+  const key = endpointKey(req)
   const db = ctx.supabaseAdmin
+  let deliveryId: string | null = null
+  let eventIdDb: string | null = null
 
   try {
-    if (!secret) return Response.json({ ok: false, error: 'webhook_secret_not_configured' }, { status: 503, headers: corsHeaders })
-    if (!/^\d+$/.test(timestamp) || Math.abs(Date.now() - Number(timestamp)) > 300000) {
-      return Response.json({ ok: false, error: 'invalid_or_stale_timestamp' }, { status: 401, headers: corsHeaders })
-    }
+    if (!/^\d+$/.test(timestamp)) return Response.json({ ok: false, error: 'invalid_timestamp' }, { status: 400, headers: corsHeaders })
+    if (Math.abs(Date.now() - Number(timestamp)) > 300000) return Response.json({ ok: false, error: 'stale_webhook' }, { status: 401, headers: corsHeaders })
     if (!eventId) return Response.json({ ok: false, error: 'event_id_required' }, { status: 400, headers: corsHeaders })
-    if (!safeEqual(signature, await hmac(secret, `${timestamp}.${raw}`))) {
-      return Response.json({ ok: false, error: 'invalid_signature' }, { status: 401, headers: corsHeaders })
+
+    let integration: any = null
+    if (key) {
+      const r = await db.from('webhook_integrations').select('id,user_id,funnel_id,provider,status,secret,vault_secret_id').eq('endpoint_key', key).eq('status', 'active').maybeSingle()
+      if (r.error) throw r.error
+      integration = r.data
+      if (!integration) return Response.json({ ok: false, error: 'webhook_integration_not_found' }, { status: 404, headers: corsHeaders })
     }
+
+    const secret = integration?.secret || Deno.env.get('ALTHEA_WEBHOOK_SECRET') || ''
+    if (!secret) return Response.json({ ok: false, error: 'webhook_secret_not_configured' }, { status: 503, headers: corsHeaders })
+    if (!safeEqual(signature, await hmac(secret, `${timestamp}.${raw}`))) return Response.json({ ok: false, error: 'invalid_signature' }, { status: 401, headers: corsHeaders })
 
     const p = JSON.parse(raw)
-    const provider = String(p.provider ?? '').trim()
     const eventType = String(p.event_type ?? p.type ?? '').trim()
+    const userId = integration?.user_id || String(p.user_id ?? '')
+    const funnelId = integration?.funnel_id || (p.funnel_id ? String(p.funnel_id) : null)
+    const transactionId = p.transaction_id ? String(p.transaction_id) : null
+    const checkoutId = p.checkout_id ? String(p.checkout_id) : null
+    const externalId = p.external_id ? String(p.external_id) : null
     const status = norm(p.status)
-    const funnelId = p.funnel_id ? String(p.funnel_id) : null
-    const gatewayId = p.gateway_connection_id ? String(p.gateway_connection_id) : null
-    const organizationId = p.organization_id ? String(p.organization_id) : null
-    const externalPaymentId = p.external_payment_id ? String(p.external_payment_id) : null
-    const externalOrderId = p.external_order_id ? String(p.external_order_id) : null
-    if (!provider || !eventType || !funnelId || !gatewayId) {
-      return Response.json({ ok: false, error: 'provider_event_funnel_and_gateway_required' }, { status: 400, headers: corsHeaders })
+    if (!eventType || !userId || !funnelId) return Response.json({ ok: false, error: 'event_user_and_funnel_required' }, { status: 400, headers: corsHeaders })
+
+    const delivery = await db.from('webhook_deliveries').insert({
+      user_id: userId, integration_id: integration?.id ?? null, event_type: eventType,
+      endpoint: new URL(req.url).pathname, signature_valid: true, status: 'received', attempt: 1, payload: p,
+    }).select('id').single()
+    if (delivery.error) throw delivery.error
+    deliveryId = delivery.data.id
+
+    const eventKey = `${integration?.id || userId}:${eventId}`
+    const existing = await db.from('integration_events').select('id,status').eq('event_key', eventKey).maybeSingle()
+    if (existing.error) throw existing.error
+    if (existing.data) {
+      await db.from('webhook_deliveries').update({ status: 'duplicate', response_code: 200, response_time_ms: Date.now() - started, delivered_at: new Date().toISOString() }).eq('id', deliveryId)
+      return Response.json({ ok: true, duplicate: true, event_id: existing.data.id, status: existing.data.status }, { headers: corsHeaders })
     }
-
-    const funnel = await db.from('funnels').select('id,organization_id').eq('id', funnelId).maybeSingle()
-    if (funnel.error) throw funnel.error
-    if (!funnel.data) return Response.json({ ok: false, error: 'funnel_not_found' }, { status: 404, headers: corsHeaders })
-    const orgId = funnel.data.organization_id
-    if (organizationId && organizationId !== orgId) return Response.json({ ok: false, error: 'organization_mismatch' }, { status: 403, headers: corsHeaders })
-
-    const gateway = await db.from('gateway_connections').select('id,organization_id').eq('id', gatewayId).maybeSingle()
-    if (gateway.error) throw gateway.error
-    if (!gateway.data || gateway.data.organization_id !== orgId) return Response.json({ ok: false, error: 'gateway_not_found_or_mismatch' }, { status: 404, headers: corsHeaders })
 
     const event = await db.from('integration_events').insert({
-      organization_id: orgId,
-      funnel_id: funnelId,
-      gateway_connection_id: gatewayId,
-      provider,
-      event_type: eventType,
-      external_event_id: eventId,
-      signature_valid: true,
-      payload: p,
-      created_at: new Date().toISOString(),
+      user_id: userId, funnel_id: funnelId, integration_id: integration?.id ?? null,
+      event_type: eventType, external_id: eventId, event_key: eventKey, status: 'processing',
+      payload: p, occurred_at: new Date(Number(timestamp)).toISOString(), claim_attempt: 0,
     }).select('id').single()
-
-    if (event.error?.code === '23505') {
-      const existing = await db.from('integration_events').select('id,processed_at').eq('provider', provider).eq('external_event_id', eventId).maybeSingle()
-      return Response.json({ ok: true, duplicate: true, event_id: existing.data?.id ?? null, processed: Boolean(existing.data?.processed_at) }, { headers: corsHeaders })
-    }
     if (event.error) throw event.error
+    eventIdDb = event.data.id
 
-    let customerId: string | null = p.customer_id ? String(p.customer_id) : null
-    const customer = p.customer && typeof p.customer === 'object' ? p.customer : null
-    if (customerId) {
-      const existing = await db.from('customers').select('id').eq('id', customerId).eq('organization_id', orgId).maybeSingle()
-      if (existing.error) throw existing.error
-      if (!existing.data) customerId = null
-    }
-    if (!customerId && customer) {
-      const email = customer.email ? String(customer.email).trim().toLowerCase() : null
-      const externalReference = customer.external_reference ? String(customer.external_reference) : null
-      let existing: any = null
-      if (externalReference) {
-        const q = await db.from('customers').select('id').eq('organization_id', orgId).eq('external_reference', externalReference).maybeSingle()
-        if (q.error) throw q.error
-        existing = q.data
-      }
-      if (!existing && email) {
-        const q = await db.from('customers').select('id').eq('organization_id', orgId).eq('email', email).maybeSingle()
-        if (q.error) throw q.error
-        existing = q.data
-      }
-      if (existing) customerId = existing.id
-      else {
-        const created = await db.from('customers').insert({ organization_id: orgId, external_reference: externalReference, name: customer.name ?? null, email, phone: customer.phone ?? null, metadata: customer.metadata ?? {} }).select('id').single()
-        if (created.error) throw created.error
-        customerId = created.data.id
+    let transaction: any = null
+    if (transactionId) {
+      const r = await db.from('gateway_transactions').select('*').eq('id', transactionId).eq('user_id', userId).maybeSingle()
+      if (r.error) throw r.error
+      transaction = r.data
+      if (transaction) {
+        const patch: any = { updated_at: new Date().toISOString() }
+        if (status) patch.status = status
+        if (p.failure_code) patch.failure_code = String(p.failure_code)
+        if (externalId) patch.external_id = externalId
+        const u = await db.from('gateway_transactions').update(patch).eq('id', transaction.id).eq('user_id', userId)
+        if (u.error) throw u.error
+        transaction = { ...transaction, ...patch }
       }
     }
 
-    const occurredAt = iso(p.occurred_at)
-    const purchase = APPROVED.includes(status)
-    const reversal = REFUNDED.includes(status) || CHARGEBACK.includes(status)
+    let checkout: any = null
+    if (checkoutId) {
+      const r = await db.from('checkout_sessions').select('*').eq('id', checkoutId).eq('user_id', userId).maybeSingle()
+      if (r.error) throw r.error
+      checkout = r.data
+      if (checkout) {
+        const next = SUCCESS.includes(status) ? 'completed' : REVERSAL.includes(status) ? 'failed' : null
+        if (next) {
+          const u = await db.from('checkout_sessions').update({ status: next, completed_at: next === 'completed' ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq('id', checkoutId).eq('user_id', userId)
+          if (u.error) throw u.error
+        }
+      }
+    }
+
+    const purchase = SUCCESS.includes(status) && (eventType.toLowerCase().includes('payment') || eventType.toLowerCase().includes('purchase') || ['paid', 'approved', 'completed', 'success'].includes(eventType.toLowerCase()))
+    const reversal = REVERSAL.includes(status) || REVERSAL.includes(norm(eventType))
     let saleId: string | null = null
 
-    if (purchase) {
-      if (!externalPaymentId) throw new Error('external_payment_id_required_for_sale')
-      const existing = await db.from('sales').select('id').eq('gateway_connection_id', gatewayId).eq('external_payment_id', externalPaymentId).maybeSingle()
-      if (existing.error) throw existing.error
-      const payload = {
-        organization_id: orgId,
-        funnel_id: funnelId,
-        product_id: p.product_id ? String(p.product_id) : null,
-        customer_id: customerId,
-        gateway_connection_id: gatewayId,
-        external_payment_id: externalPaymentId,
-        external_order_id: externalOrderId,
-        amount: Number(p.amount ?? 0),
-        currency: String(p.currency ?? 'BRL').toUpperCase(),
-        status: 'approved',
-        source_event_id: event.data.id,
-        metadata: p.metadata ?? p,
-        occurred_at: occurredAt,
-        updated_at: new Date().toISOString(),
+    if (purchase && transaction) {
+      const saleExternalId = externalId || transaction.external_id || eventId
+      const attribution = checkout?.attribution && typeof checkout.attribution === 'object' ? checkout.attribution : {}
+      const sale = {
+        funnel_id: funnelId, product_id: checkout?.product_id ?? transaction.product_id ?? null,
+        checkout_id: checkoutId, transaction_id: transaction.id,
+        amount: transaction.amount ?? checkout?.amount ?? p.amount ?? 0,
+        currency: transaction.currency ?? checkout?.currency ?? p.currency ?? 'BRL', status: 'approved', attribution,
+        source: attribution.source ?? null, medium: attribution.medium ?? null, campaign: attribution.campaign ?? null,
+        content: attribution.content ?? null, term: attribution.term ?? null, click_id: attribution.click_id ?? null,
+        external_id: saleExternalId, gateway_id: transaction.gateway_id ?? null,
+        occurred_at: new Date(Number(timestamp)).toISOString(), data: p, user_id: userId,
       }
-      if (existing.data) {
-        saleId = existing.data.id
-        const updated = await db.from('sales').update(payload).eq('id', saleId).eq('organization_id', orgId)
-        if (updated.error) throw updated.error
+      const ex = await db.from('sales').select('id').eq('user_id', userId).eq('external_id', saleExternalId).maybeSingle()
+      if (ex.error) throw ex.error
+      if (ex.data) {
+        saleId = ex.data.id
+        const u = await db.from('sales').update(sale).eq('id', saleId).eq('user_id', userId)
+        if (u.error) throw u.error
       } else {
-        const created = await db.from('sales').insert(payload).select('id').single()
-        if (created.error) throw created.error
-        saleId = created.data.id
+        const i = await db.from('sales').insert({ id: `sale_${eventId}`, ...sale }).select('id').single()
+        if (i.error) throw i.error
+        saleId = i.data.id
       }
     }
 
-    if (reversal && externalPaymentId) {
-      const nextStatus = CHARGEBACK.includes(status) ? 'chargeback' : 'refunded'
-      const updated = await db.from('sales').update({ status: nextStatus, source_event_id: event.data.id, metadata: p, updated_at: new Date().toISOString() }).eq('organization_id', orgId).eq('gateway_connection_id', gatewayId).eq('external_payment_id', externalPaymentId).select('id').maybeSingle()
-      if (updated.error) throw updated.error
-      saleId = updated.data?.id ?? null
+    if (reversal) {
+      const saleExternalId = externalId || transaction?.external_id || eventId
+      const u = await db.from('sales').update({ status: status === 'chargeback' || norm(eventType) === 'chargeback' ? 'chargeback' : 'refunded', data: p }).eq('user_id', userId).eq('external_id', saleExternalId)
+      if (u.error) throw u.error
     }
 
-    await db.from('integration_events').update({ processed_at: new Date().toISOString() }).eq('id', event.data.id)
-    return Response.json({ ok: true, duplicate: false, event_id: event.data.id, processed: true, sale_id: saleId, sale_synced: purchase || reversal }, { headers: corsHeaders })
+    const internalSecret = Deno.env.get('ALTHEA_INTERNAL_SECRET') || ''
+    let automationTriggered = false
+    if (internalSecret) {
+      const url = `${Deno.env.get('SUPABASE_URL')}/functions/v1/automation-engine-v2`
+      const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': internalSecret }, body: JSON.stringify({ user_id: userId, funnel_id: funnelId, event_id: event.data.id, event_type: eventType, transaction_id: transactionId, checkout_id: checkoutId, sale_id: saleId, external_id: externalId, payload: p }) })
+      automationTriggered = response.ok
+      if (!response.ok) throw new Error(`automation_engine_http_${response.status}`)
+    }
+
+    await db.from('integration_events').update({ status: 'processed', processed_at: new Date().toISOString(), error_message: null }).eq('id', event.data.id)
+    await db.from('webhook_deliveries').update({ status: 'delivered', response_code: 200, response_time_ms: Date.now() - started, delivered_at: new Date().toISOString() }).eq('id', deliveryId)
+    return Response.json({ ok: true, duplicate: false, event_id: event.data.id, processed: true, sale_id: saleId, sale_synced: purchase || reversal, automation_triggered: automationTriggered }, { headers: corsHeaders })
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'webhook_processing_failed'
     console.error('althea-webhook', error)
-    return Response.json({ ok: false, error: error instanceof Error ? error.message : 'webhook_processing_failed' }, { status: 500, headers: corsHeaders })
+    if (eventIdDb) {
+      const ev = await db.from('integration_events').select('retry_count').eq('id', eventIdDb).maybeSingle()
+      await db.from('integration_events').update({ status: 'retry', retry_count: Number(ev.data?.retry_count ?? 0) + 1, error_message: message }).eq('id', eventIdDb)
+    }
+    if (deliveryId) await db.from('webhook_deliveries').update({ status: 'failed', response_code: 500, response_time_ms: Date.now() - started, error_message: message }).eq('id', deliveryId)
+    return Response.json({ ok: false, error: message, event_id: eventIdDb, retryable: Boolean(eventIdDb) }, { status: 500, headers: corsHeaders })
   }
 }))
