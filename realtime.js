@@ -136,4 +136,43 @@
   if(window.sb?.auth) sb.auth.onAuthStateChange((_event,session)=>{
     if(session?.user) setTimeout(()=>bootstrapSandbox(),250);
   });
+
+  // Checkout UI now uses the deployed Checkout Engine instead of writing sessions directly from the browser.
+  window.newCheckout = async function() {
+    const f=await sb.from('funnels').select('id,nome').eq('user_id',user.id).is('deleted_at',null).order('created_at',{ascending:false});
+    if(f.error) return alert(f.error.message);
+    const p=await sb.from('products').select('id,data').eq('user_id',user.id).order('created_at',{ascending:false});
+    if(p.error) return alert(p.error.message);
+    if(!(f.data||[]).length) return alert('Conecte um funil antes de criar um checkout.');
+    modal('Nova sessão de checkout',`<form id="checkoutForm">
+      <div class="field"><label>Funil</label><select id="cf">${(f.data||[]).map(x=>`<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select></div>
+      <div class="field"><label>Produto</label><select id="cp"><option value="">Sem produto</option>${(p.data||[]).map(x=>{const d=x.data||{};return `<option value="${x.id}" data-price="${d.price||d.amount||0}">${esc(d.name||d.nome||'Produto')}</option>`}).join('')}</select></div>
+      <div class="field"><label>Valor</label><input id="ca" type="number" min="0.01" step="0.01" value="10"></div>
+      <div class="field"><label>Cliente</label><input id="cn" placeholder="Nome"></div>
+      <div class="field"><label>E-mail</label><input id="ce" type="email" placeholder="cliente@email.com"></div>
+      <div class="field"><label>UTM campaign</label><input id="uc"></div>
+      <button class="primary">Criar sessão</button>
+    </form>`);
+    cp.onchange=()=>{const v=Number(cp.options[cp.selectedIndex]?.dataset.price||0);if(v>0)ca.value=v;};
+    checkoutForm.onsubmit=async e=>{
+      e.preventDefault();
+      const ik=`ui_chk_${crypto.randomUUID()}`;
+      const body={
+        funnel_id:cf.value,
+        product_id:cp.value||null,
+        amount:Number(ca.value||0),
+        currency:'BRL',
+        action:'start',
+        idempotency_key:ik,
+        customer:{name:cn.value.trim(),email:ce.value.trim()},
+        attribution:{utm_campaign:uc.value.trim()},
+        metadata:{source:'control_center'}
+      };
+      try {
+        const result=await sb.functions.invoke('checkout-engine-v2',{body,headers:{'x-idempotency-key':ik}});
+        if(result.error) throw result.error;
+        closeModal(); go('checkout');
+      } catch(err) { alert(err.message||'Não foi possível criar o checkout.'); }
+    };
+  };
 })();
