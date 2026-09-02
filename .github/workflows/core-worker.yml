@@ -1,0 +1,28 @@
+name: Althea Core Worker
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate configuration
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          ALTHEA_INTERNAL_SECRET: ${{ secrets.ALTHEA_INTERNAL_SECRET }}
+        run: |
+          test -n "$SUPABASE_URL"
+          test -n "$ALTHEA_INTERNAL_SECRET"
+      - name: Run queue worker
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          ALTHEA_INTERNAL_SECRET: ${{ secrets.ALTHEA_INTERNAL_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            -X POST "$SUPABASE_URL/functions/v1/core-worker" \
+            -H 'content-type: application/json' \
+            -H "x-internal-secret: $ALTHEA_INTERNAL_SECRET" \
+            --data '{"limit":50}'
