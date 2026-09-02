@@ -2,7 +2,7 @@ name: Security
 
 on:
   push:
-    branches: [main, ci-security-hardening]
+    branches: [main]
   pull_request:
     branches: [main]
   schedule:
@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
       - name: Install dependencies
@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Scan repository for high-confidence secrets
