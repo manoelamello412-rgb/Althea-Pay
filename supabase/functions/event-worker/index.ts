@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
       const retryCount = Number(event.retry_count ?? 0) + 1;
 
       try {
-        const { error: claimError } = await db
+        const { data: claimedEvent, error: claimError } = await db
           .from("integration_events")
           .update({
             status: "processing",
@@ -50,9 +50,12 @@ Deno.serve(async (req) => {
             error_message: null,
           })
           .eq("id", event.id)
-          .in("status", ["pending", "failed"]);
+          .in("status", ["pending", "failed"])
+          .select("id")
+          .maybeSingle();
 
         if (claimError) throw claimError;
+        if (!claimedEvent) continue;
 
         const automationUrl = `${supabaseUrl}/functions/v1/automation-engine-v2`;
         const response = await fetch(automationUrl, {
@@ -85,7 +88,8 @@ Deno.serve(async (req) => {
             claimed_at: null,
             error_message: null,
           })
-          .eq("id", event.id);
+          .eq("id", event.id)
+          .eq("status", "processing");
 
         if (processedError) throw processedError;
         processed++;
@@ -106,7 +110,8 @@ Deno.serve(async (req) => {
             next_retry_at: nextRetryAt,
             claimed_at: null,
           })
-          .eq("id", event.id);
+          .eq("id", event.id)
+          .eq("status", "processing");
 
         if (terminal) {
           await db.from("event_dead_letters").insert({
