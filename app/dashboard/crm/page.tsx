@@ -46,7 +46,7 @@ export default function CRMPage() {
     void load()
     let channel: ReturnType<typeof supabase.channel> | null = null
     let active = true
-    void supabase.auth.getUser().then(({ data }) => {
+    void supabase.auth.getUser().then(({ data }: { data: { user: { id: string } | null } }) => {
       if (!active || !data.user) return
       channel = supabase.channel(`crm-${data.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'crm_webhook_events', filter: `user_id=eq.${data.user.id}` }, () => { void load() }).on('postgres_changes', { event: '*', schema: 'public', table: 'crm_messages', filter: `user_id=eq.${data.user.id}` }, () => { if (selected) void loadMessages(selected) }).subscribe()
     })
