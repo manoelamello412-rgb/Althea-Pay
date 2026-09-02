@@ -1,62 +1,140 @@
-import { logJSON, genRequestId } from '../../lib/logging';
-import { query } from '../../lib/db';
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
-// Event worker: processes webhook_events rows and marks them processed or moves to DLQ
-export default async function handler(req: any, res: any) {
-  const requestId = genRequestId();
-  logJSON('info','worker.start',{requestId});
+const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const internalSecret = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
+const db = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+
+Deno.serve(async (req) => {
+  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+  if (!internalSecret || req.headers.get("x-internal-secret") !== internalSecret) {
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  const requestedLimit = Number(req.headers.get("x-batch-size") ?? "50");
+  const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 50, 1), 100);
 
   try {
-    // attempt to query DB; if not configured, return noop
-    let rows;
-    try {
-      const r = await query(`SELECT id, event_id, payload, attempts FROM webhook_events WHERE processed = false AND next_attempt_at <= now() ORDER BY received_at LIMIT 50`);
-      rows = r.rows;
-    } catch (e) {
-      logJSON('warn','worker.no_db',{requestId, note: 'DB not configured or query failed', error: String(e)});
-      return res.status(200).json({ ok: true, note: 'noop (no DB)'});
-    }
+    const now = new Date().toISOString();
+    const { data: events, error } = await db
+      .from("integration_events")
+      .select("id,user_id,funnel_id,event_type,external_id,status,payload,event_key,processed_at,error_message,retry_count,next_retry_at,claimed_at,claim_attempt")
+      .in("status", ["pending", "failed"])
+      .or(`next_retry_at.is.null,next_retry_at.lte.${now}`)
+      .order("created_at", { ascending: true })
+      .limit(limit);
 
-    for (const row of rows) {
-      const { id, event_id, payload, attempts } = row;
-      logJSON('info','worker.processing',{requestId,event_id,attempts});
+    if (error) throw error;
+
+    let processed = 0;
+    let failed = 0;
+
+    for (const event of events ?? []) {
+      const retryCount = Number(event.retry_count ?? 0) + 1;
+
       try {
-        // route by payload type
-        if (payload && payload.type) {
-          if (payload.type === 'payment_intent.succeeded' || payload.type === 'charge.succeeded') {
-            // extract gateway tx id and amount
-            const gatewayTxId = payload.data?.object?.id || payload.data?.object?.charge || null;
-            const amount = payload.data?.object?.amount || 0;
-            const currency = (payload.data?.object?.currency || 'USD').toUpperCase();
+        const { error: claimError } = await db
+          .from("integration_events")
+          .update({
+            status: "processing",
+            retry_count: retryCount,
+            claimed_at: new Date().toISOString(),
+            claim_attempt: Number(event.claim_attempt ?? 0) + 1,
+            error_message: null,
+          })
+          .eq("id", event.id)
+          .in("status", ["pending", "failed"]);
 
-            // insert into ledger
-            try {
-              await query(`INSERT INTO ledger_transactions(gateway_tx_id, amount, gross, fees, net, currency, status) VALUES($1,$2,$3,$4,$5,$6,$7)`, [gatewayTxId, amount, amount, 0, amount, currency, 'settled']);
-            } catch (ledgerErr) {
-              logJSON('warn','worker.ledger_insert_failed',{requestId,event_id,error:String(ledgerErr)});
-            }
-          }
+        if (claimError) throw claimError;
+
+        const automationUrl = `${supabaseUrl}/functions/v1/automation-engine-v2`;
+        const response = await fetch(automationUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-internal-secret": internalSecret,
+          },
+          body: JSON.stringify({
+            event_id: event.id,
+            event_type: event.event_type,
+            user_id: event.user_id,
+            funnel_id: event.funnel_id,
+            external_id: event.external_id,
+            payload: event.payload ?? {},
+          }),
+        });
+
+        if (!response.ok) {
+          const detail = await response.text().catch(() => "");
+          throw new Error(`automation_engine_${response.status}${detail ? `:${detail.slice(0, 300)}` : ""}`);
         }
 
-        await query(`UPDATE webhook_events SET processed = true WHERE id = $1`, [id]);
-        logJSON('info','worker.processed',{requestId,event_id});
-      } catch (procErr) {
-        const newAttempts = (attempts || 0) + 1;
-        if (newAttempts >= 5) {
-          await query(`INSERT INTO webhook_events_dlq(event_id, payload, reason) VALUES($1,$2,$3)`, [event_id, payload, String(procErr)]);
-          await query(`DELETE FROM webhook_events WHERE id = $1`, [id]);
-          logJSON('error','worker.moved_to_dlq',{requestId,event_id});
-        } else {
-          const nextAt = new Date(Date.now() + Math.pow(2, newAttempts) * 1000).toISOString();
-          await query(`UPDATE webhook_events SET attempts = $1, next_attempt_at = $2 WHERE id = $3`, [newAttempts, nextAt, id]);
-          logJSON('warn','worker.retry_scheduled',{requestId,event_id,newAttempts,nextAt});
+        const { error: processedError } = await db
+          .from("integration_events")
+          .update({
+            status: "processed",
+            processed_at: new Date().toISOString(),
+            next_retry_at: null,
+            claimed_at: null,
+            error_message: null,
+          })
+          .eq("id", event.id);
+
+        if (processedError) throw processedError;
+        processed++;
+      } catch (err) {
+        failed++;
+        const message = err instanceof Error ? err.message : String(err);
+        const terminal = retryCount >= 5;
+        const nextRetryAt = terminal
+          ? null
+          : new Date(Date.now() + Math.min(300_000, 2 ** retryCount * 1000)).toISOString();
+
+        await db
+          .from("integration_events")
+          .update({
+            status: terminal ? "dead_letter" : "failed",
+            retry_count: retryCount,
+            error_message: message,
+            next_retry_at: nextRetryAt,
+            claimed_at: null,
+          })
+          .eq("id", event.id);
+
+        if (terminal) {
+          await db.from("event_dead_letters").insert({
+            id: crypto.randomUUID(),
+            user_id: event.user_id,
+            event_id: event.id,
+            event_type: event.event_type,
+            reason: message,
+            attempts: retryCount,
+            payload: event.payload ?? {},
+            first_failed_at: new Date().toISOString(),
+            last_failed_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+          });
         }
       }
     }
 
-    return res.status(200).json({ ok: true, processed: rows.length });
+    return json({
+      ok: true,
+      scanned: events?.length ?? 0,
+      processed,
+      failed,
+    });
   } catch (err) {
-    logJSON('error','worker.error',{requestId, error: String(err)});
-    return res.status(500).json({ ok: false });
+    return json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    }, 500);
   }
-}
+});
