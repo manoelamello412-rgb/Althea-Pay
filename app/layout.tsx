@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import './brand-kit.css'
 import './althea-visual.css'
+import './dashboard.css'
 
 export const metadata: Metadata = {
   title: 'ALTHEA PAY — Control Center',
