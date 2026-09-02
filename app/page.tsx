@@ -3,40 +3,221 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ALTHEA_PAY } from '@/lib/althea'
-import { BrandKit, hydrateAltheaBrand } from '@/components/brand-kit'
+import { hydrateAltheaBrand } from '@/components/brand-kit'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-type Row = { id: string; data?: Record<string, unknown>; created_at?: string; [key: string]: unknown }
-type Transaction = { id: string; amount: number | null; status: string | null; currency: string | null; created_at?: string; completed_at?: string | null; gateway_id?: string | null; customer?: Record<string, unknown> | null; funnel_id?: string | null }
 type Module = 'Visão geral' | 'Funis' | 'Produtos' | 'Gateways' | 'Vendas' | 'Clientes' | 'Chats' | 'Analytics' | 'Integrações' | 'Configurações'
-const nav: Module[] = ['Visão geral','Funis','Produtos','Gateways','Vendas','Clientes','Chats','Analytics','Integrações','Configurações']
-const tableMap: Partial<Record<Module,string>> = { Produtos:'products', Gateways:'gateways', Clientes:'clients', Chats:'chats' }
-const labels: Record<string,string> = { products:'Produtos', gateways:'Gateways', clients:'Clientes', chats:'Chats' }
-const money = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:2})
-const dateTime = new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
-function statusLabel(status?: string | null){const value=(status||'').toLowerCase();if(['approved','paid','completed','success','succeeded'].includes(value))return 'Aprovada';if(['pending','created','processing'].includes(value))return 'Pendente';if(['refunded','chargeback'].includes(value))return value==='chargeback'?'Chargeback':'Reembolsada';if(['failed','cancelled','canceled','rejected'].includes(value))return 'Falhou';return status||'—'}
-function statusClass(status?: string | null){const value=(status||'').toLowerCase();if(['approved','paid','completed','success','succeeded'].includes(value))return 'ok';if(['pending','created','processing'].includes(value))return 'pending';if(['refunded','chargeback'].includes(value))return 'warning';return 'danger'}
-function customerName(customer?: Record<string,unknown>|null){if(!customer)return 'Cliente não identificado';return String(customer.name||customer.full_name||customer.nome||customer.email||'Cliente')}
+type Transaction = { id: string; amount: number | null; status: string | null; currency: string | null; created_at?: string; gateway_id?: string | null; funnel_id?: string | null; customer?: Record<string, unknown> | null }
+type Row = { id: string; data?: Record<string, unknown>; created_at?: string; [key: string]: unknown }
 
-export default function DashboardPage(){
- const router=useRouter();const [active,setActive]=useState<Module>('Visão geral');const [userId,setUserId]=useState('');const [email,setEmail]=useState('');const [fullName,setFullName]=useState('');const [rows,setRows]=useState<Row[]>([]);const [funnels,setFunnels]=useState<Row[]>([]);const [transactions,setTransactions]=useState<Transaction[]>([]);const [counts,setCounts]=useState<Record<string,number>>({});const [connectedFunnels,setConnectedFunnels]=useState(0);const [integrationEvents,setIntegrationEvents]=useState(0);const [json,setJson]=useState('{\n  "nome": "",\n  "descricao": ""\n}');const [funnelName,setFunnelName]=useState('');const [funnelUrl,setFunnelUrl]=useState('');const [funnelStatus,setFunnelStatus]=useState('draft');const [saving,setSaving]=useState(false);const [loading,setLoading]=useState(true);const [message,setMessage]=useState('');const [error,setError]=useState('');const [period,setPeriod]=useState<7|30>(7);const [salesQuery,setSalesQuery]=useState('');const [salesStatus,setSalesStatus]=useState('all');const [salesWindow,setSalesWindow]=useState<'all'|7|30>('all');const [selectedTransaction,setSelectedTransaction]=useState<Transaction|null>(null);const supabase=useMemo(()=>createSupabaseBrowserClient(),[])
- async function loadAll(){if(!supabase){setError('Supabase não configurado.');setLoading(false);return}setLoading(true);setError('');const {data:{user}}=await supabase.auth.getUser();if(!user){router.replace('/login');return}setUserId(user.id);setEmail(user.email||'');const profile=await supabase.from('profiles').select('full_name').eq('id',user.id).maybeSingle();setFullName(profile.data?.full_name||user.user_metadata?.full_name||'');const [f,p,g,s,c,ch,tx,conn,events]=await Promise.all([supabase.from('funnels').select('id,nome,url,status,created_at,last_communication').order('created_at',{ascending:false}),supabase.from('products').select('id,data,created_at').order('created_at',{ascending:false}),supabase.from('gateways').select('id,data,created_at').order('created_at',{ascending:false}),supabase.from('sales').select('id,data,created_at,amount,status,occurred_at,currency,gateway_id,funnel_id,transaction_id').order('created_at',{ascending:false}).limit(100),supabase.from('clients').select('id,data,created_at').order('created_at',{ascending:false}),supabase.from('chats').select('id,data,created_at').order('created_at',{ascending:false}),supabase.from('gateway_transactions').select('id,amount,status,currency,created_at,completed_at,gateway_id,funnel_id,customer').order('created_at',{ascending:false}).limit(100),supabase.from('funnel_connections').select('id,status,health_status,event_count').order('created_at',{ascending:false}),supabase.from('integration_events').select('id,created_at,status').order('created_at',{ascending:false}).limit(100)]);const first=[f,p,g,s,c,ch,tx,conn,events].find(x=>x.error);if(first?.error)setError(first.error.message);setFunnels((f.data||[]) as Row[]);setCounts({funnels:f.data?.length||0,products:p.data?.length||0,gateways:g.data?.length||0,sales:s.data?.length||0,clients:c.data?.length||0,chats:ch.data?.length||0});const mapped=(tx.data||[]) as Transaction[];setTransactions(mapped.length?mapped:(s.data||[]).map((item:any)=>({id:item.id,amount:item.amount??Number(item.data?.amount||0)||null,status:item.status??item.data?.status??null,currency:item.currency??'BRL',created_at:item.occurred_at||item.created_at,gateway_id:item.gateway_id,funnel_id:item.funnel_id,customer:item.data?.customer||null})));setConnectedFunnels((conn.data||[]).filter((item:any)=>['active','healthy','connected'].includes(String(item.status||item.health_status||'').toLowerCase())).length);setIntegrationEvents(events.data?.length||0);const activeTable=tableMap[active];if(activeTable)setRows((({products:p,gateways:g,clients:c,chats:ch} as Record<string,any>)[activeTable]?.data||[]) as Row[]);setLoading(false)}
- useEffect(()=>{hydrateAltheaBrand();loadAll()},[active]);useEffect(()=>{if(!supabase||!userId)return;const channel=supabase.channel(`althea-dashboard-${userId}`).on('postgres_changes',{event:'*',schema:'public',table:'gateway_transactions'},()=>loadAll()).on('postgres_changes',{event:'*',schema:'public',table:'sales'},()=>loadAll()).on('postgres_changes',{event:'*',schema:'public',table:'funnels'},()=>loadAll()).on('postgres_changes',{event:'*',schema:'public',table:'funnel_connections'},()=>loadAll()).subscribe();const interval=window.setInterval(()=>loadAll(),30000);return()=>{window.clearInterval(interval);supabase.removeChannel(channel)}},[supabase,userId])
- async function createFunnel(e:FormEvent){e.preventDefault();if(!supabase||!userId)return;setSaving(true);setError('');setMessage('');const {error}=await supabase.from('funnels').insert({id:`ANT-${Date.now()}`,nome:funnelName,url:funnelUrl||null,status:funnelStatus,user_id:userId});if(error)setError(error.message);else{setMessage('Funil criado com sucesso.');setFunnelName('');setFunnelUrl('');await loadAll()}setSaving(false)}
- async function createGeneric(e:FormEvent){e.preventDefault();if(!supabase||!userId||!tableMap[active])return;setSaving(true);setError('');setMessage('');let data:Record<string,unknown>;try{data=JSON.parse(json)}catch{setError('O JSON informado é inválido.');setSaving(false);return}const table=tableMap[active]!;const {error}=await supabase.from(table).insert({id:`${table.slice(0,3).toUpperCase()}-${Date.now()}`,data,user_id:userId});if(error)setError(error.message);else{setMessage(`${labels[table]} criado com sucesso.`);setJson('{\n  "nome": "",\n  "descricao": ""\n}');await loadAll()}setSaving(false)}
- async function deleteRow(table:string,id:string){if(!supabase)return;if(!confirm('Excluir este registro?'))return;const {error}=await supabase.from(table).delete().eq('id',id);if(error)setError(error.message);else{setMessage('Registro excluído.');await loadAll()}}
- async function saveProfile(e:FormEvent){e.preventDefault();if(!supabase||!userId)return;setSaving(true);const {error}=await supabase.from('profiles').update({full_name:fullName,updated_at:new Date().toISOString()}).eq('id',userId);if(error)setError(error.message);else setMessage('Configurações salvas.');setSaving(false)}
- async function logout(){if(!supabase)return;await supabase.auth.signOut();router.replace('/login');router.refresh()}
- const descriptions:Record<Module,string>={'Visão geral':'Seu centro de comando financeiro, conectado aos dados reais da operação.','Funis':'Crie, acompanhe e remova seus funis conectados.','Produtos':'Gerencie os produtos associados à sua operação.','Gateways':'Cadastre e acompanhe configurações de gateways.','Vendas':'Central de vendas com busca, filtros e detalhes em tempo real.','Clientes':'Centralize os registros dos seus clientes.','Chats':'Acompanhe os registros de atendimento e conversas.','Analytics':'Indicadores calculados diretamente dos dados disponíveis.','Integrações':'Base de integrações, eventos e webhooks da operação.','Configurações':'Perfil, conta e identidade visual da Althea Pay.'}
- const now=Date.now(),start=now-period*86400000;const periodTx=transactions.filter(t=>new Date(t.created_at||0).getTime()>=start);const approved=periodTx.filter(t=>['approved','paid','completed','success','succeeded'].includes(String(t.status||'').toLowerCase()));const pending=periodTx.filter(t=>['pending','created','processing'].includes(String(t.status||'').toLowerCase()));const refunded=periodTx.filter(t=>['refunded','chargeback'].includes(String(t.status||'').toLowerCase()));const revenue=approved.reduce((sum,t)=>sum+(Number(t.amount)||0),0);const average=approved.length?revenue/approved.length:0;const approvalRate=periodTx.length?(approved.length/periodTx.length)*100:0;const chart=Array.from({length:period},(_,i)=>{const day=new Date();day.setHours(0,0,0,0);day.setDate(day.getDate()-(period-1-i));const next=new Date(day);next.setDate(day.getDate()+1);const value=approved.filter(t=>{const d=new Date(t.created_at||0);return d>=day&&d<next}).reduce((sum,t)=>sum+(Number(t.amount)||0),0);return{label:period===7?day.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.',''):day.getDate().toString().padStart(2,'0'),value}});const maxChart=Math.max(...chart.map(x=>x.value),1);const chartPoints=chart.map((x,i)=>`${i*(100/(Math.max(chart.length-1,1)))},${100-(x.value/maxChart)*82-8}`).join(' ')
- const sales=transactions.filter(t=>{const q=salesQuery.trim().toLowerCase();const matchesQuery=!q||[t.id,t.gateway_id,t.funnel_id,customerName(t.customer),t.status].some(v=>String(v||'').toLowerCase().includes(q));const matchesStatus=salesStatus==='all'||statusClass(t.status)===salesStatus;const matchesWindow=salesWindow==='all'||new Date(t.created_at||0).getTime()>=Date.now()-Number(salesWindow)*86400000;return matchesQuery&&matchesStatus&&matchesWindow});const salesApproved=sales.filter(t=>statusClass(t.status)==='ok');const salesPending=sales.filter(t=>statusClass(t.status)==='pending');const salesTotal=salesApproved.reduce((sum,t)=>sum+(Number(t.amount)||0),0)
- return <main className="althea-app"><aside className="althea-sidebar"><div className="app-brand"><img src="/althea-leaf.svg" alt="Althea Pay"/><div><div className="app-brand-name">ALTHEA</div><div className="app-brand-pay">PAY</div></div><small className="app-brand-tag">CONSTRUA SUAS RAÍZES FINANCEIRAS.</small></div><nav className="althea-nav">{nav.map(item=><button key={item} className={active===item?'active':''} onClick={()=>{setActive(item);setMessage('');setError('')}}>{item}</button>)}</nav><button className="auth-switch sidebar-logout" onClick={logout}>Sair da conta</button></aside><section className="althea-main"><header className="althea-header dashboard-header"><div><div className="althea-kicker">{ALTHEA_PAY.tagline}</div><h1>{active==='Visão geral'?(fullName?`Olá, ${fullName.split(' ')[0]}`:'Visão geral'):active}</h1><p>{descriptions[active]}</p></div><div className="dashboard-header-actions"><button className="refresh-button" onClick={loadAll} disabled={loading}>↻ <span>{loading?'Atualizando':'Atualizar'}</span></button><div className="althea-status"><i/> {loading?'Sincronizando':'Tempo real ativo'}</div></div></header>{error&&<div className="auth-error" role="alert">{error}</div>}{message&&<div className="auth-message" role="status">{message}</div>}
- {active==='Visão geral'&&<><section className="dashboard-hero-row"><div className="revenue-card althea-card"><div className="revenue-top"><div><span>FATURAMENTO</span><small>Últimos {period} dias · vendas aprovadas</small></div><div className="period-switch"><button className={period===7?'selected':''} onClick={()=>setPeriod(7)}>7D</button><button className={period===30?'selected':''} onClick={()=>setPeriod(30)}>30D</button></div></div><strong>{money.format(revenue)}</strong><div className="revenue-meta"><span className="trend">● Dados reais da operação</span><span>Ticket médio {money.format(average)}</span></div><div className="chart-wrap"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Faturamento por dia"><defs><linearGradient id="area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#1DB854" stopOpacity=".30"/><stop offset="1" stopColor="#1DB854" stopOpacity="0"/></linearGradient></defs><polyline points={`0,92 ${chartPoints} 100,92`} fill="url(#area)" stroke="none"/><polyline points={chartPoints} fill="none" stroke="#1DB854" strokeWidth="1.7" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round"/></svg><div className="chart-labels">{chart.filter((_,i)=>period===7||i%5===0||i===period-1).map((x,i)=><span key={`${x.label}-${i}`}>{x.label}</span>)}</div></div></div><div className="quick-panel althea-card"><div className="panel-heading"><div><span>OPERAÇÃO</span><h2>Status agora</h2></div><span className="live-dot">LIVE</span></div><div className="health-list"><div><i className="health-good"/><span>Banco de dados</span><strong>Online</strong></div><div><i className={connectedFunnels?'health-good':'health-muted'}/><span>Funis conectados</span><strong>{connectedFunnels}</strong></div><div><i className={counts.gateways?'health-good':'health-muted'}/><span>Gateways cadastrados</span><strong>{counts.gateways||0}</strong></div><div><i className={integrationEvents?'health-good':'health-muted'}/><span>Eventos recentes</span><strong>{integrationEvents}</strong></div></div><button className="ghost-action" onClick={()=>setActive('Integrações')}>Ver central de integrações →</button></div></section><section className="dashboard-kpis"><Metric title="Vendas aprovadas" value={approved.length.toLocaleString('pt-BR')} note={`${approvalRate.toFixed(1).replace('.',',')}% das transações`} icon="✓" tone="green"/><Metric title="Pendentes" value={pending.length.toLocaleString('pt-BR')} note="Aguardando confirmação" icon="◷" tone="gold"/><Metric title="Reembolsos / chargebacks" value={refunded.length.toLocaleString('pt-BR')} note="No período selecionado" icon="↩" tone="red"/><Metric title="Ticket médio" value={money.format(average)} note="Entre vendas aprovadas" icon="◆" tone="silver"/></section><section className="dashboard-lower-grid"><div className="althea-card dashboard-table-card"><div className="panel-heading"><div><span>TRANSAÇÕES</span><h2>Últimas movimentações</h2></div><button className="text-action" onClick={()=>setActive('Vendas')}>Ver todas →</button></div>{transactions.slice(0,7).length===0?<div className="empty-state"><strong>A operação ainda não recebeu transações</strong><p>Assim que um gateway registrar uma transação, ela aparecerá aqui automaticamente.</p></div>:<div className="transaction-list">{transactions.slice(0,7).map(tx=><div className="transaction-row" key={tx.id} onClick={()=>setSelectedTransaction(tx)} role="button" tabIndex={0}><div className="transaction-avatar">{customerName(tx.customer).slice(0,1).toUpperCase()}</div><div className="transaction-main"><strong>{customerName(tx.customer)}</strong><small>{tx.gateway_id||'Gateway não informado'} · {tx.created_at?dateTime.format(new Date(tx.created_at)):'agora'}</small></div><div className="transaction-amount"><strong>{money.format(Number(tx.amount)||0)}</strong><span className={`status ${statusClass(tx.status)}`}>{statusLabel(tx.status)}</span></div></div>)}</div>}</div><div className="althea-card funnel-health-card"><div className="panel-heading"><div><span>FUNIS</span><h2>Performance da operação</h2></div><button className="text-action" onClick={()=>setActive('Funis')}>Gerenciar →</button></div>{funnels.length===0?<div className="empty-state"><strong>Nenhum funil criado</strong><p>Crie seu primeiro funil e acompanhe a operação por aqui.</p><button className="primary small" onClick={()=>setActive('Funis')}>+ Criar funil</button></div>:<div className="funnel-mini-list">{funnels.slice(0,5).map(f=><div className="funnel-mini" key={f.id}><div className="funnel-mini-icon">⌁</div><div><strong>{String(f.nome)}</strong><small>{String(f.url||'URL não configurada')}</small></div><span className={`althea-pill ${String(f.status)==='active'?'pill-active':''}`}>{String(f.status||'draft')}</span></div>)}</div>}</div></section></>}
- {active==='Vendas'&&<section className="sales-center"><div className="sales-summary"><Metric title="Aprovadas" value={salesApproved.length.toLocaleString('pt-BR')} note={money.format(salesTotal)} icon="✓" tone="green"/><Metric title="Pendentes" value={salesPending.length.toLocaleString('pt-BR')} note="Aguardando confirmação" icon="◷" tone="gold"/><Metric title="Encontradas" value={sales.length.toLocaleString('pt-BR')} note="Após os filtros" icon="⌕" tone="silver"/></div><div className="althea-card sales-panel"><div className="sales-toolbar"><div><span className="sales-eyebrow">CENTRAL DE VENDAS</span><h2>Transações</h2><p>Pesquise, filtre e abra qualquer movimentação para ver os detalhes.</p></div><button className="refresh-button" onClick={loadAll} disabled={loading}>↻ Atualizar</button></div><div className="sales-filters"><label className="sales-search">⌕<input value={salesQuery} onChange={e=>setSalesQuery(e.target.value)} placeholder="Buscar por cliente, ID, gateway ou funil..."/></label><select value={salesStatus} onChange={e=>setSalesStatus(e.target.value)}><option value="all">Todos os status</option><option value="ok">Aprovadas</option><option value="pending">Pendentes</option><option value="warning">Reembolsadas / chargebacks</option><option value="danger">Falhas</option></select><select value={String(salesWindow)} onChange={e=>setSalesWindow(e.target.value==='all'?'all':Number(e.target.value) as 7|30)}><option value="all">Todo período</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option></select><button className="filter-clear" onClick={()=>{setSalesQuery('');setSalesStatus('all');setSalesWindow('all')}}>Limpar</button></div>{sales.length===0?<div className="empty-state"><strong>Nenhuma venda encontrada</strong><p>Ajuste os filtros ou aguarde novas transações do gateway.</p></div>:<div className="sales-table-wrap"><table className="sales-table"><thead><tr><th>Cliente</th><th>Transação</th><th>Gateway / Funil</th><th>Data</th><th>Status</th><th>Valor</th></tr></thead><tbody>{sales.map(tx=><tr key={tx.id} onClick={()=>setSelectedTransaction(tx)}><td><strong>{customerName(tx.customer)}</strong><small>{tx.customer?.email?String(tx.customer.email):'Cliente'}</small></td><td><code>{tx.id}</code></td><td><strong>{tx.gateway_id||'—'}</strong><small>{tx.funnel_id||'Funil não informado'}</small></td><td>{tx.created_at?dateTime.format(new Date(tx.created_at)):'—'}</td><td><span className={`status ${statusClass(tx.status)}`}>{statusLabel(tx.status)}</span></td><td className="sales-value">{money.format(Number(tx.amount)||0)}</td></tr>)}</tbody></table></div>}</div></section>}
- {active==='Funis'&&<><section className="althea-card althea-panel"><div className="panel-heading"><div><span>NOVO FUNIL</span><h2>Conectar funil</h2></div></div><form className="auth-form" onSubmit={createFunnel}><label>Nome<input value={funnelName} onChange={e=>setFunnelName(e.target.value)} required placeholder="Meu funil"/></label><label>URL<input type="url" value={funnelUrl} onChange={e=>setFunnelUrl(e.target.value)} placeholder="https://..."/></label><label>Status<select value={funnelStatus} onChange={e=>setFunnelStatus(e.target.value)}><option value="draft">Rascunho</option><option value="active">Ativo</option><option value="paused">Pausado</option><option value="archived">Arquivado</option></select></label><button className="primary" disabled={saving}>{saving?'Salvando...':'Criar funil'}</button></form></section><List table="funnels" rows={funnels} onDelete={deleteRow}/></>}
- {tableMap[active]&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>REGISTROS</span><h2>{labels[tableMap[active]!]}</h2></div></div><form className="auth-form" onSubmit={createGeneric}><label>Dados do registro (JSON)<textarea value={json} onChange={e=>setJson(e.target.value)} rows={8}/></label><button className="primary" disabled={saving}>{saving?'Salvando...':`Criar ${labels[tableMap[active]!]}`}</button></form><List table={tableMap[active]!} rows={rows} onDelete={deleteRow}/></section>}
- {active==='Analytics'&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>ANALYTICS</span><h2>Indicadores</h2></div></div><div className="analytics-grid">{Object.entries(counts).map(([k,v])=><article className="althea-card" key={k}><span>{k}</span><strong>{v}</strong><small>Contagem atual</small></article>)}</div></section>}{active==='Integrações'&&<section className="althea-card althea-panel"><div className="panel-heading"><div><span>INTEGRAÇÕES</span><h2>Conectividade</h2></div></div><div className="empty-state"><strong>Tempo real habilitado</strong><p>O painel acompanha transações, vendas, funis e conexões por eventos do Supabase Realtime. Credenciais secretas permanecem no servidor.</p></div></section>}{active==='Configurações'&&<><section className="althea-card althea-panel"><div className="panel-heading"><div><span>PERFIL</span><h2>Configurações da conta</h2></div></div><form className="auth-form" onSubmit={saveProfile}><label>E-mail<input value={email} disabled/></label><label>Nome<input value={fullName} onChange={e=>setFullName(e.target.value)} placeholder="Seu nome"/></label><button className="primary" disabled={saving}>{saving?'Salvando...':'Salvar configurações'}</button></form></section><BrandKit/></>}
- {selectedTransaction&&<div className="sales-modal-backdrop" onClick={()=>setSelectedTransaction(null)}><section className="sales-modal" onClick={e=>e.stopPropagation()}><button className="sales-modal-close" onClick={()=>setSelectedTransaction(null)} aria-label="Fechar">×</button><span className="sales-eyebrow">DETALHE DA TRANSAÇÃO</span><h2>{money.format(Number(selectedTransaction.amount)||0)}</h2><span className={`status ${statusClass(selectedTransaction.status)}`}>{statusLabel(selectedTransaction.status)}</span><div className="sales-detail-grid"><div><small>Cliente</small><strong>{customerName(selectedTransaction.customer)}</strong></div><div><small>Transação</small><strong>{selectedTransaction.id}</strong></div><div><small>Gateway</small><strong>{selectedTransaction.gateway_id||'Não informado'}</strong></div><div><small>Funil</small><strong>{selectedTransaction.funnel_id||'Não informado'}</strong></div><div><small>Moeda</small><strong>{selectedTransaction.currency||'BRL'}</strong></div><div><small>Data</small><strong>{selectedTransaction.created_at?dateTime.format(new Date(selectedTransaction.created_at)):'—'}</strong></div></div></section></div>}
- </section></main>}
-function Metric({title,value,note,icon,tone}:{title:string;value:string;note:string;icon:string;tone:string}){return <article className={`althea-card kpi-card ${tone}`}><div className="kpi-icon">{icon}</div><span>{title}</span><strong>{value}</strong><small>{note}</small></article>}
-function List({table,rows,onDelete}:{table:string;rows:Row[];onDelete:(table:string,id:string)=>void}){if(!rows.length)return <div className="empty-state"><strong>Nenhum registro</strong><p>Crie um registro acima para começar.</p></div>;return <div className="records">{rows.map(row=><article className="record" key={row.id}><div><strong>{row.id}</strong><small>{row.created_at?new Date(row.created_at).toLocaleString('pt-BR'):''}</small><pre>{JSON.stringify(row.data||row,null,2)}</pre></div><button className="danger" onClick={()=>onDelete(table,row.id)}>Excluir</button></article>)}</div>}
+const nav: Module[] = ['Visão geral', 'Funis', 'Produtos', 'Gateways', 'Vendas', 'Clientes', 'Chats', 'Analytics', 'Integrações', 'Configurações']
+const tableMap: Partial<Record<Module, string>> = { Produtos: 'products', Gateways: 'gateways', Clientes: 'clients', Chats: 'chats' }
+const labels: Record<string, string> = { products: 'Produtos', gateways: 'Gateways', clients: 'Clientes', chats: 'Chats' }
+const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 })
+const dateTime = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+function statusLabel(status?: string | null) {
+  const value = (status || '').toLowerCase()
+  if (['approved', 'paid', 'completed', 'success', 'succeeded'].includes(value)) return 'Aprovada'
+  if (['pending', 'created', 'processing'].includes(value)) return 'Pendente'
+  if (['refunded', 'chargeback'].includes(value)) return value === 'chargeback' ? 'Chargeback' : 'Reembolsada'
+  if (['failed', 'cancelled', 'canceled', 'rejected'].includes(value)) return 'Falhou'
+  return status || '—'
+}
+
+function statusClass(status?: string | null) {
+  const value = (status || '').toLowerCase()
+  if (['approved', 'paid', 'completed', 'success', 'succeeded'].includes(value)) return 'ok'
+  if (['pending', 'created', 'processing'].includes(value)) return 'pending'
+  if (['refunded', 'chargeback'].includes(value)) return 'warning'
+  return 'danger'
+}
+
+function customerName(customer?: Record<string, unknown> | null) {
+  if (!customer) return 'Cliente não identificado'
+  return String(customer.name || customer.full_name || customer.nome || customer.email || 'Cliente')
+}
+
+export default function DashboardPage() {
+  const router = useRouter()
+  const supabase = useMemo(() => createSupabaseBrowserClient(), [])
+  const [active, setActive] = useState<Module>('Visão geral')
+  const [userId, setUserId] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [rows, setRows] = useState<Row[]>([])
+  const [funnels, setFunnels] = useState<Row[]>([])
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [connectedFunnels, setConnectedFunnels] = useState(0)
+  const [integrationEvents, setIntegrationEvents] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [period, setPeriod] = useState<7 | 30>(7)
+  const [salesQuery, setSalesQuery] = useState('')
+  const [salesStatus, setSalesStatus] = useState('all')
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [funnelName, setFunnelName] = useState('')
+  const [funnelUrl, setFunnelUrl] = useState('')
+  const [json, setJson] = useState('{\n  "nome": "",\n  "descricao": ""\n}')
+  const [saving, setSaving] = useState(false)
+
+  async function loadAll() {
+    if (!supabase) { setError('Supabase não configurado.'); setLoading(false); return }
+    setLoading(true)
+    setError('')
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.replace('/login'); return }
+    setUserId(user.id)
+    const profile = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
+    setFullName(profile.data?.full_name || user.user_metadata?.full_name || '')
+    const [f, p, g, s, c, ch, tx, conn, events] = await Promise.all([
+      supabase.from('funnels').select('id,nome,url,status,created_at,last_communication').order('created_at', { ascending: false }),
+      supabase.from('products').select('id,data,created_at').order('created_at', { ascending: false }),
+      supabase.from('gateways').select('id,data,created_at').order('created_at', { ascending: false }),
+      supabase.from('sales').select('id,data,created_at,amount,status,occurred_at,currency,gateway_id,funnel_id,transaction_id').order('created_at', { ascending: false }).limit(100),
+      supabase.from('clients').select('id,data,created_at').order('created_at', { ascending: false }),
+      supabase.from('chats').select('id,data,created_at').order('created_at', { ascending: false }),
+      supabase.from('gateway_transactions').select('id,amount,status,currency,created_at,completed_at,gateway_id,funnel_id,customer').order('created_at', { ascending: false }).limit(100),
+      supabase.from('funnel_connections').select('id,status,health_status,event_count').order('created_at', { ascending: false }),
+      supabase.from('integration_events').select('id,created_at,status').order('created_at', { ascending: false }).limit(100),
+    ])
+    const firstError = [f, p, g, s, c, ch, tx, conn, events].find(x => x.error)
+    if (firstError?.error) setError(firstError.error.message)
+    setFunnels((f.data || []) as Row[])
+    setCounts({ funnels: f.data?.length || 0, products: p.data?.length || 0, gateways: g.data?.length || 0, sales: s.data?.length || 0, clients: c.data?.length || 0, chats: ch.data?.length || 0 })
+    const mapped = (tx.data || []) as Transaction[]
+    const fallback = (s.data || []).map((item: any): Transaction => ({
+      id: item.id,
+      amount: item.amount ?? (Number(item.data?.amount || 0) || null),
+      status: item.status ?? item.data?.status ?? null,
+      currency: item.currency ?? 'BRL',
+      created_at: item.occurred_at || item.created_at,
+      gateway_id: item.gateway_id,
+      funnel_id: item.funnel_id,
+      customer: item.data?.customer || null,
+    }))
+    setTransactions(mapped.length ? mapped : fallback)
+    setConnectedFunnels((conn.data || []).filter((item: any) => ['active', 'healthy', 'connected'].includes(String(item.status || item.health_status || '').toLowerCase())).length)
+    setIntegrationEvents(events.data?.length || 0)
+    const activeTable = tableMap[active]
+    if (activeTable) {
+      const source: Record<string, any> = { products: p, gateways: g, clients: c, chats: ch }
+      setRows((source[activeTable]?.data || []) as Row[])
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { hydrateAltheaBrand(); loadAll() }, [active])
+  useEffect(() => {
+    if (!supabase || !userId) return
+    const channel = supabase.channel(`althea-dashboard-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_transactions' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'funnels' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'funnel_connections' }, loadAll)
+      .subscribe()
+    const interval = window.setInterval(loadAll, 30000)
+    return () => { window.clearInterval(interval); supabase.removeChannel(channel) }
+  }, [supabase, userId])
+
+  async function createFunnel(e: FormEvent) {
+    e.preventDefault(); if (!supabase || !userId) return
+    setSaving(true); setError(''); setMessage('')
+    const { error: insertError } = await supabase.from('funnels').insert({ id: `ANT-${Date.now()}`, nome: funnelName, url: funnelUrl || null, status: 'draft', user_id: userId })
+    if (insertError) setError(insertError.message); else { setMessage('Funil criado com sucesso.'); setFunnelName(''); setFunnelUrl(''); await loadAll() }
+    setSaving(false)
+  }
+
+  async function createGeneric(e: FormEvent) {
+    e.preventDefault(); if (!supabase || !userId || !tableMap[active]) return
+    setSaving(true); setError(''); setMessage('')
+    let data: Record<string, unknown>
+    try { data = JSON.parse(json) } catch { setError('O JSON informado é inválido.'); setSaving(false); return }
+    const table = tableMap[active]!
+    const { error: insertError } = await supabase.from(table).insert({ id: `${table.slice(0, 3).toUpperCase()}-${Date.now()}`, data, user_id: userId })
+    if (insertError) setError(insertError.message); else { setMessage(`${labels[table]} criado com sucesso.`); await loadAll() }
+    setSaving(false)
+  }
+
+  async function deleteRow(table: string, id: string) {
+    if (!supabase || !confirm('Excluir este registro?')) return
+    const { error: deleteError } = await supabase.from(table).delete().eq('id', id)
+    if (deleteError) setError(deleteError.message); else { setMessage('Registro excluído.'); await loadAll() }
+  }
+
+  async function logout() { if (!supabase) return; await supabase.auth.signOut(); router.replace('/login'); router.refresh() }
+
+  const descriptions: Record<Module, string> = {
+    'Visão geral': 'Seu centro de comando financeiro, conectado aos dados reais da operação.',
+    'Funis': 'Crie, acompanhe e remova seus funis conectados.',
+    'Produtos': 'Gerencie os produtos associados à sua operação.',
+    'Gateways': 'Cadastre e acompanhe configurações de gateways.',
+    'Vendas': 'Central de vendas com busca, filtros e detalhes em tempo real.',
+    'Clientes': 'Centralize os registros dos seus clientes.',
+    'Chats': 'Acompanhe os registros de atendimento e conversas.',
+    'Analytics': 'Indicadores calculados diretamente dos dados disponíveis.',
+    'Integrações': 'Base de integrações, eventos e webhooks da operação.',
+    'Configurações': 'Perfil, conta e identidade visual da Althea Pay.',
+  }
+
+  const now = Date.now()
+  const start = now - period * 86400000
+  const periodTx = transactions.filter(t => new Date(t.created_at || 0).getTime() >= start)
+  const approved = periodTx.filter(t => statusClass(t.status) === 'ok')
+  const pending = periodTx.filter(t => statusClass(t.status) === 'pending')
+  const refunded = periodTx.filter(t => statusClass(t.status) === 'warning')
+  const revenue = approved.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+  const average = approved.length ? revenue / approved.length : 0
+  const approvalRate = periodTx.length ? (approved.length / periodTx.length) * 100 : 0
+  const sales = transactions.filter(t => {
+    const q = salesQuery.trim().toLowerCase()
+    const matchesQuery = !q || [t.id, t.gateway_id, t.funnel_id, customerName(t.customer), t.status].some(v => String(v || '').toLowerCase().includes(q))
+    const matchesStatus = salesStatus === 'all' || statusClass(t.status) === salesStatus
+    return matchesQuery && matchesStatus
+  })
+
+  return (
+    <main className="althea-app">
+      <aside className="althea-sidebar">
+        <div className="app-brand">
+          <img src="/althea-pay-lockup.svg" alt="Althea Pay" />
+        </div>
+        <nav className="althea-nav">{nav.map(item => <button key={item} className={active === item ? 'active' : ''} onClick={() => { setActive(item); setMessage(''); setError('') }}>{item}</button>)}</nav>
+        <button className="auth-switch sidebar-logout" onClick={logout}>Sair da conta</button>
+      </aside>
+
+      <section className="althea-main">
+        <header className="althea-header dashboard-header">
+          <div><div className="althea-kicker">{ALTHEA_PAY.tagline}</div><h1>{active === 'Visão geral' ? (fullName ? `Olá, ${fullName.split(' ')[0]}` : 'Visão geral') : active}</h1><p>{descriptions[active]}</p></div>
+          <div className="dashboard-header-actions"><button className="refresh-button" onClick={loadAll} disabled={loading}>↻ <span>{loading ? 'Atualizando' : 'Atualizar'}</span></button><div className="althea-status"><i /> {loading ? 'Sincronizando' : 'Tempo real ativo'}</div></div>
+        </header>
+        {error && <div className="auth-error" role="alert">{error}</div>}
+        {message && <div className="auth-message" role="status">{message}</div>}
+
+        {active === 'Visão geral' && <>
+          <section className="dashboard-kpis">
+            <article className="althea-card"><span>FATURAMENTO</span><strong>{money.format(revenue)}</strong><small>Últimos {period} dias · aprovadas</small></article>
+            <article className="althea-card"><span>APROVAÇÃO</span><strong>{approvalRate.toFixed(1)}%</strong><small>{approved.length} aprovadas</small></article>
+            <article className="althea-card"><span>PENDENTES</span><strong>{pending.length}</strong><small>aguardando processamento</small></article>
+            <article className="althea-card"><span>TICKET MÉDIO</span><strong>{money.format(average)}</strong><small>{refunded.length} reembolsos/chargebacks</small></article>
+          </section>
+          <section className="dashboard-hero-row">
+            <div className="revenue-card althea-card"><div className="revenue-top"><div><span>VISÃO DA OPERAÇÃO</span><small>Dados reais sincronizados com o banco</small></div><div className="period-switch"><button className={period === 7 ? 'selected' : ''} onClick={() => setPeriod(7)}>7D</button><button className={period === 30 ? 'selected' : ''} onClick={() => setPeriod(30)}>30D</button></div></div><strong>{money.format(revenue)}</strong><div className="revenue-meta"><span className="trend">● Dados reais da operação</span><span>{approved.length} vendas aprovadas</span></div></div>
+            <div className="quick-panel althea-card"><div className="panel-heading"><div><span>OPERAÇÃO</span><h2>Status agora</h2></div><span className="live-dot">LIVE</span></div><div className="health-list"><div><i className="health-good" /><span>Banco de dados</span><strong>Online</strong></div><div><i className={connectedFunnels ? 'health-good' : 'health-muted'} /><span>Funis conectados</span><strong>{connectedFunnels}</strong></div><div><i className={counts.gateways ? 'health-good' : 'health-muted'} /><span>Gateways cadastrados</span><strong>{counts.gateways || 0}</strong></div><div><i className={integrationEvents ? 'health-good' : 'health-muted'} /><span>Eventos recentes</span><strong>{integrationEvents}</strong></div></div></div>
+          </section>
+        </>}
+
+        {active === 'Vendas' && <section className="althea-card sales-module"><div className="module-toolbar"><input value={salesQuery} onChange={e => setSalesQuery(e.target.value)} placeholder="Buscar venda, cliente, gateway..." /><select value={salesStatus} onChange={e => setSalesStatus(e.target.value)}><option value="all">Todos</option><option value="ok">Aprovadas</option><option value="pending">Pendentes</option><option value="warning">Reembolsadas</option><option value="danger">Falhas</option></select></div><div className="sales-table-wrap"><table className="sales-table"><thead><tr><th>Transação</th><th>Cliente</th><th>Status</th><th>Valor</th><th>Data</th></tr></thead><tbody>{sales.map(t => <tr key={t.id} onClick={() => setSelectedTransaction(t)}><td>{t.id}</td><td>{customerName(t.customer)}</td><td><span className={`status-badge ${statusClass(t.status)}`}>{statusLabel(t.status)}</span></td><td>{money.format(Number(t.amount) || 0)}</td><td>{t.created_at ? dateTime.format(new Date(t.created_at)) : '—'}</td></tr>)}</tbody></table>{!sales.length && <div className="empty-state">Nenhuma venda encontrada.</div>}</div></section>}
+
+        {active === 'Funis' && <section className="module-grid"><form className="althea-card form-card" onSubmit={createFunnel}><span>NOVO FUNIL</span><input value={funnelName} onChange={e => setFunnelName(e.target.value)} placeholder="Nome do funil" required /><input value={funnelUrl} onChange={e => setFunnelUrl(e.target.value)} placeholder="URL do funil" /><button disabled={saving}>{saving ? 'Salvando...' : 'Criar funil'}</button></form><div className="althea-card"><span>FUNIS CONECTADOS</span>{funnels.map(f => <div className="list-row" key={f.id}><div><strong>{String(f.nome || f.id)}</strong><small>{String(f.status || 'draft')}</small></div><button onClick={() => deleteRow('funnels', f.id)}>Excluir</button></div>)}{!funnels.length && <div className="empty-state">Nenhum funil cadastrado.</div>}</div></section>}
+
+        {['Produtos', 'Gateways', 'Clientes', 'Chats'].includes(active) && <section className="module-grid"><form className="althea-card form-card" onSubmit={createGeneric}><span>NOVO {labels[tableMap[active]!]?.toUpperCase()}</span><textarea value={json} onChange={e => setJson(e.target.value)} rows={8} /><button disabled={saving}>{saving ? 'Salvando...' : 'Criar registro'}</button></form><div className="althea-card"><span>{labels[tableMap[active]!]?.toUpperCase()}</span>{rows.map(row => <div className="list-row" key={row.id}><div><strong>{row.id}</strong><small>{row.created_at ? dateTime.format(new Date(row.created_at)) : '—'}</small></div><button onClick={() => deleteRow(tableMap[active]!, row.id)}>Excluir</button></div>)}{!rows.length && <div className="empty-state">Nenhum registro encontrado.</div>}</div></section>}
+
+        {['Analytics', 'Integrações', 'Configurações'].includes(active) && <section className="module-grid"><div className="althea-card info-card"><span>{active.toUpperCase()}</span><h2>{active === 'Analytics' ? 'Performance em tempo real' : active === 'Integrações' ? 'Central de integrações' : 'Configurações da conta'}</h2><p>{descriptions[active]}</p><div className="summary-grid"><div><strong>{counts.sales || 0}</strong><small>vendas</small></div><div><strong>{counts.clients || 0}</strong><small>clientes</small></div><div><strong>{counts.products || 0}</strong><small>produtos</small></div><div><strong>{integrationEvents}</strong><small>eventos</small></div></div></div></section>}
+      </section>
+
+      {selectedTransaction && <div className="modal-backdrop" onClick={() => setSelectedTransaction(null)}><div className="transaction-modal althea-card" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => setSelectedTransaction(null)}>×</button><span>DETALHES DA TRANSAÇÃO</span><h2>{selectedTransaction.id}</h2><p><strong>Status:</strong> {statusLabel(selectedTransaction.status)}</p><p><strong>Valor:</strong> {money.format(Number(selectedTransaction.amount) || 0)}</p><p><strong>Cliente:</strong> {customerName(selectedTransaction.customer)}</p><p><strong>Gateway:</strong> {selectedTransaction.gateway_id || '—'}</p><p><strong>Funil:</strong> {selectedTransaction.funnel_id || '—'}</p></div></div>}
+    </main>
+  )
+}
