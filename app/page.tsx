@@ -8,7 +8,7 @@ import { hydrateAltheaBrand } from '@/components/brand-kit'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Module = 'Visão geral' | 'Funis' | 'Produtos' | 'Gateways' | 'Vendas' | 'Clientes' | 'Chats' | 'Analytics' | 'Integrações' | 'Configurações'
-type Row = { id: string; data?: Record<string, unknown> | null; nome?: string | null; name?: string | null; provider?: string | null; status?: string | null; created_at?: string; [key: string]: unknown }
+type Row = { id: string; data?: Record<string, unknown> | null; nome?: string | null; name?: string | null; provider?: string | null; status?: string | null; url?: string | null; endpoint?: string | null; created_at?: string; [key: string]: unknown }
 type Transaction = { id: string; amount: number | null; status: string | null; currency: string | null; created_at?: string; gateway_id?: string | null; funnel_id?: string | null; customer?: Record<string, unknown> | null }
 
 const nav: Module[] = ['Visão geral','Funis','Produtos','Gateways','Vendas','Clientes','Chats','Analytics','Integrações','Configurações']
