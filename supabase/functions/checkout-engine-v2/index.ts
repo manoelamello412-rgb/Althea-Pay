@@ -1,5 +1,101 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-const URL=Deno.env.get("SUPABASE_URL")!;const SERVICE=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;const ANON=Deno.env.get("SUPABASE_ANON_KEY")??Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;const db=createClient(URL,SERVICE);
-const j=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{"content-type":"application/json"}});
-async function getUser(req:Request){const a=req.headers.get("authorization")||"",t=a.replace(/^Bearer\s+/i,"");if(!t)return null;const c=createClient(URL,ANON,{global:{headers:{Authorization:`Bearer ${t}`}}});const r=await c.auth.getUser(t);return r.error?null:r.data.user}
-Deno.serve(async req=>{if(req.method!=="POST")return j({error:"method_not_allowed"},405);const u=await getUser(req);if(!u)return j({error:"unauthorized"},401);const b=await req.json().catch(()=>null);if(!b)return j({error:"invalid_json"},400);const f=String(b.funnel_id||""),p=b.product_id?String(b.product_id):null,a=Number(b.amount),cur=String(b.currency||"BRL").toUpperCase(),act=b.action==="purchase"?"purchase":"start",ik=req.headers.get("x-idempotency-key")||req.headers.get("idempotency-key")||b.idempotency_key||crypto.randomUUID();if(!f||!Number.isFinite(a)||a<=0)return j({error:"invalid_checkout"},400);const {data:fn}=await db.from("funnels").select("id").eq("id",f).eq("user_id",u.id).maybeSingle();if(!fn)return j({error:"funnel_not_found"},404);const {data:old}=await db.from("checkout_sessions").select("*").eq("user_id",u.id).eq("funnel_id",f).contains("metadata",{idempotency_key:ik}).maybeSingle();if(old)return j({checkout:old,replayed:true});const att=b.attribution&&typeof b.attribution==="object"?b.attribution:{},cust=b.customer&&typeof b.customer==="object"?b.customer:{},meta={...(b.metadata||{}),idempotency_key:ik,source:"checkout-engine-v2"};const {data:co,error}=await db.from("checkout_sessions").insert({user_id:u.id,funnel_id:f,product_id:p,status:act==="purchase"?"processing":"started",currency:cur,amount:a,customer:cust,attribution:att,metadata:meta}).select().single();if(error)return j({error:"checkout_create_failed",detail:error.message},500);await db.from("checkout_events").insert({checkout_id:co.id,user_id:u.id,event_type:act==="purchase"?"purchase_requested":"checkout_started",payload:{funnel_id:f,product_id:p,amount:a,currency:cur}});if(act!=="purchase")return j({checkout:co,replayed:false});const gr=await fetch(`${URL}/functions/v1/gateway-orchestrator`,{method:"POST",headers:{"content-type":"application/json",authorization:req.headers.get("authorization")||"","x-idempotency-key":ik},body:JSON.stringify({funnel_id:f,product_id:p,amount:a,currency:cur,customer:cust,metadata:{...meta,checkout_id:co.id},idempotency_key:ik})});const gw=await gr.json().catch(()=>({error:"gateway_invalid_response"}));if(!gr.ok){await db.from("checkout_sessions").update({status:"failed",updated_at:new Date().toISOString()}).eq("id",co.id);return j({error:"payment_failed",checkout:{...co,status:"failed"},gateway:gw},gr.status)}const txid=gw.transaction_id||gw.transaction?.id;const {data:tx}=txid?await db.from("gateway_transactions").select("*").eq("id",txid).eq("user_id",u.id).maybeSingle():{data:null};if(!tx||tx.status!=="approved"){await db.from("checkout_sessions").update({status:"failed",updated_at:new Date().toISOString()}).eq("id",co.id);return j({error:"payment_failed",checkout:{...co,status:"failed"},gateway:gw},402)}await db.from("checkout_sessions").update({status:"completed",completed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",co.id);const ext=tx.external_id||gw.external_id||null;let sale=(await db.from("sales").select("*").eq("user_id",u.id).eq("transaction_id",txid).maybeSingle()).data;if(!sale){const r=await db.from("sales").insert({user_id:u.id,funnel_id:f,product_id:p,checkout_id:co.id,transaction_id:txid,amount:a,currency:cur,status:"approved",attribution:att,external_id:ext,gateway_id:tx.gateway_id||gw.gateway_id||null,occurred_at:new Date().toISOString()}).select().single();if(r.error)return j({error:"sale_projection_failed",detail:r.error.message},500);sale=r.data;}if(sale?.id)await db.rpc("project_sale_attribution",{p_sale_id:String(sale.id)});await db.from("checkout_events").insert({checkout_id:co.id,user_id:u.id,event_type:"purchase_approved",payload:{transaction_id:txid,sale_id:sale.id}});const ek=`checkout:${co.id}:purchase`;const {data:existingEvent}=await db.from("integration_events").select("id").eq("user_id",u.id).eq("event_key",ek).maybeSingle();if(!existingEvent)await db.from("integration_events").insert({user_id:u.id,funnel_id:f,event_type:"purchase",event_key:ek,external_id:ext||ik,payload:{checkout_id:co.id,transaction_id:txid,sale_id:sale.id,amount:a,currency:cur,product_id:p,attribution:att,customer:cust},status:"pending"});return j({checkout:{...co,status:"completed"},gateway:gw,sale,replayed:false})});
+
+const URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
+const db = createClient(URL, SERVICE);
+
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+async function getUser(req: Request) {
+  const authorization = req.headers.get("authorization") || "";
+  const token = authorization.replace(/^Bearer\s+/i, "");
+  if (!token) return null;
+  const client = createClient(URL, ANON, { global: { headers: { Authorization: `Bearer ${token}` } } });
+  const result = await client.auth.getUser(token);
+  return result.error ? null : result.data.user;
+}
+
+Deno.serve(async (req) => {
+  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+  const user = await getUser(req);
+  if (!user) return json({ error: "unauthorized" }, 401);
+
+  const body = await req.json().catch(() => null) as Record<string, unknown> | null;
+  if (!body) return json({ error: "invalid_json" }, 400);
+
+  const funnelId = String(body.funnel_id || "");
+  const productId = body.product_id ? String(body.product_id) : null;
+  const amount = Number(body.amount);
+  const currency = String(body.currency || "BRL").toUpperCase();
+  const action = body.action === "purchase" ? "purchase" : "start";
+  const idempotencyKey = String(req.headers.get("x-idempotency-key") || req.headers.get("idempotency-key") || body.idempotency_key || crypto.randomUUID()).trim();
+
+  if (!funnelId || !Number.isFinite(amount) || amount <= 0 || !idempotencyKey || idempotencyKey.length > 300) return json({ error: "invalid_checkout" }, 400);
+
+  const { data: funnel } = await db.from("funnels").select("id").eq("id", funnelId).eq("user_id", user.id).maybeSingle();
+  if (!funnel) return json({ error: "funnel_not_found" }, 404);
+
+  if (productId) {
+    const { data: product, error: productError } = await db.from("products").select("id").eq("id", productId).eq("user_id", user.id).maybeSingle();
+    if (productError) return json({ error: "product_lookup_failed", detail: productError.message }, 500);
+    if (!product) return json({ error: "product_not_found" }, 404);
+  }
+
+  const attribution = body.attribution && typeof body.attribution === "object" ? body.attribution : {};
+  const customer = body.customer && typeof body.customer === "object" ? body.customer : {};
+  const metadata = { ...(body.metadata && typeof body.metadata === "object" ? body.metadata : {}), idempotency_key: idempotencyKey, source: "checkout-engine-v2" };
+
+  const { data: checkout, error: checkoutError } = await db.from("checkout_sessions").insert({
+    user_id: user.id, funnel_id: funnelId, product_id: productId,
+    status: action === "purchase" ? "processing" : "started", currency, amount,
+    customer, attribution, metadata, idempotency_key: idempotencyKey,
+  }).select().single();
+
+  if (checkoutError) {
+    if (checkoutError.code === "23505") {
+      const { data: existing, error: existingError } = await db.from("checkout_sessions").select("*").eq("user_id", user.id).eq("funnel_id", funnelId).eq("idempotency_key", idempotencyKey).maybeSingle();
+      if (existingError) return json({ error: "checkout_lookup_failed", detail: existingError.message }, 500);
+      if (existing) return json({ checkout: existing, replayed: true });
+    }
+    return json({ error: "checkout_create_failed", detail: checkoutError.message }, 500);
+  }
+
+  await db.from("checkout_events").insert({ checkout_id: checkout.id, user_id: user.id, event_type: action === "purchase" ? "purchase_requested" : "checkout_started", payload: { funnel_id: funnelId, product_id: productId, amount, currency } });
+  if (action !== "purchase") return json({ checkout, replayed: false });
+
+  const gatewayResponse = await fetch(`${URL}/functions/v1/gateway-orchestrator`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: req.headers.get("authorization") || "", "x-idempotency-key": idempotencyKey },
+    body: JSON.stringify({ funnel_id: funnelId, product_id: productId, amount, currency, customer, metadata: { ...metadata, checkout_id: checkout.id }, idempotency_key: idempotencyKey }),
+  });
+  const gateway = await gatewayResponse.json().catch(() => ({ error: "gateway_invalid_response" }));
+  if (!gatewayResponse.ok) {
+    await db.from("checkout_sessions").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", checkout.id).eq("user_id", user.id);
+    return json({ error: "payment_failed", checkout: { ...checkout, status: "failed" }, gateway }, gatewayResponse.status);
+  }
+
+  const transactionId = gateway.transaction_id || gateway.transaction?.id;
+  const { data: transaction } = transactionId ? await db.from("gateway_transactions").select("*").eq("id", transactionId).eq("user_id", user.id).maybeSingle() : { data: null };
+  if (!transaction || transaction.status !== "approved") {
+    await db.from("checkout_sessions").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", checkout.id).eq("user_id", user.id);
+    return json({ error: "payment_failed", checkout: { ...checkout, status: "failed" }, gateway }, 402);
+  }
+
+  await db.from("checkout_sessions").update({ status: "completed", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", checkout.id).eq("user_id", user.id);
+  const externalId = transaction.external_id || gateway.external_id || null;
+  let sale = (await db.from("sales").select("*").eq("user_id", user.id).eq("transaction_id", transactionId).maybeSingle()).data;
+  if (!sale) {
+    const insertedSale = await db.from("sales").insert({ user_id: user.id, funnel_id: funnelId, product_id: productId, checkout_id: checkout.id, transaction_id: transactionId, amount, currency, status: "approved", attribution, external_id: externalId, gateway_id: transaction.gateway_id || gateway.gateway_id || null, occurred_at: new Date().toISOString() }).select().single();
+    if (insertedSale.error) return json({ error: "sale_projection_failed", detail: insertedSale.error.message }, 500);
+    sale = insertedSale.data;
+  }
+  if (sale?.id) await db.rpc("project_sale_attribution", { p_sale_id: String(sale.id) });
+
+  await db.from("checkout_events").insert({ checkout_id: checkout.id, user_id: user.id, event_type: "purchase_approved", payload: { transaction_id: transactionId, sale_id: sale.id } });
+  const eventKey = `checkout:${checkout.id}:purchase`;
+  const { data: existingEvent } = await db.from("integration_events").select("id").eq("user_id", user.id).eq("event_key", eventKey).maybeSingle();
+  if (!existingEvent) await db.from("integration_events").insert({ user_id: user.id, funnel_id: funnelId, event_type: "purchase", event_key: eventKey, external_id: externalId || idempotencyKey, payload: { checkout_id: checkout.id, transaction_id: transactionId, sale_id: sale.id, amount, currency, product_id: productId, attribution, customer }, status: "pending" });
+
+  return json({ checkout: { ...checkout, status: "completed" }, gateway, sale, replayed: false });
+});
