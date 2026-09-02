@@ -5,7 +5,7 @@ Deno.serve(withSupabase({ auth: 'none' }, async (_req, ctx) => {
   let database: 'ok' | 'error' = 'ok'
 
   try {
-    const { error } = await ctx.supabaseAdmin.from('platform_settings').select('id').limit(1)
+    const { error } = await ctx.supabaseAdmin.from('platform_settings').select('user_id').limit(1)
     if (error) database = 'error'
   } catch {
     database = 'error'
