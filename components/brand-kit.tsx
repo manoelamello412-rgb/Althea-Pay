@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 export type AltheaBrand = { ink:string; forest:string; deep:string; green:string; gold:string; silver:string; logo:string; logo_light:string; logo_dark:string; favicon:string }
-export const DEFAULT_ALTHEA_BRAND: AltheaBrand = { ink:'#0B0B0D', forest:'#0F1A16', deep:'#0D362D', green:'#1DB854', gold:'#D4AF37', silver:'#A6A6A6', logo:'/althea-logo.png.PNG', logo_light:'/althea-logo.png.PNG', logo_dark:'/althea-logo.png.PNG', favicon:'/althea-mark.png' }
+export const DEFAULT_ALTHEA_BRAND: AltheaBrand = { ink:'#0B0B0D', forest:'#0F1A16', deep:'#0D362D', green:'#1DB854', gold:'#D4AF37', silver:'#A6A6A6', logo:'/althea-logo.png', logo_light:'/althea-logo.png', logo_dark:'/althea-logo.png', favicon:'/althea-mark.png' }
 type BrandRow=Record<string,string>
 type UploadKey='logo'|'logo_light'|'logo_dark'|'favicon'
 const STORAGE_KEY='althea-brand-kit-v1'
