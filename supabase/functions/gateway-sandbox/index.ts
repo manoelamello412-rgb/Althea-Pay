@@ -1,4 +1,4 @@
-import { simulateSandboxPayment } from '../_shared/gateway-sandbox-sim'
+import { simulateSandboxPayment } from '../_shared/gateway-sandbox-sim.ts'
 import { IdempotencyStore } from '../../../lib/idempotency'
 import { verifyHMAC } from '../../../lib/hmac'
 
