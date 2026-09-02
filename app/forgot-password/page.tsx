@@ -41,7 +41,7 @@ export default function ForgotPasswordPage() {
   }
 
   return <main className="auth-shell"><section className="auth-card">
-    <div className="brand-lockup"><Image src="/althea-pay-lockup.svg" alt="Althea Pay" width={294} height={230} priority style={{ width: 'min(100%, 294px)', height: 'auto', objectFit: 'contain', filter: 'none' }} /></div>
+    <div className="brand-lockup"><Image src="/althea-logo.png.PNG" alt="Althea Pay" width={294} height={230} priority style={{ width: 'min(100%, 294px)', height: 'auto', objectFit: 'contain', filter: 'none' }} /></div>
     <div className="auth-heading"><span>RECUPERAÇÃO SEGURA</span><h1>Esqueci minha senha</h1><p>Informe seu e-mail para receber o link de redefinição.</p></div>
     <form onSubmit={handleSubmit} className="auth-form">
       <label>E-mail<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" required /></label>
