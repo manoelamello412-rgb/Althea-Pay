@@ -32,9 +32,9 @@
 
   async function provisionSandboxGateway(funnelId=null) {
     if (!window.sb || !window.user?.id) return null;
-    const {data,error}=await sb.rpc('provision_sandbox_gateway',{p_funnel_id:funnelId});
-    if(error) throw error;
-    return data?.[0]||null;
+    const result=await sb.functions.invoke('sandbox-provision',{body:funnelId?{funnel_id:funnelId}:{}});
+    if(result.error) throw result.error;
+    return result.data||null;
   }
   window.provisionSandboxGateway=provisionSandboxGateway;
 
