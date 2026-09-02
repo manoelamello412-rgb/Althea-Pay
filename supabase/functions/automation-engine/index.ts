@@ -35,11 +35,27 @@ async function action(rule: any, ctx: any) {
   if (type === "update_transaction") {
     if (!ctx.transaction_id) throw new Error("transaction_id_required");
     const patch: any = {};
-    if (cfg.status) patch.status = cfg.status;
     if (cfg.error_message) patch.error_message = cfg.error_message;
-    if (["approved", "refunded", "chargeback"].includes(cfg.status)) patch.completed_at = new Date().toISOString();
-    const { data, error } = await db.from("gateway_transactions").update(patch).eq("id", ctx.transaction_id).eq("user_id", ctx.user_id).select("id,status").single();
-    if (error) throw error;
+    let data: any = null;
+    if (cfg.status) {
+      const { data: transition, error: transitionError } = await db.rpc("transition_gateway_transaction_status", {
+        p_transaction_id: ctx.transaction_id,
+        p_user_id: ctx.user_id,
+        p_new_status: String(cfg.status),
+        p_error_message: cfg.error_message ? String(cfg.error_message) : null,
+        p_external_status: null,
+      });
+      if (transitionError) throw transitionError;
+      data = transition;
+    } else if (Object.keys(patch).length) {
+      const { data: updated, error } = await db.from("gateway_transactions").update(patch).eq("id", ctx.transaction_id).eq("user_id", ctx.user_id).select("id,status").single();
+      if (error) throw error;
+      data = updated;
+    } else {
+      const { data: current, error } = await db.from("gateway_transactions").select("id,status").eq("id", ctx.transaction_id).eq("user_id", ctx.user_id).single();
+      if (error) throw error;
+      data = current;
+    }
     return { type, transaction: data };
   }
   if (type === "recover_checkout") {
