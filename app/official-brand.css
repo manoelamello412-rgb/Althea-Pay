@@ -1,6 +1,6 @@
 /* ALTHEA PAY — official master logo */
-/* The master lockup is the approved artwork supplied for the brand. */
-.app-brand{display:block!important;width:100%;height:158px;margin:2px 0 30px!important;padding:0!important;border-radius:12px;background:#fff url('/althea-pay-lockup.svg') center/contain no-repeat;box-shadow:0 12px 34px rgba(0,0,0,.24);overflow:hidden}
+/* The master lockup is supplied as the approved raster artwork in /public. */
+.app-brand{display:block!important;width:100%;height:158px;margin:2px 0 30px!important;padding:0!important;border-radius:12px;background:#fff url('/althea-logo.png') center/contain no-repeat;box-shadow:0 12px 34px rgba(0,0,0,.24);overflow:hidden}
 .app-brand>img,.app-brand>div,.app-brand>.app-brand-tag{display:none!important}
 @media(max-width:1100px) and (min-width:801px){.app-brand{height:132px}}
 @media(max-width:800px){.app-brand{display:none!important}}
