@@ -1,0 +1,1 @@
+drop index if exists public.checkout_sessions_user_id_idempotency_key_uidx;
