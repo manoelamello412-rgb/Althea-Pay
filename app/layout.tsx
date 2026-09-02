@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import './brand-kit.css'
+import './althea-visual.css'
 
 export const metadata: Metadata = {
-  title: 'ALTHEA — Control Center',
+  title: 'ALTHEA PAY — Control Center',
   description: 'Central de controle, inteligência e operações dos seus funis.',
 }
 
