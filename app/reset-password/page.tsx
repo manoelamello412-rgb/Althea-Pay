@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '../../lib/supabase/client'
@@ -64,7 +65,7 @@ export default function ResetPasswordPage() {
   }
 
   return <main className="auth-shell"><section className="auth-card">
-    <div className="althea-brand auth-brand">ALTHEA PAY<span>Control Center</span></div>
+    <div className="brand-lockup"><Image src="/althea-pay-lockup.svg" alt="Althea Pay" width={294} height={230} priority style={{ width: 'min(100%, 294px)', height: 'auto', objectFit: 'contain', filter: 'none' }} /></div>
     <div className="auth-heading"><span>RECUPERAÇÃO SEGURA</span><h1>Nova senha</h1><p>Crie uma nova senha para voltar ao seu painel.</p></div>
     {ready ? <form onSubmit={handleSubmit} className="auth-form"><label>Nova senha<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password" minLength={6} required /></label><label>Confirmar senha<input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password" minLength={6} required /></label>{error&&<div className="auth-error" role="alert">{error}</div>}{message&&<div className="auth-message" role="status">{message}</div>}<button className="primary auth-submit" disabled={loading}>{loading?'Atualizando...':'Atualizar senha'}</button></form> : <div>{error&&<div className="auth-error" role="alert">{error}</div>}<button type="button" className="auth-switch" onClick={()=>router.push('/forgot-password')}>Solicitar novo link</button></div>}
     <button type="button" className="auth-switch" onClick={()=>router.push('/login')}>← Voltar para o login</button>
