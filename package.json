@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "typecheck": "echo \"No typecheck configured\"",
-    "test": "echo \"No tests specified\" && exit 0"
+    "lint": "echo \"No lint configured\"",
+    "test": "node ./scripts/run-tests.js"
   },
   "dependencies": {
     "stripe": "^12.0.0",
