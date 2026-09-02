@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["deno.window", "dom", "dom.iterable", "esnext"]
+  },
+  "imports": {
+    "@supabase/functions-js/": "jsr:@supabase/functions-js/",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
+    "@std/": "jsr:@std/"
+  }
+}
