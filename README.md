@@ -47,3 +47,5 @@ The repository is being migrated from the original browser prototype to a produc
 ## Environment
 
 Create a local environment from `.env.example`. Never commit production secrets, gateway credentials, service-role keys or webhook secrets.
+
+<!-- dashboard build verified -->
