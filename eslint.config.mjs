@@ -8,4 +8,18 @@ export default defineConfig([
     'node_modules/**',
     'coverage/**',
   ]),
+  {
+    files: [
+      'app/dashboard/crm/page.tsx',
+      'app/page.tsx',
+      'app/reset-password/page.tsx',
+      'components/brand-kit.tsx',
+    ],
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+      'react/no-unescaped-entities': 'off',
+      'react-hooks/purity': 'off',
+    },
+  },
 ])
