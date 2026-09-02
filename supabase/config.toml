@@ -3,6 +3,9 @@ project_id = "hkraryqoziravulvqkid"
 [functions.gateway-orchestrator]
 verify_jwt = true
 
+[functions.gateway-webhook]
+verify_jwt = false
+
 [functions.gateway-sandbox]
 verify_jwt = true
 
