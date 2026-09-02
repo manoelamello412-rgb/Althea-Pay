@@ -14,6 +14,7 @@ export default defineConfig([
       'app/page.tsx',
       'app/reset-password/page.tsx',
       'components/brand-kit.tsx',
+      'components/brand-logo.tsx',
       'app/dashboard/settings/page.tsx',
       'components/dashboard-session-actions.tsx',
     ],
