@@ -1,0 +1,81 @@
+/* ALTHEA PAY — Responsive Control Center
+   Desktop, notebook, tablet and mobile without losing the fintech visual language. */
+
+/* Large desktop / notebook */
+.althea-main{min-width:0}
+.dashboard-header-actions{display:flex;align-items:center;gap:10px}
+.refresh-button{border:1px solid rgba(29,184,84,.18);background:rgba(15,26,22,.72);color:#a8c5b4;border-radius:10px;padding:9px 12px;font-size:10px;transition:.2s}
+.refresh-button:hover{border-color:rgba(29,184,84,.4);color:#e7fff0;transform:translateY(-1px)}
+.refresh-button:disabled{opacity:.6;cursor:wait}
+.dashboard-hero-row{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(280px,.72fr);gap:14px}
+.revenue-card{min-height:365px}
+.quick-panel{min-height:365px}
+
+/* Tablet */
+@media (max-width:1100px){
+  .althea-app{grid-template-columns:220px minmax(0,1fr)!important}
+  .althea-main{padding:30px 26px 60px!important}
+  .dashboard-hero-row{grid-template-columns:1fr}
+  .quick-panel{min-height:auto}
+  .althea-metrics{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+
+@media (max-width:800px){
+  body{overflow-x:hidden}
+  .althea-app{display:block!important;min-height:100svh;padding-bottom:74px}
+  .althea-app:after{width:480px;height:480px;right:-280px;top:20px}
+
+  /* Mobile navigation: the same modules remain available, but become a native-feeling bottom rail. */
+  .althea-sidebar{position:fixed!important;left:0;right:0;bottom:0;top:auto;width:100%;height:66px!important;padding:7px 8px!important;display:block!important;border-right:0!important;border-top:1px solid rgba(29,184,84,.18)!important;background:rgba(7,13,10,.94)!important;backdrop-filter:blur(22px);z-index:50}
+  .althea-sidebar:before{display:none}
+  .app-brand,.sidebar-logout{display:none!important}
+  .althea-nav{height:100%;display:flex!important;gap:4px!important;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;align-items:stretch}
+  .althea-nav::-webkit-scrollbar{display:none}
+  .althea-nav button{flex:0 0 auto;min-width:76px;height:52px;padding:7px 9px!important;text-align:center!important;border-radius:10px!important;font-size:9px!important;color:#71877b!important}
+  .althea-nav button.active{box-shadow:inset 0 2px 0 var(--althea-green),0 5px 18px rgba(0,0,0,.2)!important}
+
+  .althea-main{width:100%;max-width:none;padding:22px 14px 30px!important}
+  .althea-header{gap:14px!important;margin-bottom:18px!important}
+  .althea-header h1{font-size:clamp(29px,9vw,40px)!important;line-height:1.02}
+  .althea-header p{font-size:11px;line-height:1.55}
+  .althea-kicker{font-size:8px!important;letter-spacing:.2em!important}
+  .dashboard-header-actions{width:100%;justify-content:space-between}
+  .refresh-button{padding:8px 10px}
+  .althea-status{font-size:9px;padding:8px 10px}
+
+  .dashboard-hero-row{gap:11px}
+  .revenue-card,.quick-panel{min-height:0}
+  .althea-card{padding:15px!important;border-radius:13px!important}
+  .revenue-card>strong{font-size:31px!important}
+  .chart-wrap{height:150px!important}
+  .health-list{display:grid;grid-template-columns:1fr 1fr;gap:7px!important}
+  .health-list>div{padding:9px!important}
+  .health-list strong{font-size:10px!important}
+  .health-list span{font-size:9px!important}
+  .analytics-grid{grid-template-columns:1fr 1fr!important}
+  .althea-metrics{grid-template-columns:1fr 1fr!important}
+}
+
+/* Small phones */
+@media (max-width:430px){
+  .althea-main{padding-left:11px!important;padding-right:11px!important}
+  .althea-header h1{font-size:30px!important}
+  .dashboard-header-actions{gap:7px}
+  .refresh-button span{display:none}
+  .refresh-button{width:38px;height:36px;padding:0;display:grid;place-items:center;font-size:17px}
+  .althea-status{flex:1;text-align:center}
+  .althea-metrics,.analytics-grid{grid-template-columns:1fr!important}
+  .health-list{grid-template-columns:1fr!important}
+  .period-switch button{min-width:36px}
+}
+
+/* Touch devices: avoid hover-only interactions. */
+@media (hover:none){
+  .althea-card:hover,.primary:hover,.refresh-button:hover{transform:none}
+}
+
+/* Accessibility / display cutouts */
+@supports (padding:max(0px)){
+  .althea-app{padding-left:max(0px,env(safe-area-inset-left));padding-right:max(0px,env(safe-area-inset-right))}
+  @media (max-width:800px){.althea-app{padding-bottom:max(74px,calc(74px + env(safe-area-inset-bottom)))}.althea-sidebar{padding-bottom:max(7px,calc(7px + env(safe-area-inset-bottom)))!important}}
+}
