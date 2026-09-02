@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import './althea-design-system.css'
 import './brand-kit.css'
 import './althea-visual.css'
 import './dashboard.css'
