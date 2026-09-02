@@ -1,0 +1,46 @@
+{
+  "info": {
+    "name": "Althea Pay Sandbox",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://hkraryqoziravulvqkid.supabase.co/functions/v1/althea-public-api" },
+    { "key": "apiKey", "value": "althea_test_replace_me" },
+    { "key": "funnelId", "value": "funnel_replace_me" }
+  ],
+  "item": [
+    {
+      "name": "List funnels",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "x-althea-api-key", "value": "{{apiKey}}" }],
+        "url": { "raw": "{{baseUrl}}/v1/funnels", "host": ["{{baseUrl}}"], "path": ["v1", "funnels"] }
+      }
+    },
+    {
+      "name": "Ingest purchase event",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "x-althea-api-key", "value": "{{apiKey}}" },
+          { "key": "x-request-id", "value": "postman-sandbox-{{$guid}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "options": { "raw": { "language": "json" } },
+          "raw": "{\n  \"event_type\": \"purchase\",\n  \"external_id\": \"postman-{{$guid}}\",\n  \"funnel_id\": \"{{funnelId}}\",\n  \"payload\": {\n    \"amount\": 199.90,\n    \"currency\": \"BRL\",\n    \"scenario\": \"approved\"\n  }\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/v1/events", "host": ["{{baseUrl}}"], "path": ["v1", "events"] }
+      }
+    },
+    {
+      "name": "List transactions",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "x-althea-api-key", "value": "{{apiKey}}" }],
+        "url": { "raw": "{{baseUrl}}/v1/transactions?limit=20", "host": ["{{baseUrl}}"], "path": ["v1", "transactions"], "query": [{ "key": "limit", "value": "20" }] }
+      }
+    }
+  ]
+}

@@ -1,13 +1,62 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-const url=Deno.env.get('SUPABASE_URL')!; const key=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!; const secret=Deno.env.get('ALTHEA_INTERNAL_SECRET')??'';
-const db=createClient(url,key,{auth:{persistSession:false}});
-const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'content-type,x-internal-secret','Content-Type':'application/json'};
-const res=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{...cors}});
-Deno.serve(async req=>{if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors}); if(req.method!=='POST')return res({error:'method_not_allowed'},405); if(!secret||req.headers.get('x-internal-secret')!==secret)return res({error:'unauthorized'},401);
- const body=await req.json().catch(()=>({})); const limit=Math.min(Math.max(Number(body.limit??25),1),100); const now=new Date().toISOString();
- const {data:events,error}=await db.from('integration_events').select('id,user_id,funnel_id,event_type,payload,external_id,retry_count').in('status',['retry','pending']).or(`next_retry_at.is.null,next_retry_at.lte.${now}`).order('created_at',{ascending:true}).limit(limit);
- if(error)return res({error:'event_lookup_failed',detail:error.message},500);
- const results=[]; for(const e of events??[]){const claim=await db.rpc('claim_integration_event',{p_event_id:e.id}); if(claim.error||claim.data!==true){results.push({id:e.id,status:'skipped'});continue;} try{const r=await fetch(`${url}/functions/v1/automation-engine-v2`,{method:'POST',headers:{'content-type':'application/json','x-internal-secret':secret},body:JSON.stringify({user_id:e.user_id,funnel_id:e.funnel_id,event_id:e.id,event_type:e.event_type,external_id:e.external_id,payload:e.payload})}); if(r.ok){await db.from('integration_events').update({status:'processed',processed_at:new Date().toISOString(),error_message:null,next_retry_at:null}).eq('id',e.id); results.push({id:e.id,status:'processed'});}else{const msg=`automation_${r.status}`; await db.rpc('schedule_integration_event_retry',{p_event_id:e.id,p_error:msg}); results.push({id:e.id,status:'retry',error:msg});}}catch(err){const msg=err instanceof Error?err.message:'worker_error';await db.rpc('schedule_integration_event_retry',{p_event_id:e.id,p_error:msg});results.push({id:e.id,status:'retry',error:msg});}}
- return res({ok:true,processed:results.filter(x=>x.status==='processed').length,retried:results.filter(x=>x.status==='retry').length,skipped:results.filter(x=>x.status==='skipped').length,results});
-});
+import { logJSON, genRequestId } from '../../lib/logging';
+import { query } from '../../lib/db';
+
+// Event worker: processes webhook_events rows and marks them processed or moves to DLQ
+export default async function handler(req: any, res: any) {
+  const requestId = genRequestId();
+  logJSON('info','worker.start',{requestId});
+
+  try {
+    // attempt to query DB; if not configured, return noop
+    let rows;
+    try {
+      const r = await query(`SELECT id, event_id, payload, attempts FROM webhook_events WHERE processed = false AND next_attempt_at <= now() ORDER BY received_at LIMIT 50`);
+      rows = r.rows;
+    } catch (e) {
+      logJSON('warn','worker.no_db',{requestId, note: 'DB not configured or query failed', error: String(e)});
+      return res.status(200).json({ ok: true, note: 'noop (no DB)'});
+    }
+
+    for (const row of rows) {
+      const { id, event_id, payload, attempts } = row;
+      logJSON('info','worker.processing',{requestId,event_id,attempts});
+      try {
+        // route by payload type
+        if (payload && payload.type) {
+          if (payload.type === 'payment_intent.succeeded' || payload.type === 'charge.succeeded') {
+            // extract gateway tx id and amount
+            const gatewayTxId = payload.data?.object?.id || payload.data?.object?.charge || null;
+            const amount = payload.data?.object?.amount || 0;
+            const currency = (payload.data?.object?.currency || 'USD').toUpperCase();
+
+            // insert into ledger
+            try {
+              await query(`INSERT INTO ledger_transactions(gateway_tx_id, amount, gross, fees, net, currency, status) VALUES($1,$2,$3,$4,$5,$6,$7)`, [gatewayTxId, amount, amount, 0, amount, currency, 'settled']);
+            } catch (ledgerErr) {
+              logJSON('warn','worker.ledger_insert_failed',{requestId,event_id,error:String(ledgerErr)});
+            }
+          }
+        }
+
+        await query(`UPDATE webhook_events SET processed = true WHERE id = $1`, [id]);
+        logJSON('info','worker.processed',{requestId,event_id});
+      } catch (procErr) {
+        const newAttempts = (attempts || 0) + 1;
+        if (newAttempts >= 5) {
+          await query(`INSERT INTO webhook_events_dlq(event_id, payload, reason) VALUES($1,$2,$3)`, [event_id, payload, String(procErr)]);
+          await query(`DELETE FROM webhook_events WHERE id = $1`, [id]);
+          logJSON('error','worker.moved_to_dlq',{requestId,event_id});
+        } else {
+          const nextAt = new Date(Date.now() + Math.pow(2, newAttempts) * 1000).toISOString();
+          await query(`UPDATE webhook_events SET attempts = $1, next_attempt_at = $2 WHERE id = $3`, [newAttempts, nextAt, id]);
+          logJSON('warn','worker.retry_scheduled',{requestId,event_id,newAttempts,nextAt});
+        }
+      }
+    }
+
+    return res.status(200).json({ ok: true, processed: rows.length });
+  } catch (err) {
+    logJSON('error','worker.error',{requestId, error: String(err)});
+    return res.status(500).json({ ok: false });
+  }
+}

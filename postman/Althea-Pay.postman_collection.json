@@ -1,0 +1,45 @@
+{
+  "info": {
+    "name": "ALTHEA PAY API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Sandbox-first collection for the ALTHEA PAY control-plane API."
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://YOUR_ALTHEA_API_HOST" },
+    { "key": "apiKey", "value": "" },
+    { "key": "funnelId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "List funnels",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "x-althea-api-key", "value": "{{apiKey}}" }],
+        "url": "{{baseUrl}}/v1/funnels"
+      }
+    },
+    {
+      "name": "List products",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "x-althea-api-key", "value": "{{apiKey}}" }],
+        "url": "{{baseUrl}}/v1/products"
+      }
+    },
+    {
+      "name": "Send checkout_started",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "x-althea-api-key", "value": "{{apiKey}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event_type\": \"checkout_started\",\n  \"funnel_id\": \"{{funnelId}}\",\n  \"external_id\": \"postman-checkout-001\",\n  \"session_key\": \"postman-session-001\",\n  \"payload\": {}\n}"
+        },
+        "url": "{{baseUrl}}/v1/events"
+      }
+    }
+  ]
+}
