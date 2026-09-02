@@ -1,152 +1,53 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-idempotency-key, idempotency-key",
-  "Access-Control-Allow-Methods": "POST,OPTIONS",
-};
+const cors = {"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type, x-idempotency-key, idempotency-key","Access-Control-Allow-Methods":"POST,OPTIONS"};
+const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,"Content-Type":"application/json"}});
+const TIMEOUT_MS=8000;
+type Failure="technical"|"timeout"|"unavailable"|"declined"|"fraud"|"pending"|"unknown";
+const canFailover=(f:Failure)=>["technical","timeout","unavailable"].includes(f);
+const classify=(status:number,p:any,timeout=false):Failure=>{if(timeout)return "timeout";const c=String(p?.failure_class??p?.code??p?.error_code??"").toLowerCase();if(c.includes("fraud")||c.includes("risk"))return "fraud";if(c.includes("pending")||c.includes("processing"))return "pending";if(c.includes("declin")||c.includes("insufficient")||c.includes("invalid_card"))return "declined";if(status===408||status===504)return "timeout";if(status===429||status>=500)return "unavailable";if(status>=400)return "declined";return "technical";};
+const digest=async(v:unknown)=>{const b=new TextEncoder().encode(JSON.stringify(v));const h=await crypto.subtle.digest("SHA-256",b);return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,"0")).join("");};
 
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
-
-async function digest(value: unknown) {
-  const bytes = new TextEncoder().encode(JSON.stringify(value));
-  const hash = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+async function callAdapter(provider:string,gatewayId:string,payload:Record<string,unknown>,key:string){
+  const env=`GATEWAY_ADAPTER_URL_${provider.replace(/[^a-z0-9]/gi,"_").toUpperCase()}`;
+  const url=Deno.env.get(env)??(Deno.env.get("GATEWAY_ADAPTER_BASE_URL")?.replace(/\/$/,"")+`/adapters/${encodeURIComponent(provider)}`);
+  if(!url)return {ok:false,failure:"unavailable" as Failure,reason:"adapter_url_not_configured"};
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),TIMEOUT_MS);
+  try{const r=await fetch(url,{method:"POST",signal:controller.signal,headers:{"Content-Type":"application/json","X-Althea-Gateway-Id":gatewayId,"X-Althea-Idempotency-Key":key},body:JSON.stringify({...payload,idempotency_key:key})});let p:any={};try{p=await r.json()}catch{};if(!r.ok)return {ok:false,failure:classify(r.status,p),reason:p?.error??`adapter_http_${r.status}`,payload:p};const s=String(p?.status??"").toLowerCase();if(p?.approved===true||s==="approved"||s==="success")return {ok:true,payload:p,reason:"approved"};if(s==="pending"||s==="processing")return {ok:false,failure:"pending" as Failure,reason:"gateway_pending",payload:p};return {ok:false,failure:classify(r.status,p),reason:p?.error??"gateway_declined",payload:p};}
+  catch(e){const t=e instanceof DOMException&&e.name==="AbortError";return {ok:false,failure:(t?"timeout":"technical") as Failure,reason:t?"adapter_timeout":e instanceof Error?e.message:"adapter_request_failed"};}
+  finally{clearTimeout(timer)}
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-
-  const auth = req.headers.get("Authorization") ?? "";
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(url, anonKey, { global: { headers: { Authorization: auth } } });
-  const admin = createClient(url, serviceKey);
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return json({ error: "unauthorized" }, 401);
-
-  let body: any;
-  try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
-
-  const funnelId = String(body.funnel_id ?? "");
-  const amount = Number(body.amount ?? 0);
-  const currency = String(body.currency ?? "BRL");
-  const operation = String(body.operation ?? "create_payment");
-  const productId = body.product_id ? String(body.product_id) : null;
-  const idem = String(body.idempotency_key ?? req.headers.get("x-idempotency-key") ?? req.headers.get("idempotency-key") ?? "");
-  const metadata = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
-  const customer = body.customer && typeof body.customer === "object" ? body.customer : {};
-
-  if (!funnelId || amount <= 0 || !idem) return json({ error: "funnel_id_positive_amount_and_idempotency_key_required" }, 400);
-  if (idem.length > 200) return json({ error: "idempotency_key_too_long" }, 400);
-
-  const requestDigest = await digest({ funnelId, amount, currency, operation, productId, metadata, customer });
-  const scope = `gateway-orchestrator:${funnelId}:${operation}`;
-  const { data: reservation, error: reservationError } = await admin.rpc("reserve_idempotency_key", {
-    p_user_id: user.id,
-    p_scope: scope,
-    p_idempotency_key: idem,
-    p_request_digest: requestDigest,
-    p_ttl: "24 hours",
-  });
-  if (reservationError) return json({ error: "idempotency_reservation_failed", detail: reservationError.message }, 500);
-
-  const r = reservation?.[0];
-  if (!r?.acquired) {
-    if (r?.response_payload) return json(r.response_payload, Number(r.response_code ?? 200));
-    return json({ error: "request_in_progress", idempotency_key: idem }, 409);
-  }
-  const reservationId = r.id;
-
-  const complete = async (status: string, code: number, payload: unknown, resourceType: string | null = null, resourceId: string | null = null) => {
-    await admin.rpc("complete_idempotency_key", {
-      p_id: reservationId,
-      p_status: status,
-      p_response_code: code,
-      p_response_payload: payload,
-      p_resource_type: resourceType,
-      p_resource_id: resourceId,
-    });
-  };
-
-  try {
-    const { data: funnel } = await supabase.from("funnels").select("id").eq("id", funnelId).eq("user_id", user.id).is("deleted_at", null).maybeSingle();
-    if (!funnel) { const payload = { error: "funnel_not_found" }; await complete("failed", 404, payload); return json(payload, 404); }
-
-    let routeQuery = supabase.from("gateway_routes").select("*").eq("user_id", user.id).eq("funnel_id", funnelId).eq("enabled", true).order("priority", { ascending: true });
-    if (productId) routeQuery = routeQuery.or(`product_id.eq.${productId},product_id.is.null`);
-    const { data: routes, error: routesError } = await routeQuery;
-    if (routesError) { const payload = { error: "route_lookup_failed", detail: routesError.message }; await complete("failed", 500, payload); return json(payload, 500); }
-    if (!routes?.length) { const payload = { error: "no_active_gateway_route" }; await complete("failed", 409, payload); return json(payload, 409); }
-
-    const gatewayIds = routes.map((route: any) => route.gateway_id);
-    const { data: healthRows } = await admin.from("gateway_operation_logs").select("gateway_id,status,response_meta,created_at").eq("user_id", user.id).in("gateway_id", gatewayIds).gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString()).order("created_at", { ascending: false }).limit(500);
-    const health = new Map<string, { total: number; ok: number }>();
-    for (const row of healthRows ?? []) { const h = health.get(row.gateway_id) || { total: 0, ok: 0 }; h.total++; if (["success", "approved", "completed"].includes(String(row.status))) h.ok++; health.set(row.gateway_id, h); }
-
-    const attempts: any[] = [];
-    let transaction: any = null;
-    let lastTechnicalError: string | null = null;
-
-    for (let i = 0; i < routes.length; i++) {
-      const route = routes[i];
-      const h = health.get(route.gateway_id) || { total: 0, ok: 0 };
-      const successRate = h.total ? Math.round((h.ok / h.total) * 10000) / 100 : null;
-      const guard = route.conditions?.health_guard !== false;
-      if (guard && route.fallback_enabled && h.total >= 5 && successRate !== null && successRate < 50) {
-        attempts.push({ gateway_id: route.gateway_id, priority: route.priority, attempt: i + 1, outcome: "health_guard_skip", reason: "gateway_degraded", health: { total: h.total, success_rate: successRate } });
-        continue;
-      }
-
-      const { data: gateway } = await supabase.from("gateways").select("*").eq("user_id", user.id).eq("id", route.gateway_id).maybeSingle();
-      if (!gateway) { attempts.push({ gateway_id: route.gateway_id, priority: route.priority, outcome: "technical_failure", reason: "gateway_not_found" }); continue; }
-
-      const provider = String(gateway.provider ?? gateway.type ?? gateway.name ?? "unknown").toLowerCase();
-      const environment = String(gateway.environment ?? gateway.env ?? "sandbox").toLowerCase();
-      const isSandbox = environment !== "production" || provider === "sandbox";
-      const simulated = String(metadata.simulate_failure ?? "").toLowerCase();
-      let outcome: "approved" | "technical_failure" | "card_decline" = "approved";
-      let reason = "sandbox_approved";
-      if (isSandbox && simulated === "technical") { outcome = "technical_failure"; reason = "simulated_technical_failure"; }
-      if (isSandbox && simulated === "card_decline") { outcome = "card_decline"; reason = "simulated_card_decline"; }
-      if (!isSandbox) { outcome = "technical_failure"; reason = "provider_adapter_not_configured"; }
-
-      const attempt = i + 1;
-      attempts.push({ gateway_id: route.gateway_id, priority: route.priority, attempt, outcome, reason, health: { total: h.total, success_rate: successRate } });
-      await admin.from("gateway_operation_logs").insert({ user_id: user.id, gateway_id: route.gateway_id, operation, status: outcome === "approved" ? "success" : "failed", attempt, request_meta: { funnel_id: funnelId, product_id: productId, amount, currency, provider, environment }, response_meta: { outcome, reason, health: { total: h.total, success_rate: successRate } }, error_message: outcome === "approved" ? null : reason });
-
-      if (outcome === "card_decline") { lastTechnicalError = reason; break; }
-      if (outcome === "technical_failure") { lastTechnicalError = reason; if (!route.fallback_enabled) break; continue; }
-
-      const externalId = `sbx_${crypto.randomUUID()}`;
-      const { data: tx, error: txError } = await admin.from("gateway_transactions").insert({ user_id: user.id, funnel_id: funnelId, product_id: productId, gateway_id: route.gateway_id, external_id: externalId, idempotency_key: idem, amount, currency, status: operation === "refund" ? "refunded" : "approved", customer, metadata: { ...metadata, sandbox: isSandbox, operation }, attempt_count: attempt, completed_at: new Date().toISOString(), routing_metadata: { selected_priority: route.priority, attempts, health: { total: h.total, success_rate: successRate } } }).select().single();
-      if (txError) { const payload = { error: "transaction_create_failed", detail: txError.message }; await complete("failed", 500, payload); return json(payload, 500); }
-      transaction = tx;
-      break;
+Deno.serve(async req=>{
+  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});if(req.method!=="POST")return json({error:"method_not_allowed"},405);
+  const url=Deno.env.get("SUPABASE_URL"),anon=Deno.env.get("SUPABASE_ANON_KEY")??Deno.env.get("SUPABASE_PUBLISHABLE_KEY"),service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");if(!url||!anon||!service)return json({error:"server_configuration_error"},500);
+  const auth=req.headers.get("Authorization")??"",sb=createClient(url,anon,{global:{headers:{Authorization:auth}}}),admin=createClient(url,service);const {data:{user}}=await sb.auth.getUser();if(!user)return json({error:"unauthorized"},401);
+  let b:any;try{b=await req.json()}catch{return json({error:"invalid_json"},400)}
+  const funnelId=String(b.funnel_id??""),amount=Number(b.amount??0),currency=String(b.currency??"BRL").toUpperCase(),operation=String(b.operation??"create_payment"),productId=b.product_id?String(b.product_id):null,key=String(b.idempotency_key??req.headers.get("x-idempotency-key")??req.headers.get("idempotency-key")??""),metadata=b.metadata&&typeof b.metadata==="object"?b.metadata:{},customer=b.customer&&typeof b.customer==="object"?b.customer:{};
+  if(!funnelId||amount<=0||!key)return json({error:"funnel_id_positive_amount_and_idempotency_key_required"},400);if(key.length>200)return json({error:"idempotency_key_too_long"},400);
+  const {data:reservation,error:reservationError}=await admin.rpc("reserve_idempotency_key",{p_user_id:user.id,p_scope:`gateway-orchestrator:${funnelId}:${operation}`,p_idempotency_key:key,p_request_digest:await digest({funnelId,amount,currency,operation,productId,metadata,customer}),p_ttl:"24 hours"});if(reservationError)return json({error:"idempotency_reservation_failed",detail:reservationError.message},500);const r=reservation?.[0];if(!r?.acquired){if(r?.response_payload)return json(r.response_payload,Number(r.response_code??200));return json({error:"request_in_progress",idempotency_key:key},409)}
+  const complete=(status:string,code:number,payload:unknown,resourceType:string|null=null,resourceId:string|null=null)=>admin.rpc("complete_idempotency_key",{p_id:r.id,p_status:status,p_response_code:code,p_response_payload:payload,p_resource_type:resourceType,p_resource_id:resourceId});
+  try{
+    const {data:funnel}=await sb.from("funnels").select("id").eq("id",funnelId).eq("user_id",user.id).is("deleted_at",null).maybeSingle();if(!funnel){const p={error:"funnel_not_found"};await complete("failed",404,p);return json(p,404)}
+    const {data:routes,error:routeError}=await sb.from("gateway_routes").select("*").eq("user_id",user.id).eq("funnel_id",funnelId).eq("enabled",true).order("priority",{ascending:true});if(routeError)return json({error:"route_lookup_failed",detail:routeError.message},500);if(!routes?.length){const p={error:"no_active_gateway_route"};await complete("failed",409,p);return json(p,409)}
+    const ids=routes.map((x:any)=>x.gateway_id),{data:gateways}=await sb.from("gateways").select("id,name,provider,type,environment,env").eq("user_id",user.id).in("id",ids),gmap=new Map<string,any>((gateways??[]).map((g:any)=>[g.id,g]));
+    const {data:creds}=await admin.from("user_gateway_credentials").select("gateway_name,is_active,priority_order").eq("user_id",user.id).eq("is_active",true).order("priority_order",{ascending:true});const cp=new Map<string,number>((creds??[]).map((x:any)=>[String(x.gateway_name).toLowerCase(),Number(x.priority_order)]));
+    const ordered=[...routes].sort((a:any,z:any)=>{const ap=cp.get(String(gmap.get(a.gateway_id)?.provider??gmap.get(a.gateway_id)?.name??"").toLowerCase())??a.priority;const zp=cp.get(String(gmap.get(z.gateway_id)?.provider??gmap.get(z.gateway_id)?.name??"").toLowerCase())??z.priority;return ap-zp||a.priority-z.priority});
+    const attempts:any[]=[],health=new Map<string,{n:number,ok:number}>();const {data:logs}=await admin.from("gateway_operation_logs").select("gateway_id,status").eq("user_id",user.id).in("gateway_id",ids).gte("created_at",new Date(Date.now()-3600000).toISOString()).limit(500);for(const x of logs??[]){const h=health.get(x.gateway_id)||{n:0,ok:0};h.n++;if(["success","approved","completed"].includes(String(x.status)))h.ok++;health.set(x.gateway_id,h)}
+    let tx:any=null,lastFailure:Failure="unknown";
+    for(let i=0;i<ordered.length;i++){
+      const route:any=ordered[i],gateway=gmap.get(route.gateway_id),provider=String(gateway?.provider??gateway?.type??gateway?.name??"unknown").toLowerCase(),h=health.get(route.gateway_id)||{n:0,ok:0},rate=h.n?Math.round(h.ok/h.n*10000)/100:null;
+      if(route.conditions?.health_guard!==false&&h.n>=5&&rate!==null&&rate<50){attempts.push({gateway_id:route.gateway_id,provider,attempt:i+1,outcome:"health_guard_skip",reason:"gateway_degraded",success_rate:rate});continue}
+      if(!gateway){attempts.push({gateway_id:route.gateway_id,provider,attempt:i+1,outcome:"error",failure_class:"unavailable",reason:"gateway_not_found"});continue}
+      const sandbox=String(gateway.environment??gateway.env??"production").toLowerCase()!=="production"||provider==="sandbox";let result:any;
+      if(sandbox){const sim=String(metadata.simulate_failure??"").toLowerCase();result=sim==="technical"?{ok:false,failure:"technical",reason:"simulated_technical_failure"}:sim==="timeout"?{ok:false,failure:"timeout",reason:"simulated_timeout"}:sim==="card_decline"?{ok:false,failure:"declined",reason:"simulated_card_decline"}:{ok:true,reason:"sandbox_approved",payload:{status:"approved",id:`sbx_${crypto.randomUUID()}`}}}else result=await callAdapter(provider,gateway.id,{amount,currency,product_id:productId,funnel_id:funnelId,customer,card_data:b.card_data??null,metadata,operation},`${key}:${gateway.id}`);
+      const f=result.failure as Failure|undefined;attempts.push({gateway_id:gateway.id,provider,attempt:i+1,outcome:result.ok?"approved":"failed",failure_class:f??null,reason:result.reason,external_transaction_id:result.payload?.id??result.payload?.transaction_id??null});await admin.from("gateway_payment_attempts").insert({user_id:user.id,sale_id:null,product_id:productId,gateway_id:gateway.id,gateway_name:provider,routing_rule_id:route.id??null,idempotency_key:`${key}:${gateway.id}`,attempt_order:i+1,status:result.ok?"approved":f==="declined"?"declined":f==="pending"?"pending":"error",failure_class:f??null,external_transaction_id:result.payload?.id??result.payload?.transaction_id??null,error_message:result.ok?null:result.reason,completed_at:new Date().toISOString()});
+      if(result.ok){const externalId=String(result.payload?.id??result.payload?.transaction_id??`sbx_${crypto.randomUUID()}`);const q=await admin.from("gateway_transactions").insert({user_id:user.id,funnel_id:funnelId,product_id:productId,gateway_id:gateway.id,external_id:externalId,idempotency_key:key,amount,currency,status:operation==="refund"?"refunded":"approved",customer,metadata:{...metadata,operation,smart_routing:true,sandbox},attempt_count:i+1,completed_at:new Date().toISOString(),routing_metadata:{attempts}}).select().single();if(q.error){const p={error:"transaction_create_failed",detail:q.error.message};await complete("failed",500,p);return json(p,500)}tx=q.data;break}
+      lastFailure=f??"unknown";if(!canFailover(lastFailure)||route.fallback_enabled===false)break;
     }
-
-    if (!transaction) {
-      const code = attempts.some((a) => a.outcome === "card_decline") ? 402 : 503;
-      const payload = { transaction: await admin.from("gateway_transactions").insert({ user_id: user.id, funnel_id: funnelId, product_id: productId, gateway_id: attempts.at(-1)?.gateway_id ?? routes[0].gateway_id, external_id: `failed_${crypto.randomUUID()}`, idempotency_key: idem, amount, currency, status: "failed", customer, metadata: { ...metadata, operation }, error_message: lastTechnicalError ?? "gateway_failure", failure_code: attempts.at(-1)?.outcome === "card_decline" ? "card_decline" : "technical_failure", attempt_count: attempts.length, routing_metadata: { attempts } }).select().single().then((x) => x.data), attempts, fallback_used: attempts.length > 1 };
-      await complete("failed", code, payload, "gateway_transaction", payload.transaction?.id ?? null);
-      return json(payload, code);
-    }
-
-    let projection: any = null;
-    if (transaction.status === "approved" && metadata.checkout_id) {
-      const p = await admin.rpc("project_checkout_purchase", { p_checkout_id: String(metadata.checkout_id) });
-      projection = p.error ? { ok: false, reason: "projection_failed" } : p.data;
-    }
-    const payload = { transaction, attempts, fallback_used: attempts.length > 1, sandbox: true, projection };
-    await complete("completed", 200, payload, "gateway_transaction", transaction.id);
-    return json(payload);
-  } catch (error) {
-    const payload = { error: "orchestrator_unhandled_error", detail: error instanceof Error ? error.message : "unknown_error" };
-    await complete("failed", 500, payload);
-    return json(payload, 500);
-  }
+    const finalGateway=tx?String(gmap.get(tx.gateway_id)?.provider??gmap.get(tx.gateway_id)?.name??tx.gateway_id):null;await admin.from("transaction_routing_logs").insert({user_id:user.id,amount,currency,gateways_attempted:attempts,final_gateway:finalGateway,status:tx?"approved":lastFailure==="pending"?"pending":"failed",failure_class:tx?null:lastFailure,created_at:new Date().toISOString(),completed_at:new Date().toISOString(),idempotency_key:key});
+    if(!tx){const code=lastFailure==="pending"?202:lastFailure==="declined"||lastFailure==="fraud"?402:503,p={error:lastFailure==="pending"?"payment_pending":"payment_failed",failure_class:lastFailure,attempts,fallback_used:attempts.length>1};await complete(lastFailure==="pending"?"completed":"failed",code,p);return json(p,code)}
+    const p={transaction:tx,attempts,fallback_used:attempts.length>1,sandbox:String(gmap.get(tx.gateway_id)?.environment??"production").toLowerCase()!=="production"};await complete("completed",200,p,"gateway_transaction",tx.id);return json(p);
+  }catch(e){const p={error:"orchestrator_unhandled_error",detail:e instanceof Error?e.message:"unknown_error"};await complete("failed",500,p);return json(p,500)}
 });
