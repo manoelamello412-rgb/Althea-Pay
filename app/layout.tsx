@@ -12,6 +12,11 @@ import './sales-center.css'
 export const metadata: Metadata = {
   title: 'ALTHEA PAY — Control Center',
   description: 'Central de controle, inteligência e operações dos seus funis.',
+  icons: {
+    icon: '/althea-mark.png',
+    shortcut: '/althea-mark.png',
+    apple: '/althea-mark.png',
+  },
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
