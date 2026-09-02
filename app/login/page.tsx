@@ -49,7 +49,7 @@ export default function LoginPage() {
   return <main className="auth-shell">
     <section className="auth-card">
       <div className="brand-lockup">
-        <Image src="/althea-pay-lockup.svg" alt="Althea Pay" width={294} height={230} priority style={{ width: 'min(100%, 294px)', height: 'auto', objectFit: 'contain', filter: 'none' }} />
+        <img src="/althea-logo.png" alt="Althea Pay" style={{ height: '120px', width: 'auto', display: 'block', margin: '0 auto', objectFit: 'contain' }} />
       </div>
       <div className="auth-heading"><span>ACESSO SEGURO</span><h1>{mode === 'login' ? 'Entrar no painel' : 'Criar sua conta'}</h1><p>{mode === 'login' ? 'Acesse seu centro de controle operacional.' : 'Crie seu acesso para começar a operar.'}</p></div>
       <form onSubmit={handleSubmit} className="auth-form">
