@@ -10,6 +10,7 @@ type GatewayName = 'stripe' | 'asaas' | 'mercado_pago'
 type Credential = { id: string; gateway_name: string; is_active: boolean; priority_order: number; metadata: Record<string, unknown> }
 type BusinessProfile = { document_type: 'CNPJ' | 'CPF'; document_number: string; legal_name: string; operation_metadata: string }
 type PasswordStrength = { score: number; label: string; requirements: { length: boolean; upper: boolean; lower: boolean; number: boolean; symbol: boolean } }
+type MfaFactor = { id: string; friendly_name: string | null; status: string }
 
 const GATEWAYS: Array<{ value: GatewayName; label: string }> = [
   { value: 'stripe', label: 'Stripe' },
@@ -74,7 +75,7 @@ export default function SettingsPage() {
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [factors, setFactors] = useState<Array<{ id: string; friendly_name: string | null; status: string }>>([])
+  const [factors, setFactors] = useState<MfaFactor[]>([])
   const [enrollingFactor, setEnrollingFactor] = useState<{ id: string; qr: string; secret: string; challengeId: string } | null>(null)
   const [mfaCode, setMfaCode] = useState('')
   const [business, setBusiness] = useState<BusinessProfile>({ document_type: 'CNPJ', document_number: '', legal_name: '', operation_metadata: '{}' })
@@ -118,7 +119,7 @@ export default function SettingsPage() {
         })
       }
       if (!credentialsResult.error && credentialsResult.data) setCredentials(credentialsResult.data as Credential[])
-      if (!factorsResult.error) setFactors((factorsResult.data.totp ?? []).map((factor) => ({ id: factor.id, friendly_name: factor.friendly_name, status: factor.status })))
+      if (!factorsResult.error) setFactors((factorsResult.data.totp ?? []).map((factor: MfaFactor) => ({ id: factor.id, friendly_name: factor.friendly_name, status: factor.status })))
       if (businessResult.error && businessResult.error.code !== 'PGRST116') setError(`Negócio: ${businessResult.error.message}`)
       setLoading(false)
     }
@@ -203,7 +204,7 @@ export default function SettingsPage() {
       if (result.error) throw result.error
       const listed = await supabase.auth.mfa.listFactors()
       if (listed.error) throw listed.error
-      setFactors((listed.data.totp ?? []).map((factor) => ({ id: factor.id, friendly_name: factor.friendly_name, status: factor.status })))
+      setFactors((listed.data.totp ?? []).map((factor: MfaFactor) => ({ id: factor.id, friendly_name: factor.friendly_name, status: factor.status })))
       setEnrollingFactor(null); setMfaCode(''); setMessage('MFA TOTP ativado com sucesso.')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Código MFA inválido.')
