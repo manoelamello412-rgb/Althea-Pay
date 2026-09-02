@@ -47,6 +47,3 @@ verify_jwt = false
 
 [functions.funnel-events]
 verify_jwt = false
-
-[functions.funnel-events-secure]
-verify_jwt = false
