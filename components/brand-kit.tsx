@@ -4,14 +4,14 @@ import { useEffect, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 export type AltheaBrand = { ink:string; forest:string; deep:string; green:string; gold:string; silver:string; logo:string; logo_light:string; logo_dark:string; favicon:string }
-export const DEFAULT_ALTHEA_BRAND: AltheaBrand = { ink:'#0B0B0D', forest:'#0F1A16', deep:'#0D362D', green:'#1DB854', gold:'#D4AF37', silver:'#A6A6A6', logo:'/althea-logo.png', logo_light:'/althea-logo.png', logo_dark:'/althea-logo.png', favicon:'/althea-leaf.svg' }
+export const DEFAULT_ALTHEA_BRAND: AltheaBrand = { ink:'#0B0B0D', forest:'#0F1A16', deep:'#0D362D', green:'#1DB854', gold:'#D4AF37', silver:'#A6A6A6', logo:'/althea-logo.png.PNG', logo_light:'/althea-logo.png.PNG', logo_dark:'/althea-logo.png.PNG', favicon:'/althea-mark.png' }
 type BrandRow=Record<string,string>
 type UploadKey='logo'|'logo_light'|'logo_dark'|'favicon'
 const STORAGE_KEY='althea-brand-kit-v1'
 
 export function applyBrand(brand:AltheaBrand){const r=document.documentElement;r.style.setProperty('--althea-ink',brand.ink);r.style.setProperty('--althea-forest',brand.forest);r.style.setProperty('--althea-deep',brand.deep);r.style.setProperty('--althea-green',brand.green);r.style.setProperty('--althea-gold',brand.gold);r.style.setProperty('--althea-silver',brand.silver);r.style.setProperty('--althea-brand-logo',`url(${brand.logo})`);r.style.setProperty('--althea-logo-light',`url(${brand.logo_light})`);r.style.setProperty('--althea-logo-dark',`url(${brand.logo_dark})`);const link=document.querySelector<HTMLLinkElement>('link[rel="icon"]')||document.head.appendChild(Object.assign(document.createElement('link'),{rel:'icon'}));link.href=brand.favicon}
 function cache(b:AltheaBrand){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(b))}catch{}}
-function rowToBrand(row:BrandRow):AltheaBrand{return {ink:row.ink||DEFAULT_ALTHEA_BRAND.ink,forest:row.forest||DEFAULT_ALTHEA_BRAND.forest,deep:row.deep||DEFAULT_ALTHEA_BRAND.deep,green:row.green||DEFAULT_ALTHEA_BRAND.green,gold:row.gold||DEFAULT_ALTHEA_BRAND.gold,silver:row.silver||DEFAULT_ALTHEA_BRAND.silver,logo:row.logo_url||DEFAULT_ALTHEA_BRAND.logo,logo_light:row.logo_light_url||row.logo_url||DEFAULT_ALTHEA_BRAND.logo_light,logo_dark:row.logo_dark_url||row.logo_url||DEFAULT_ALTHEA_BRAND.logo_dark,favicon:row.favicon_url||row.logo_url||DEFAULT_ALTHEA_BRAND.favicon}}
+function rowToBrand(row:BrandRow):AltheaBrand{return {ink:row.ink||DEFAULT_ALTHEA_BRAND.ink,forest:row.forest||DEFAULT_ALTHEA_BRAND.forest,deep:row.deep||DEFAULT_ALTHEA_BRAND.deep,green:row.green||DEFAULT_ALTHEA_BRAND.green,gold:row.gold||DEFAULT_ALTHEA_BRAND.gold,silver:row.silver||DEFAULT_ALTHEA_BRAND.silver,logo:row.logo_url||DEFAULT_ALTHEA_BRAND.logo,logo_light:row.logo_light_url||row.logo_url||DEFAULT_ALTHEA_BRAND.logo_light,logo_dark:row.logo_dark_url||row.logo_url||DEFAULT_ALTHEA_BRAND.logo_dark,favicon:row.favicon_url||DEFAULT_ALTHEA_BRAND.favicon}}
 export function hydrateAltheaBrand(){try{const s=localStorage.getItem(STORAGE_KEY);applyBrand(s?{...DEFAULT_ALTHEA_BRAND,...JSON.parse(s)}:DEFAULT_ALTHEA_BRAND)}catch{applyBrand(DEFAULT_ALTHEA_BRAND)}}
 
 export function BrandKit(){
