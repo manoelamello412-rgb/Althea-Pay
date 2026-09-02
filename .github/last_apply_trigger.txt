@@ -1,5 +1,0 @@
-Apply RLS workflow triggered by assistant
-
-Timestamp: 2026-09-01T23:13:30Z
-
-This file is a no-op change to trigger the apply-rls workflow on the ci-security-hardening branch.

@@ -1,1 +1,0 @@
-This marker is retained in the branch tree only as a merge-resolution audit note.

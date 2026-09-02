@@ -1,5 +1,0 @@
-Trigger commit after user confirmation (Sim executar)
-
-Timestamp: 2026-09-01T23:19:50Z
-
-User confirmed 'Sim executar' — triggering workflows (apply migrations & RLS, db-backed-e2e) by pushing this no-op file.
