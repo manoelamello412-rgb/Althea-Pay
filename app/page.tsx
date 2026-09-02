@@ -296,7 +296,7 @@ export default function DashboardPage() {
           </div>
           <div className="funnel-health-card althea-card">
             <div className="panel-heading"><div><span>FUNIS</span><h2>Saúde da operação</h2></div><CheckCircle2 size={18} className="icon-green" /></div>
-            <div className="funnel-mini-list">{funnels.slice(0, 4).map(funnel => <div className="funnel-mini" key={funnel.id}><span className="funnel-mini-icon"><GitBranch size={15} /></span><span><strong>{rowName(funnel)}</strong><small>{funnel.url || funnel.endpoint || 'URL não configurada'}</small></span><span className="pill-active">{String(funnel.status || 'draft')}</span></div>)}{funnels.length === 0 && <div className="empty-state"><strong>Sem funis cadastrados.</strong><p>Crie seu primeiro funil para acompanhar conexão e eventos em tempo real.</p></div>}</div>
+            <div className="funnel-mini-list">{funnels.slice(0, 4).map(funnel => <div className="funnel-mini" key={funnel.id}><span className="funnel-mini-icon"><GitBranch size={15} /></span><span><strong>{rowName(funnel)}</strong><small>{String(funnel.url || funnel.endpoint || 'URL não configurada')}</small></span><span className="pill-active">{String(funnel.status || 'draft')}</span></div>)}{funnels.length === 0 && <div className="empty-state"><strong>Sem funis cadastrados.</strong><p>Crie seu primeiro funil para acompanhar conexão e eventos em tempo real.</p></div>}</div>
           </div>
         </section>
       </>
