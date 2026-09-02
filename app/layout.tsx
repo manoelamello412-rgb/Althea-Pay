@@ -6,6 +6,7 @@ import './dashboard.css'
 import './dashboard-responsive.css'
 import './official-brand.css'
 import './dashboard-polish.css'
+import './sales-center.css'
 
 export const metadata: Metadata = {
   title: 'ALTHEA PAY — Control Center',
