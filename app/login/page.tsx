@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '../../lib/supabase/client'
@@ -48,7 +49,7 @@ export default function LoginPage() {
   return <main className="auth-shell">
     <section className="auth-card">
       <div className="brand-lockup">
-        <img src="/althea-pay-lockup.svg" alt="Althea Pay — Construa suas raízes financeiras" style={{ width: 'min(100%, 340px)', height: 'auto', objectFit: 'contain', filter: 'none' }} />
+        <Image src="/althea-pay-lockup.svg" alt="Althea Pay — Construa suas raízes financeiras" width={340} height={100} priority style={{ width: 'min(100%, 340px)', height: 'auto', objectFit: 'contain', filter: 'none' }} />
       </div>
       <div className="auth-heading"><span>ACESSO SEGURO</span><h1>{mode === 'login' ? 'Entrar no painel' : 'Criar sua conta'}</h1><p>{mode === 'login' ? 'Acesse seu centro de controle operacional.' : 'Crie seu acesso para começar a operar.'}</p></div>
       <form onSubmit={handleSubmit} className="auth-form">
