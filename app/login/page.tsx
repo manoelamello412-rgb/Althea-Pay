@@ -48,10 +48,7 @@ export default function LoginPage() {
   return <main className="auth-shell">
     <section className="auth-card">
       <div className="brand-lockup">
-        <img src="/althea-leaf.svg" alt="Althea Pay" />
-        <div className="brand-lockup-word">ALTHEA</div>
-        <div className="brand-lockup-pay">PAY</div>
-        <div className="brand-lockup-tag">CONSTRUA SUAS <b>RAÍZES</b> FINANCEIRAS.</div>
+        <img src="/althea-pay-lockup.svg" alt="Althea Pay — Construa suas raízes financeiras" />
       </div>
       <div className="auth-heading"><span>ACESSO SEGURO</span><h1>{mode === 'login' ? 'Entrar no painel' : 'Criar sua conta'}</h1><p>{mode === 'login' ? 'Acesse seu centro de controle operacional.' : 'Crie seu acesso para começar a operar.'}</p></div>
       <form onSubmit={handleSubmit} className="auth-form">
