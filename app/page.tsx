@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ALTHEA_PAY } from '@/lib/althea'
@@ -181,7 +182,7 @@ export default function DashboardPage() {
     <main className="althea-app">
       <aside className="althea-sidebar">
         <div className="app-brand">
-          <img src="/althea-pay-lockup.svg" alt="Althea Pay" />
+          <Image src="/althea-pay-lockup.svg" alt="Althea Pay" width={340} height={100} priority />
         </div>
         <nav className="althea-nav">{nav.map(item => <button key={item} className={active === item ? 'active' : ''} onClick={() => { setActive(item); setMessage(''); setError('') }}>{item}</button>)}</nav>
         <button className="auth-switch sidebar-logout" onClick={logout}>Sair da conta</button>
