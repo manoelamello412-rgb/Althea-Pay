@@ -1,0 +1,42 @@
+:root {
+  --background-deep: #0B0B0D;
+  --surface-card: #0F1A16;
+  --brand-vibrant: #1DB854;
+  --brand-accent: #D4AF37;
+  --text-primary: #FFFFFF;
+  --text-muted: #A6A6A6;
+  --font-space: 'Space Grotesk', sans-serif;
+
+  /* Aliases oficiais usados pelos módulos legados. */
+  --althea-ink: var(--background-deep);
+  --althea-forest: var(--surface-card);
+  --althea-deep: #0D362D;
+  --althea-green: var(--brand-vibrant);
+  --althea-gold: var(--brand-accent);
+  --althea-silver: var(--text-muted);
+  --althea-white: var(--text-primary);
+  --althea-muted: var(--text-muted);
+}
+
+html,
+body {
+  background-color: var(--background-deep);
+  color: var(--text-primary);
+  font-family: var(--font-space);
+}
+
+.btn-althea-primary {
+  background-color: var(--brand-vibrant);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 12px 24px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-althea-primary:hover {
+  background-color: #179b45;
+  box-shadow: 0 0 15px rgba(29, 184, 84, 0.4);
+}
