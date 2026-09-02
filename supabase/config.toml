@@ -50,6 +50,3 @@ verify_jwt = false
 
 [functions.funnel-events-secure]
 verify_jwt = false
-
-[functions.althea-gateway-orchestrator]
-verify_jwt = true
