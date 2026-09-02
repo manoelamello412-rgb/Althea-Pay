@@ -36,6 +36,10 @@ ALTHEA PAY is the control/visibility layer; it is not the payment custodian.
 
 The product name is **ALTHEA PAY**. Use this spelling in UI copy, documentation, API-facing labels and product messaging.
 
+## Visual identity
+
+The approved frontend identity uses the official two-leaf ALTHEA PAY mark, Space Grotesk typography, and the dark premium palette: #0B0B0D, #0F1A16, #0D362D, #1DB854, #D4AF37 and #A6A6A6. The approved tagline is **CONSTRUA SUAS RAÍZES FINANCEIRAS.**
+
 ## Development status
 
 The repository is being migrated from the original browser prototype to a production-oriented application architecture. The legacy prototype is preserved while the real application layers are introduced incrementally.
