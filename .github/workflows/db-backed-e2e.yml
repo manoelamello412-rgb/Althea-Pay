@@ -1,29 +1,41 @@
 name: db-backed-e2e
+
 on:
   workflow_dispatch:
-  push:
-    branches: [ ci-security-hardening ]
   pull_request:
     branches: [ main ]
+
+permissions:
+  contents: read
+
 jobs:
   e2e-db:
     runs-on: ubuntu-latest
-    if: startsWith(secrets.DATABASE_URL, 'postgres')
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
       - name: Install
-        run: npm ci
-      - name: Apply migrations
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm install --no-audit --no-fund
+      - name: Check database secret
+        id: db
+        shell: bash
         run: |
-          echo "Applying migrations"
-          psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql
-      - name: Run tests
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npm test --if-present
+          if [[ "$DATABASE_URL" == postgres* ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check database connectivity
+        if: steps.db.outputs.configured == 'true'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-client
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "select 1 as database_ok"
+      - name: Run automated tests
+        run: npm test
