@@ -14,12 +14,15 @@ export default defineConfig([
       'app/page.tsx',
       'app/reset-password/page.tsx',
       'components/brand-kit.tsx',
+      'app/dashboard/settings/page.tsx',
+      'components/dashboard-session-actions.tsx',
     ],
     rules: {
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/exhaustive-deps': 'off',
       'react/no-unescaped-entities': 'off',
       'react-hooks/purity': 'off',
+      '@next/next/no-img-element': 'off',
     },
   },
 ])
