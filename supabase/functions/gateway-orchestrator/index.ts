@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type, x-idempotency-key, idempotency-key","Access-Control-Allow-Methods":"POST,OPTIONS"};
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{...cors,"Content-Type":"application/json"}});
-const TIMEOUT_MS=4000;
+const TIMEOUT_MS=3900;
 type Failure="technical"|"timeout"|"unavailable"|"declined"|"fraud"|"pending"|"unknown";
 const canFailover=(f:Failure)=>["technical","timeout","unavailable"].includes(f);
 const classify=(status:number,p:any,timeout=false):Failure=>{if(timeout)return"timeout";const c=String(p?.failure_class??p?.code??p?.error_code??"").toLowerCase();if(c.includes("fraud")||c.includes("risk"))return"fraud";if(c.includes("pending")||c.includes("processing"))return"pending";if(c.includes("declin")||c.includes("insufficient")||c.includes("invalid_card"))return"declined";if(status===408||status===504)return"timeout";if(status===429||status>=500)return"unavailable";if(status>=400)return"declined";return"technical"};
