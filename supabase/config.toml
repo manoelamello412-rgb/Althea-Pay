@@ -6,7 +6,13 @@ verify_jwt = true
 [functions.gateway-webhook]
 verify_jwt = false
 
+[functions.gateway-webhook-processor]
+verify_jwt = false
+
 [functions.gateway-sandbox]
+verify_jwt = true
+
+[functions.gateway-refund]
 verify_jwt = true
 
 [functions.checkout-engine]
@@ -46,4 +52,25 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.funnel-events]
+verify_jwt = false
+
+[functions.funnel-events-secure]
+verify_jwt = false
+
+[functions.reconciliation-worker]
+verify_jwt = false
+
+[functions.sandbox-provision]
+verify_jwt = true
+
+[functions.risk-engine]
+verify_jwt = false
+
+[functions.outbound-webhook-dispatcher]
+verify_jwt = false
+
+[functions.core-worker]
+verify_jwt = false
+
+[functions.integration-event-processor]
 verify_jwt = false
