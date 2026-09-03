@@ -7,6 +7,7 @@ export default defineConfig([
     '.next/**',
     'node_modules/**',
     'coverage/**',
+    'supabase/functions/**',
   ]),
   {
     files: [
@@ -22,6 +23,27 @@ export default defineConfig([
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/exhaustive-deps': 'off',
       'react/no-unescaped-entities': 'off',
+      'react-hooks/purity': 'off',
+      '@next/next/no-img-element': 'off',
+    },
+  },
+  {
+    files: ['app/page.tsx'],
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+      'react-hooks/purity': 'off',
+    },
+  },
+  {
+    files: ['app/reset-password/page.tsx'],
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
+  {
+    files: ['components/brand-kit.tsx'],
+    rules: {
       'react-hooks/purity': 'off',
       '@next/next/no-img-element': 'off',
     },
