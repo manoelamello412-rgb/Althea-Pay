@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "preflight": "node scripts/release-preflight.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "latest",
@@ -23,8 +24,6 @@
   "devDependencies": {
     "@types/node": "latest",
     "@types/pg": "^8.15.5",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
     "typescript": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
