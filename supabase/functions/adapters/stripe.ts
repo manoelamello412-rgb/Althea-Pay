@@ -100,7 +100,7 @@ export default class StripeAdapter implements GatewayAdapter {
 
     const sig = headers['stripe-signature'] || headers['Stripe-Signature'] || '';
     try {
-      const event = this.stripe.webhooks.constructEvent(rawBody as string | Buffer, sig, STRIPE_WEBHOOK_SECRET);
+      const event = this.stripe.webhooks.constructEvent(rawBody as string, sig, STRIPE_WEBHOOK_SECRET);
       return { ok: true, event };
     } catch (e) {
       logJSON('warn', 'stripe.webhook.invalid_signature', { error: String(e) });
