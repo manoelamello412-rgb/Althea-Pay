@@ -60,6 +60,7 @@ Deno.serve(
     const db = ctx.supabaseAdmin
     let deliveryId: string | null = null
     let eventIdDb: string | null = null
+    let tenantUserId: string | null = null
 
     try {
       if (!/^\d+$/.test(timestamp)) return Response.json({ ok: false, error: 'invalid_timestamp' }, { status: 400, headers: corsHeaders })
@@ -71,13 +72,16 @@ Deno.serve(
       if (result.error) throw result.error
       const integration = result.data
       if (!integration) return Response.json({ ok: false, error: 'webhook_integration_not_found' }, { status: 404, headers: corsHeaders })
+      tenantUserId = integration.user_id
 
       const secret = integration.secret || ''
       if (!secret) return Response.json({ ok: false, error: 'webhook_secret_not_configured' }, { status: 503, headers: corsHeaders })
       const expected = await hmac(secret, `${timestamp}.${raw}`)
       if (!safeEqual(signature, expected)) return Response.json({ ok: false, error: 'invalid_signature' }, { status: 401, headers: corsHeaders })
 
-      const payload = JSON.parse(raw)
+      const parsed: unknown = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return Response.json({ ok: false, error: 'invalid_payload' }, { status: 400, headers: corsHeaders })
+      const payload = parsed as Record<string, unknown>
       const eventType = String(payload.event_type ?? payload.type ?? '').trim()
       const payloadUserId = payload.user_id ? String(payload.user_id) : null
       const payloadFunnelId = payload.funnel_id ? String(payload.funnel_id) : null
@@ -100,7 +104,7 @@ Deno.serve(
       const existing = await db.from('integration_events').select('id,status').eq('event_key', eventKey).maybeSingle()
       if (existing.error) throw existing.error
       if (existing.data) {
-        await db.from('webhook_deliveries').update({ status: 'duplicate', response_code: 200, response_time_ms: Date.now() - started, delivered_at: new Date().toISOString() }).eq('id', deliveryId)
+        await db.from('webhook_deliveries').update({ status: 'duplicate', response_code: 200, response_time_ms: Date.now() - started, delivered_at: new Date().toISOString() }).eq('id', deliveryId).eq('user_id', userId)
         return Response.json({ ok: true, duplicate: true, event_id: existing.data.id, status: existing.data.status }, { headers: corsHeaders })
       }
 
@@ -170,7 +174,7 @@ Deno.serve(
         automationTriggered = automationResponse.ok
         if (!automationResponse.ok) throw new Error(`automation_engine_http_${automationResponse.status}`)
         if (purchase) {
-          const webhookResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/outbound-webhook-dispatcher`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': internalSecret }, body: JSON.stringify({ user_id: userId, event_id: event.data.id, event_type: 'order.approved', event_db_id: event.data.id, payload: { ...payload, sale_id: saleId, transaction_id: transactionId, funnel_id: funnelId } }) })
+          const webhookResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/outbound-webhook-dispatcher`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': internalSecret }, body: JSON.stringify({ user_id: userId, event_id: event.data.id, event_type: 'order.approved', event_db_id: event.data.id, payload: { ...payload, sale_id: saleId, transaction_id: transactionId, funnel_id: funnelId } })
           universalWebhookTriggered = webhookResponse.ok
           if (!webhookResponse.ok) throw new Error(`outbound_webhook_http_${webhookResponse.status}`)
         }
@@ -182,11 +186,11 @@ Deno.serve(
     } catch (error) {
       const message = error instanceof Error ? error.message : 'webhook_processing_failed'
       console.error('althea-webhook', error)
-      if (eventIdDb) {
-        const existingEvent = await db.from('integration_events').select('retry_count').eq('id', eventIdDb).maybeSingle()
-        await db.from('integration_events').update({ status: 'retry', retry_count: Number(existingEvent.data?.retry_count ?? 0) + 1, error_message: message }).eq('id', eventIdDb).eq('user_id', (await db.from('integration_events').select('user_id').eq('id', eventIdDb).maybeSingle()).data?.user_id ?? '')
+      if (eventIdDb && tenantUserId) {
+        const existingEvent = await db.from('integration_events').select('retry_count').eq('id', eventIdDb).eq('user_id', tenantUserId).maybeSingle()
+        await db.from('integration_events').update({ status: 'retry', retry_count: Number(existingEvent.data?.retry_count ?? 0) + 1, error_message: message }).eq('id', eventIdDb).eq('user_id', tenantUserId)
       }
-      if (deliveryId) await db.from('webhook_deliveries').update({ status: 'failed', response_code: 500, response_time_ms: Date.now() - started, error_message: message }).eq('id', deliveryId)
+      if (deliveryId && tenantUserId) await db.from('webhook_deliveries').update({ status: 'failed', response_code: 500, response_time_ms: Date.now() - started, error_message: message }).eq('id', deliveryId).eq('user_id', tenantUserId)
       return Response.json({ ok: false, error: message, event_id: eventIdDb, retryable: Boolean(eventIdDb) }, { status: 500, headers: corsHeaders })
     }
   }),
