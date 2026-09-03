@@ -2,9 +2,16 @@ import type { GatewayAdapter, GatewayAuthParams, GatewayResponse } from '../../.
 import { simulateSandboxPayment, type SandboxScenario } from '../_shared/gateway-sandbox-sim'
 
 function response(result: ReturnType<typeof simulateSandboxPayment>): GatewayResponse {
+  const status: GatewayResponse['status'] = result.status === 'approved'
+    ? 'approved'
+    : result.status === 'declined'
+      ? 'declined'
+      : result.status === 'pending'
+        ? 'pending'
+        : 'error'
   return {
     id: result.id,
-    status: result.status === 'approved' || result.status === 'declined' ? result.status : 'error',
+    status,
     amount: result.amount,
     currency: result.currency,
     raw: result,
