@@ -41,7 +41,8 @@ Deno.serve(async req => {
   const r = Array.isArray(reservation) ? reservation[0] as Record<string, unknown> | undefined : undefined;
   if (!r?.acquired) { if (r?.response_payload) return json(r.response_payload, Number(r.response_code ?? 200)); return json({ error: "request_in_progress", idempotency_key: key }, 409); }
   const reservationId = String(r.id ?? "");
-  const complete = async (status: string, code: number, payload: unknown, resourceId: string | null = null) => { if (reservationId) await db.rpc("complete_idempotency_key", { p_id: reservationId, p_status: status, p_response_code: code, p_response_payload: payload, p_resource_type: "gateway_transaction", p_resource_id: resourceId }); };
+  const leaseToken = r.lease_token ? String(r.lease_token) : null;
+  const complete = async (status: string, code: number, payload: unknown, resourceId: string | null = null) => { if (reservationId) await db.rpc("complete_idempotency_key", { p_id: reservationId, p_status: status, p_response_code: code, p_response_payload: payload, p_resource_type: "gateway_transaction", p_resource_id: resourceId, p_lease_token: leaseToken }); };
   try {
     const { data: gateway, error: gatewayError } = await db.from("gateways").select("id,data").eq("id", row.gateway_id).eq("user_id", uid).maybeSingle();
     if (gatewayError || !gateway) { const p = { error: "gateway_not_found" }; await complete("failed", 404, p); return json(p, 404); }
