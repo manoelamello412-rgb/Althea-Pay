@@ -40,6 +40,21 @@ jobs:
             exit 1
           fi
 
+      - name: Validate Edge Function bundles
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          for function_dir in supabase/functions/*; do
+            if [ -d "$function_dir" ] && [ -f "$function_dir/index.ts" ]; then
+              echo "Validating $function_dir"
+              supabase functions deploy "$(basename "$function_dir")" --project-ref "hkraryqoziravulvqkid" --no-verify-jwt >/tmp/supabase-deploy.log 2>&1 || {
+                cat /tmp/supabase-deploy.log
+                exit 1
+              }
+            fi
+          done
+
       - name: Deploy Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
