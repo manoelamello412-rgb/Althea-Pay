@@ -37,6 +37,21 @@ assertNo(/\b(?:card_number|cardNumber|pan|cvc|cvv|security_code|securityCode)\b\
 const webhookFunctionFiles = checked.filter((file) => file.includes(`${join("supabase", "functions")}${join("")}`))
 assertNo(/from\(['"]webhook_integrations['"]\)\.select\([^)]*\bsecret\b/i, "Plaintext webhook secret selected directly from webhook_integrations", webhookFunctionFiles)
 
+// Every production Edge Function that creates a timer must also clear it.
+// This is intentionally conservative: timer cleanup is required even on exceptions.
+for (const file of webhookFunctionFiles) {
+  const text = source.get(file)
+  if (/\bsetTimeout\s*\(/.test(text) && !/\bclearTimeout\s*\(/.test(text)) {
+    failures.push(`Timer without clearTimeout cleanup: ${relative(root, file)}`)
+  }
+}
+
+// Flag the most dangerous fire-and-forget network patterns in payment code.
+// Deliberate async work must be awaited or explicitly delegated to a durable queue.
+const paymentFiles = webhookFunctionFiles.filter((file) => /gateway|checkout|refund|payment|reconciliation|risk-engine|event-worker|automation-engine/.test(file))
+assertNo(/(^|[=({,:;\s])void\s+fetch\s*\(/, "Fire-and-forget fetch in payment-critical code", paymentFiles)
+assertNo(/(^|[=({,:;\s])fetch\s*\([^;\n]+\)\s*;\s*(?:return|})/s, "Potential unawaited fetch in payment-critical code", paymentFiles)
+
 const protectedFunctions = [
   "event-worker",
   "automation-engine-v2",
@@ -74,4 +89,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-console.log("Release preflight PASSED: browser secret exposure, raw-card assignments, webhook Vault access, required internal guards and core release components are clear.")
+console.log("Release preflight PASSED: browser secret exposure, raw-card assignments, webhook Vault access, timer cleanup, async payment calls, required internal guards and core release components are clear.")
