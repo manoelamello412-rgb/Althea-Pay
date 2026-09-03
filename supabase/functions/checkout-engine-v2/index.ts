@@ -71,6 +71,13 @@ Deno.serve(async (req) => {
   });
   const gateway = await gatewayResponse.json().catch(() => ({ error: "gateway_invalid_response" }));
   if (!gatewayResponse.ok) {
+    const pendingFailure = gatewayResponse.status === 202 || (gateway && typeof gateway === "object" && (gateway.error === "payment_pending" || gateway.failure_class === "pending"));
+    if (pendingFailure) {
+      const pendingCheckout = { ...checkout, status: "processing" };
+      await db.from("checkout_sessions").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", checkout.id).eq("user_id", user.id);
+      await db.from("checkout_events").insert({ checkout_id: checkout.id, user_id: user.id, event_type: "payment_pending", payload: { gateway } });
+      return json({ checkout: pendingCheckout, gateway, pending: true, replayed: false }, 202);
+    }
     await db.from("checkout_sessions").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", checkout.id).eq("user_id", user.id);
     return json({ error: "payment_failed", checkout: { ...checkout, status: "failed" }, gateway }, gatewayResponse.status);
   }
@@ -78,6 +85,12 @@ Deno.serve(async (req) => {
   const transactionId = gateway.transaction_id || gateway.transaction?.id;
   const { data: transaction } = transactionId ? await db.from("gateway_transactions").select("*").eq("id", transactionId).eq("user_id", user.id).maybeSingle() : { data: null };
   if (!transaction || transaction.status !== "approved") {
+    const isPending = gateway?.failure_class === "pending" || gateway?.error === "payment_pending" || transaction?.status === "pending";
+    if (isPending) {
+      await db.from("checkout_sessions").update({ status: "processing", updated_at: new Date().toISOString() }).eq("id", checkout.id).eq("user_id", user.id);
+      await db.from("checkout_events").insert({ checkout_id: checkout.id, user_id: user.id, event_type: "payment_pending", payload: { transaction_id: transactionId, gateway } });
+      return json({ checkout: { ...checkout, status: "processing" }, gateway, transaction, pending: true, replayed: false }, 202);
+    }
     await db.from("checkout_sessions").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", checkout.id).eq("user_id", user.id);
     return json({ error: "payment_failed", checkout: { ...checkout, status: "failed" }, gateway }, 402);
   }
