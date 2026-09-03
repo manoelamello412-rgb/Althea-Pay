@@ -68,13 +68,13 @@ Deno.serve(
       if (!eventId) return Response.json({ ok: false, error: 'event_id_required' }, { status: 400, headers: corsHeaders })
       if (!key || key.length > 300) return Response.json({ ok: false, error: 'webhook_endpoint_required' }, { status: 400, headers: corsHeaders })
 
-      const result = await db.from('webhook_integrations').select('id,user_id,funnel_id,provider,status,secret,vault_secret_id').eq('endpoint_key', key).eq('status', 'active').maybeSingle()
+      const result = await db.rpc('get_webhook_integration', { p_endpoint_key: key })
       if (result.error) throw result.error
-      const integration = result.data
+      const integration = Array.isArray(result.data) ? (result.data[0] ?? null) : result.data
       if (!integration) return Response.json({ ok: false, error: 'webhook_integration_not_found' }, { status: 404, headers: corsHeaders })
       tenantUserId = integration.user_id
 
-      const secret = integration.secret || ''
+      const secret = String(integration.secret ?? '')
       if (!secret) return Response.json({ ok: false, error: 'webhook_secret_not_configured' }, { status: 503, headers: corsHeaders })
       const expected = await hmac(secret, `${timestamp}.${raw}`)
       if (!safeEqual(signature, expected)) return Response.json({ ok: false, error: 'invalid_signature' }, { status: 401, headers: corsHeaders })
