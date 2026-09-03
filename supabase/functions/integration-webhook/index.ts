@@ -45,28 +45,28 @@ Deno.serve(async (req) => {
 
     let payload: Record<string, unknown>
     try {
-      payload = JSON.parse(raw)
+      const parsed: unknown = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return json({ ok: false, error: 'invalid_payload' }, 400)
+      payload = parsed as Record<string, unknown>
     } catch {
       return json({ ok: false, error: 'invalid_json' }, 400)
     }
 
     const eventId = suppliedEventId || String(payload.id ?? payload.event_id ?? '')
-    if (!eventId) return json({ ok: false, error: 'event_id_required' }, 400)
+    if (!eventId || eventId.length > 300) return json({ ok: false, error: 'event_id_required' }, 400)
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    const fallbackSecret = Deno.env.get('ALTHEA_WEBHOOK_SECRET') ?? ''
     if (!supabaseUrl || !serviceRoleKey) return json({ ok: false, error: 'supabase_service_configuration_missing' }, 503)
 
     const db = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
-    let secret = fallbackSecret
     const key = endpointKey(req)
-    if (key) {
-      const integration = await db.from('webhook_integrations').select('id,secret,status').eq('endpoint_key', key).eq('status', 'active').maybeSingle()
-      if (integration.error) throw integration.error
-      if (!integration.data) return json({ ok: false, error: 'webhook_integration_not_found' }, 404)
-      secret = String(integration.data.secret ?? secret)
-    }
+    if (!key || key.length > 300) return json({ ok: false, error: 'webhook_endpoint_required' }, 400)
+
+    const integration = await db.from('webhook_integrations').select('id,secret,status').eq('endpoint_key', key).eq('status', 'active').maybeSingle()
+    if (integration.error) throw integration.error
+    if (!integration.data) return json({ ok: false, error: 'webhook_integration_not_found' }, 404)
+    const secret = String(integration.data.secret ?? '')
     if (!secret) return json({ ok: false, error: 'webhook_secret_not_configured' }, 503)
 
     const expected = await hmac(secret, `${timestamp}.${raw}`)
