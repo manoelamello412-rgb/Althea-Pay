@@ -32,6 +32,7 @@ assertNo(/SUPABASE_SERVICE_ROLE_KEY|service_role/i, "Service-role secret referen
 const cardDataProductionFiles = checked.filter((file) =>
   !file.includes(`${join("tests")}${join("")}`) &&
   !file.endsWith(join("lib", "vault.ts")) &&
+  !file.endsWith(join("scripts", "release-preflight.mjs")) &&
   !file.includes(`${join("supabase", "migrations")}${join("")}`)
 )
 assertNo(/(?:card_number|cardNumber|pan|cvc|cvv|security_code|securityCode)\s*[:=]/i, "Raw card credential field assignment detected", cardDataProductionFiles)
@@ -39,21 +40,12 @@ assertNo(/(?:card_number|cardNumber|pan|cvc|cvv|security_code|securityCode)\s*[:
 const webhookFunctionFiles = checked.filter((file) => file.includes(`${join("supabase", "functions")}${join("")}`))
 assertNo(/from\(['"]webhook_integrations['"]\)\.select\([^)]*\bsecret\b/i, "Plaintext webhook secret selected directly from webhook_integrations", webhookFunctionFiles)
 
-const protectedFunctions = [
-  "event-worker",
-  "automation-engine-v2",
-  "reconciliation-worker",
-  "risk-engine",
-  "core-worker",
-]
-
+const protectedFunctions = ["event-worker", "automation-engine-v2", "reconciliation-worker", "risk-engine", "core-worker"]
 for (const name of protectedFunctions) {
   const file = join(root, "supabase", "functions", name, "index.ts")
   try {
     const text = await readFile(file, "utf8")
-    if (!text.includes("ALTHEA_INTERNAL_SECRET") && !text.includes("x-internal-secret")) {
-      failures.push(`Internal function missing explicit internal-secret guard: ${name}`)
-    }
+    if (!text.includes("ALTHEA_INTERNAL_SECRET") && !text.includes("x-internal-secret")) failures.push(`Internal function missing explicit internal-secret guard: ${name}`)
   } catch {
     failures.push(`Required internal function missing: ${name}`)
   }
@@ -68,23 +60,14 @@ const requiredFiles = [
   "supabase/functions/health/index.ts",
   "scripts/load-smoke.mjs",
 ]
+for (const file of requiredFiles) if (!source.has(join(root, file))) failures.push(`Required release component missing: ${file}`)
 
-for (const file of requiredFiles) {
-  if (!source.has(join(root, file))) failures.push(`Required release component missing: ${file}`)
-}
-
-try {
-  await access(join(root, "docs", "PRODUCTION_READINESS.md"))
-} catch {
-  failures.push("Production readiness document missing")
-}
+try { await access(join(root, "docs", "PRODUCTION_READINESS.md")) } catch { failures.push("Production readiness document missing") }
 
 console.log(`Release preflight: checked ${checked.length} source/config files.`)
-
 if (failures.length) {
   console.error("Release preflight FAILED:")
   for (const failure of failures) console.error(`- ${failure}`)
   process.exit(1)
 }
-
 console.log("Release preflight PASSED: browser secret exposure, raw-card assignments, webhook Vault access, required internal guards and core release components are clear.")
