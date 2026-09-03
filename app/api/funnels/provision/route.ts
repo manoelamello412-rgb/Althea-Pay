@@ -30,12 +30,14 @@ export async function POST(request: Request) {
     const funnelId = `funnel_${slug(name)}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`
     const ingestionToken = `alt_fnl_${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`
     const tokenHash = await sha256(ingestionToken)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hkraryqoziravulvqkid.supabase.co'
+    const eventEndpoint = `${supabaseUrl}/functions/v1/funnel-events`
 
     const funnel = await supabase.from('funnels').insert({
       id: funnelId,
       nome: name,
       url,
-      endpoint: '/functions/v1/funnel-events',
+      endpoint: eventEndpoint,
       status: 'active',
       user_id: user.id,
     }).select('id,nome,url,endpoint,status,created_at').single()
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
       connection_type: connectionType || 'script',
       status: 'active',
       health_status: 'unknown',
-      config: { protocol_version: '2026-09', event_endpoint: '/functions/v1/funnel-events' },
+      config: { protocol_version: '2026-09', event_endpoint: eventEndpoint },
       connected_at: new Date().toISOString(),
     }).select('id,funnel_id,connection_type,status,health_status,connected_at').single()
     if (connection.error) {
@@ -75,8 +77,7 @@ export async function POST(request: Request) {
         id: token.data.id,
         token_prefix: token.data.token_prefix,
         token: ingestionToken,
-        endpoint: `${new URL(request.url).origin}/api/funnel/events`,
-        event_endpoint: `${new URL(request.url).origin}/functions/v1/funnel-events`,
+        event_endpoint: eventEndpoint,
       },
       warning: 'Store the ingestion token securely. It is returned only during provisioning.',
     }, 201)
