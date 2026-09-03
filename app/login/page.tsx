@@ -72,7 +72,6 @@ export default function LoginPage() {
       <section className="auth-card">
         <div className="brand-lockup">
           <BrandLogo variant="main" alt="Althea Pay" priority style={{ height: '120px', width: 'auto', display: 'block', margin: '0 auto', objectFit: 'contain' }} />
-          <div className="brand-lockup-tag">CONSTRUA SUAS <b>RAÍZES</b> FINANCEIRAS.</div>
         </div>
         <div className="auth-heading">
           <span>ACESSO SEGURO</span>
