@@ -23,9 +23,9 @@ export const DEFAULT_ALTHEA_BRAND: AltheaBrand = {
   green: '#1DB854',
   gold: '#D4AF37',
   silver: '#A6A6A6',
-  logo: '/althea-logo.png',
-  logo_light: '/althea-logo.png',
-  logo_dark: '/althea-logo.png',
+  logo: '/althea-logo.png.PNG',
+  logo_light: '/althea-logo.png.PNG',
+  logo_dark: '/althea-logo.png.PNG',
   favicon: '/althea-mark.png',
 }
 
