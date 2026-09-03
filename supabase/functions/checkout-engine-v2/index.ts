@@ -61,10 +61,11 @@ Deno.serve(async (req) => {
   }
 
   const reservationId = String(lock.id || "");
+  const leaseToken = lock.lease_token ? String(lock.lease_token) : null;
   let completed = false;
   const complete = async (status: "completed" | "failed", responseCode: number, payload: unknown, resourceId?: string) => {
     if (completed || !reservationId) return;
-    const { error } = await db.rpc("complete_idempotency_key", { p_id: reservationId, p_status: status, p_response_code: responseCode, p_response_payload: payload, p_resource_type: resourceId ? "checkout_session" : null, p_resource_id: resourceId ?? null });
+    const { error } = await db.rpc("complete_idempotency_key", { p_id: reservationId, p_status: status, p_response_code: responseCode, p_response_payload: payload, p_resource_type: resourceId ? "checkout_session" : null, p_resource_id: resourceId ?? null, p_lease_token: leaseToken });
     if (!error) completed = true;
   };
 
