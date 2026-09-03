@@ -36,6 +36,9 @@ const cardDataProductionFiles = checked.filter((file) =>
 )
 assertNo(/(?:card_number|pan|cvc|cvv|security_code)\s*[:=]/i, "Raw card credential field assignment detected", cardDataProductionFiles)
 
+const webhookFunctionFiles = checked.filter((file) => file.includes(`${join("supabase", "functions")}${join("")}`))
+assertNo(/from\(['"]webhook_integrations['"]\)\.select\([^)]*\bsecret\b/i, "Plaintext webhook secret selected directly from webhook_integrations", webhookFunctionFiles)
+
 const protectedFunctions = [
   "event-worker",
   "automation-engine-v2",
@@ -80,4 +83,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log("Release preflight PASSED: browser secret exposure, raw-card assignments, required internal guards and core release components are clear.")
+console.log("Release preflight PASSED: browser secret exposure, raw-card assignments, webhook Vault access, required internal guards and core release components are clear.")
