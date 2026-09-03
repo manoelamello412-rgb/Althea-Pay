@@ -174,7 +174,7 @@ Deno.serve(
         automationTriggered = automationResponse.ok
         if (!automationResponse.ok) throw new Error(`automation_engine_http_${automationResponse.status}`)
         if (purchase) {
-          const webhookResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/outbound-webhook-dispatcher`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': internalSecret }, body: JSON.stringify({ user_id: userId, event_id: event.data.id, event_type: 'order.approved', event_db_id: event.data.id, payload: { ...payload, sale_id: saleId, transaction_id: transactionId, funnel_id: funnelId } })
+          const webhookResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/outbound-webhook-dispatcher`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': internalSecret }, body: JSON.stringify({ user_id: userId, event_id: event.data.id, event_type: 'order.approved', event_db_id: event.data.id, payload: { ...payload, sale_id: saleId, transaction_id: transactionId, funnel_id: funnelId } }) })
           universalWebhookTriggered = webhookResponse.ok
           if (!webhookResponse.ok) throw new Error(`outbound_webhook_http_${webhookResponse.status}`)
         }
