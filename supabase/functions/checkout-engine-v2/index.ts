@@ -61,7 +61,8 @@ Deno.serve(async (req) => {
     return json({ error: "checkout_create_failed", detail: checkoutError.message }, 500);
   }
 
-  await db.from("checkout_events").insert({ checkout_id: checkout.id, user_id: user.id, event_type: action === "purchase" ? "purchase_requested" : "checkout_started", payload: { funnel_id: funnelId, product_id: productId, amount, currency } });
+  const checkoutEvent = await db.from("checkout_events").insert({ checkout_id: checkout.id, user_id: user.id, event_type: action === "purchase" ? "purchase_requested" : "checkout_started", payload: { funnel_id: funnelId, product_id: productId, amount, currency } });
+  if (checkoutEvent.error) return json({ error: "checkout_event_failed", detail: checkoutEvent.error.message }, 500);
   if (action !== "purchase") return json({ checkout, replayed: false });
 
   const gatewayResponse = await fetch(`${URL}/functions/v1/gateway-orchestrator`, {
@@ -100,15 +101,20 @@ Deno.serve(async (req) => {
   let sale = (await db.from("sales").select("*").eq("user_id", user.id).eq("transaction_id", transactionId).maybeSingle()).data;
   if (!sale) {
     const insertedSale = await db.from("sales").insert({ user_id: user.id, funnel_id: funnelId, product_id: productId, checkout_id: checkout.id, transaction_id: transactionId, amount, currency, status: "approved", attribution, external_id: externalId, gateway_id: transaction.gateway_id || gateway.gateway_id || null, occurred_at: new Date().toISOString() }).select().single();
-    if (insertedSale.error) return json({ error: "sale_projection_failed", detail: insertedSale.error.message }, 500);
-    sale = insertedSale.data;
+    if (insertedSale.error && insertedSale.error.code !== "23505") return json({ error: "sale_projection_failed", detail: insertedSale.error.message }, 500);
+    sale = insertedSale.data ?? (await db.from("sales").select("*").eq("user_id", user.id).eq("transaction_id", transactionId).maybeSingle()).data;
+    if (!sale) return json({ error: "sale_projection_failed", detail: "sale_not_found_after_conflict" }, 500);
   }
   if (sale?.id) await db.rpc("project_sale_attribution", { p_sale_id: String(sale.id) });
 
-  await db.from("checkout_events").insert({ checkout_id: checkout.id, user_id: user.id, event_type: "purchase_approved", payload: { transaction_id: transactionId, sale_id: sale.id } });
+  const approvedEvent = await db.from("checkout_events").insert({ checkout_id: checkout.id, user_id: user.id, event_type: "purchase_approved", payload: { transaction_id: transactionId, sale_id: sale.id } });
+  if (approvedEvent.error) return json({ error: "checkout_event_failed", detail: approvedEvent.error.message }, 500);
   const eventKey = `checkout:${checkout.id}:purchase`;
   const { data: existingEvent } = await db.from("integration_events").select("id").eq("user_id", user.id).eq("event_key", eventKey).maybeSingle();
-  if (!existingEvent) await db.from("integration_events").insert({ user_id: user.id, funnel_id: funnelId, event_type: "purchase", event_key: eventKey, external_id: externalId || idempotencyKey, payload: { checkout_id: checkout.id, transaction_id: transactionId, sale_id: sale.id, amount, currency, product_id: productId, attribution, customer }, status: "pending" });
+  if (!existingEvent) {
+    const insertedEvent = await db.from("integration_events").insert({ user_id: user.id, funnel_id: funnelId, event_type: "purchase", event_key: eventKey, external_id: externalId || idempotencyKey, payload: { checkout_id: checkout.id, transaction_id: transactionId, sale_id: sale.id, amount, currency, product_id: productId, attribution, customer }, status: "pending" });
+    if (insertedEvent.error && insertedEvent.error.code !== "23505") return json({ error: "integration_event_failed", detail: insertedEvent.error.message }, 500);
+  }
 
   return json({ checkout: { ...checkout, status: "completed" }, gateway, sale, replayed: false });
 });
