@@ -34,3 +34,5 @@ jobs:
         run: npm test
       - name: Run build
         run: npm run build
+      - name: Run production-safe load smoke
+        run: node scripts/load-smoke.mjs
