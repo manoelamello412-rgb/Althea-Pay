@@ -7,7 +7,7 @@ function PillarIcon({ type }: { type: 'security' | 'stability' | 'growth' | 'tec
   if (type === 'stability') return <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M7 19h34M10 19l14-10 14 10M12 21v16M20 21v16M28 21v16M36 21v16M8 39h32" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
   if (type === 'growth') return <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M7 39h34M11 35V26h7v9M22 35V19h7v16M33 35V12h7v23M29 17l7-7 5 5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
   if (type === 'technology') return <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 14h9M31 14h9M8 24h9M31 24h9M8 34h9M31 34h9M17 14h14M17 24h14M17 34h14" fill="none" stroke="currentColor" strokeWidth="1.5"/><circle cx="8" cy="14" r="2.5" fill="currentColor"/><circle cx="40" cy="14" r="2.5" fill="currentColor"/><circle cx="8" cy="24" r="2.5" fill="currentColor"/><circle cx="40" cy="24" r="2.5" fill="currentColor"/><circle cx="8" cy="34" r="2.5" fill="currentColor"/><circle cx="40" cy="34" r="2.5" fill="currentColor"/><circle cx="24" cy="14" r="2.5" fill="currentColor"/><circle cx="24" cy="24" r="2.5" fill="currentColor"/><circle cx="24" cy="34" r="2.5" fill="currentColor"/></svg>
-  return <img src="/althea-mark.png" alt="" aria-hidden="true" />
+  return <BrandLogo variant="mark" alt="" />
 }
 
 export function BrandPillars() {
