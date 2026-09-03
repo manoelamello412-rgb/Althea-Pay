@@ -1,7 +1,7 @@
 // Shared, deterministic sandbox payment simulator.
 // This module never handles or stores PAN/CVC.
 
-export type SandboxScenario = 'approved' | 'declined' | 'error' | 'refund' | 'chargeback'
+export type SandboxScenario = 'approved' | 'pending' | 'declined' | 'error' | 'refund' | 'chargeback'
 
 export type SandboxResult = {
   status: SandboxScenario
@@ -35,6 +35,8 @@ export function simulateSandboxPayment(
   switch (scenario) {
     case 'approved':
       return { status: scenario, id, amount, currency, gateway: 'sandbox', retryable: false }
+    case 'pending':
+      return { status: scenario, id, amount, currency, gateway: 'sandbox', reason: 'awaiting_provider_confirmation', retryable: false }
     case 'declined':
       return { status: scenario, id, amount, currency, gateway: 'sandbox', reason: 'card_declined', retryable: false }
     case 'error':
