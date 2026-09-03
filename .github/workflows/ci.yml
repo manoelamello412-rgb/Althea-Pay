@@ -36,3 +36,5 @@ jobs:
         run: npm run build
       - name: Run production-safe load smoke
         run: node scripts/load-smoke.mjs
+      - name: Run release preflight
+        run: node scripts/release-preflight.mjs
