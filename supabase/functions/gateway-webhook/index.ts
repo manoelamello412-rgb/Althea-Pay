@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type, x-webhook-signature, x-webhook-timestamp, x-provider-event-id",
+  "Access-Control-Allow-Headers": "content-type, x-webhook-signature, x-webhook-timestamp, x-provider-event-id, x-provider",
   "Access-Control-Allow-Methods": "POST,OPTIONS",
 };
 
@@ -35,9 +35,11 @@ Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   if (!serviceRole || !supabaseUrl) return json({ error: "server_configuration_error" }, 500);
 
-  const provider = (request.headers.get("x-provider") ?? new URL(request.url).searchParams.get("provider") ?? "unknown").toLowerCase();
+  const providerRaw = request.headers.get("x-provider") ?? new URL(request.url).searchParams.get("provider") ?? "";
+  const provider = providerRaw.trim().toLowerCase();
+  if (!provider || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(provider)) return json({ error: "provider_required" }, 400);
   const secretName = `WEBHOOK_SECRET_${provider.replace(/[^a-z0-9]/gi, "_").toUpperCase()}`;
-  const secret = Deno.env.get(secretName) ?? Deno.env.get("ALTHEA_WEBHOOK_SECRET");
+  const secret = Deno.env.get(secretName) ?? "";
   if (!secret) return json({ error: "webhook_secret_not_configured" }, 503);
 
   const rawBody = await request.text();
