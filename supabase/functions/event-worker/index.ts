@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const internalSecret = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
+const envInternalSecret = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
 const db = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
 const json = (body: unknown, status = 200) =>
@@ -12,8 +12,16 @@ const json = (body: unknown, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 
+async function resolveInternalSecret() {
+  if (envInternalSecret) return envInternalSecret;
+  const { data, error } = await db.rpc("get_althea_internal_secret");
+  if (error || typeof data !== "string" || !data) return "";
+  return data;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+  const internalSecret = await resolveInternalSecret();
   if (!internalSecret || req.headers.get("x-internal-secret") !== internalSecret) {
     return json({ error: "unauthorized" }, 401);
   }
