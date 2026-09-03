@@ -65,36 +65,38 @@ Deno.serve(
       if (!/^\d+$/.test(timestamp)) return Response.json({ ok: false, error: 'invalid_timestamp' }, { status: 400, headers: corsHeaders })
       if (Math.abs(Date.now() - Number(timestamp)) > 300000) return Response.json({ ok: false, error: 'stale_webhook' }, { status: 401, headers: corsHeaders })
       if (!eventId) return Response.json({ ok: false, error: 'event_id_required' }, { status: 400, headers: corsHeaders })
+      if (!key || key.length > 300) return Response.json({ ok: false, error: 'webhook_endpoint_required' }, { status: 400, headers: corsHeaders })
 
-      let integration: any = null
-      if (key) {
-        const result = await db.from('webhook_integrations').select('id,user_id,funnel_id,provider,status,secret,vault_secret_id').eq('endpoint_key', key).eq('status', 'active').maybeSingle()
-        if (result.error) throw result.error
-        integration = result.data
-        if (!integration) return Response.json({ ok: false, error: 'webhook_integration_not_found' }, { status: 404, headers: corsHeaders })
-      }
+      const result = await db.from('webhook_integrations').select('id,user_id,funnel_id,provider,status,secret,vault_secret_id').eq('endpoint_key', key).eq('status', 'active').maybeSingle()
+      if (result.error) throw result.error
+      const integration = result.data
+      if (!integration) return Response.json({ ok: false, error: 'webhook_integration_not_found' }, { status: 404, headers: corsHeaders })
 
-      const secret = integration?.secret || Deno.env.get('ALTHEA_WEBHOOK_SECRET') || ''
+      const secret = integration.secret || ''
       if (!secret) return Response.json({ ok: false, error: 'webhook_secret_not_configured' }, { status: 503, headers: corsHeaders })
       const expected = await hmac(secret, `${timestamp}.${raw}`)
       if (!safeEqual(signature, expected)) return Response.json({ ok: false, error: 'invalid_signature' }, { status: 401, headers: corsHeaders })
 
       const payload = JSON.parse(raw)
       const eventType = String(payload.event_type ?? payload.type ?? '').trim()
-      const userId = integration?.user_id || String(payload.user_id ?? '')
-      const funnelId = integration?.funnel_id || (payload.funnel_id ? String(payload.funnel_id) : null)
+      const payloadUserId = payload.user_id ? String(payload.user_id) : null
+      const payloadFunnelId = payload.funnel_id ? String(payload.funnel_id) : null
+      const userId = integration.user_id
+      const funnelId = integration.funnel_id
+      if (!eventType || !userId || !funnelId) return Response.json({ ok: false, error: 'webhook_integration_incomplete' }, { status: 400, headers: corsHeaders })
+      if (payloadUserId && payloadUserId !== userId) return Response.json({ ok: false, error: 'tenant_mismatch' }, { status: 403, headers: corsHeaders })
+      if (payloadFunnelId && payloadFunnelId !== funnelId) return Response.json({ ok: false, error: 'funnel_mismatch' }, { status: 403, headers: corsHeaders })
+
       const transactionId = payload.transaction_id ? String(payload.transaction_id) : null
       const checkoutId = payload.checkout_id ? String(payload.checkout_id) : null
       const externalId = payload.external_id ? String(payload.external_id) : null
       const status = norm(payload.status)
 
-      if (!eventType || !userId || !funnelId) return Response.json({ ok: false, error: 'event_user_and_funnel_required' }, { status: 400, headers: corsHeaders })
-
-      const delivery = await db.from('webhook_deliveries').insert({ user_id: userId, integration_id: integration?.id ?? null, event_type: eventType, endpoint: new URL(req.url).pathname, signature_valid: true, status: 'received', attempt: 1, payload }).select('id').single()
+      const delivery = await db.from('webhook_deliveries').insert({ user_id: userId, integration_id: integration.id, event_type: eventType, endpoint: new URL(req.url).pathname, signature_valid: true, status: 'received', attempt: 1, payload }).select('id').single()
       if (delivery.error) throw delivery.error
       deliveryId = delivery.data.id
 
-      const eventKey = `${integration?.id || userId}:${eventId}`
+      const eventKey = `${integration.id}:${eventId}`
       const existing = await db.from('integration_events').select('id,status').eq('event_key', eventKey).maybeSingle()
       if (existing.error) throw existing.error
       if (existing.data) {
@@ -102,13 +104,13 @@ Deno.serve(
         return Response.json({ ok: true, duplicate: true, event_id: existing.data.id, status: existing.data.status }, { headers: corsHeaders })
       }
 
-      const event = await db.from('integration_events').insert({ user_id: userId, funnel_id: funnelId, integration_id: integration?.id ?? null, event_type: eventType, external_id: eventId, event_key: eventKey, status: 'processing', payload, occurred_at: new Date(Number(timestamp)).toISOString(), claim_attempt: 0 }).select('id').single()
+      const event = await db.from('integration_events').insert({ user_id: userId, funnel_id: funnelId, integration_id: integration.id, event_type: eventType, external_id: eventId, event_key: eventKey, status: 'processing', payload, occurred_at: new Date(Number(timestamp)).toISOString(), claim_attempt: 0 }).select('id').single()
       if (event.error) throw event.error
       eventIdDb = event.data.id
 
       let transaction: any = null
       if (transactionId) {
-        const result = await db.from('gateway_transactions').select('*').eq('id', transactionId).eq('user_id', userId).maybeSingle()
+        const result = await db.from('gateway_transactions').select('*').eq('id', transactionId).eq('user_id', userId).eq('funnel_id', funnelId).maybeSingle()
         if (result.error) throw result.error
         transaction = result.data
         if (transaction) {
@@ -121,13 +123,13 @@ Deno.serve(
 
       let checkout: any = null
       if (checkoutId) {
-        const result = await db.from('checkout_sessions').select('*').eq('id', checkoutId).eq('user_id', userId).maybeSingle()
+        const result = await db.from('checkout_sessions').select('*').eq('id', checkoutId).eq('user_id', userId).eq('funnel_id', funnelId).maybeSingle()
         if (result.error) throw result.error
         checkout = result.data
         if (checkout) {
           const next = SUCCESS.includes(status) ? 'completed' : REVERSAL.includes(status) ? 'failed' : null
           if (next) {
-            const updated = await db.from('checkout_sessions').update({ status: next, completed_at: next === 'completed' ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq('id', checkoutId).eq('user_id', userId)
+            const updated = await db.from('checkout_sessions').update({ status: next, completed_at: next === 'completed' ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq('id', checkoutId).eq('user_id', userId).eq('funnel_id', funnelId)
             if (updated.error) throw updated.error
           }
         }
@@ -141,7 +143,7 @@ Deno.serve(
         const saleExternalId = externalId || transaction.external_id || eventId
         const attribution = checkout?.attribution && typeof checkout.attribution === 'object' ? checkout.attribution : {}
         const sale: any = { funnel_id: funnelId, product_id: checkout?.product_id ?? transaction.product_id ?? null, checkout_id: checkoutId, transaction_id: transaction.id, amount: transaction.amount ?? checkout?.amount ?? payload.amount ?? 0, currency: transaction.currency ?? checkout?.currency ?? payload.currency ?? 'BRL', status: 'approved', attribution, source: attribution.source ?? null, medium: attribution.medium ?? null, campaign: attribution.campaign ?? null, content: attribution.content ?? null, term: attribution.term ?? null, click_id: attribution.click_id ?? null, external_id: saleExternalId, gateway_id: transaction.gateway_id ?? null, occurred_at: new Date(Number(timestamp)).toISOString(), data: payload, user_id: userId }
-        const existingSale = await db.from('sales').select('id').eq('user_id', userId).eq('external_id', saleExternalId).maybeSingle()
+        const existingSale = await db.from('sales').select('id').eq('user_id', userId).eq('transaction_id', transaction.id).maybeSingle()
         if (existingSale.error) throw existingSale.error
         if (existingSale.data) {
           saleId = existingSale.data.id
@@ -174,15 +176,15 @@ Deno.serve(
         }
       }
 
-      await db.from('integration_events').update({ status: 'processed', processed_at: new Date().toISOString(), error_message: null }).eq('id', event.data.id)
-      await db.from('webhook_deliveries').update({ status: 'delivered', response_code: 200, response_time_ms: Date.now() - started, delivered_at: new Date().toISOString() }).eq('id', deliveryId)
+      await db.from('integration_events').update({ status: 'processed', processed_at: new Date().toISOString(), error_message: null }).eq('id', event.data.id).eq('user_id', userId)
+      await db.from('webhook_deliveries').update({ status: 'delivered', response_code: 200, response_time_ms: Date.now() - started, delivered_at: new Date().toISOString() }).eq('id', deliveryId).eq('user_id', userId)
       return Response.json({ ok: true, duplicate: false, event_id: event.data.id, processed: true, sale_id: saleId, sale_synced: purchase || reversal, automation_triggered: automationTriggered, universal_webhook_triggered: universalWebhookTriggered }, { headers: corsHeaders })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'webhook_processing_failed'
       console.error('althea-webhook', error)
       if (eventIdDb) {
         const existingEvent = await db.from('integration_events').select('retry_count').eq('id', eventIdDb).maybeSingle()
-        await db.from('integration_events').update({ status: 'retry', retry_count: Number(existingEvent.data?.retry_count ?? 0) + 1, error_message: message }).eq('id', eventIdDb)
+        await db.from('integration_events').update({ status: 'retry', retry_count: Number(existingEvent.data?.retry_count ?? 0) + 1, error_message: message }).eq('id', eventIdDb).eq('user_id', (await db.from('integration_events').select('user_id').eq('id', eventIdDb).maybeSingle()).data?.user_id ?? '')
       }
       if (deliveryId) await db.from('webhook_deliveries').update({ status: 'failed', response_code: 500, response_time_ms: Date.now() - started, error_message: message }).eq('id', deliveryId)
       return Response.json({ ok: false, error: message, event_id: eventIdDb, retryable: Boolean(eventIdDb) }, { status: 500, headers: corsHeaders })
