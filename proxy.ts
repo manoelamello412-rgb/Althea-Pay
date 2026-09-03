@@ -1,17 +1,24 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-function requireEnv(name: string): string {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`${name} is not configured. Set it in your environment before starting the app.`)
+function resolveEnv(...names: string[]): string {
+  for (const name of names) {
+    const value = process.env[name]
+    if (value) return value
   }
-  return value
+  throw new Error(`${names[0]} is not configured. Set it in your environment before starting the app.`)
 }
 
 export async function proxy(request: NextRequest) {
-  const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL')
-  const key = requireEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY')
+  // Support both the app's public names and the Supabase/Vercel integration names.
+  // The Supabase URL and publishable/anon key are intended to be client-safe values.
+  const url = resolveEnv('NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL')
+  const key = resolveEnv(
+    'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'SUPABASE_PUBLISHABLE_KEY',
+    'SUPABASE_ANON_KEY',
+  )
   const isLogin = request.nextUrl.pathname === '/login'
 
   let response = NextResponse.next({ request })
