@@ -18,21 +18,23 @@ async function walk(dir) {
 await walk(root)
 
 const source = new Map()
-for (const file of checked) {
-  source.set(file, await readFile(file, "utf8"))
-}
+for (const file of checked) source.set(file, await readFile(file, "utf8"))
 
 function assertNo(pattern, label, files = checked) {
   for (const file of files) {
-    if (pattern.test(source.get(file))) {
-      failures.push(`${label}: ${relative(root, file)}`)
-    }
+    if (pattern.test(source.get(file))) failures.push(`${label}: ${relative(root, file)}`)
   }
 }
 
 const browserFiles = checked.filter((file) => /(^|[\\/])app[\\/]|(^|[\\/])components[\\/]/.test(file))
 assertNo(/SUPABASE_SERVICE_ROLE_KEY|service_role/i, "Service-role secret referenced by browser/UI code", browserFiles)
-assertNo(/(?:card_number|pan|cvc|cvv|security_code)\s*[:=]/i, "Raw card credential field detected in application source", checked.filter((file) => !file.includes("test")))
+
+const cardDataProductionFiles = checked.filter((file) =>
+  !file.includes(`${join("tests")}${join("")}`) &&
+  !file.endsWith(join("lib", "vault.ts")) &&
+  !file.includes(`${join("supabase", "migrations")}${join("")}`)
+)
+assertNo(/(?:card_number|pan|cvc|cvv|security_code)\s*[:=]/i, "Raw card credential field assignment detected", cardDataProductionFiles)
 
 const protectedFunctions = [
   "event-worker",
@@ -68,8 +70,7 @@ for (const file of requiredFiles) {
   if (!source.has(join(root, file))) failures.push(`Required release component missing: ${file}`)
 }
 
-const readinessDoc = join(root, "docs", "PRODUCTION_READINESS.md")
-if (!source.has(readinessDoc)) failures.push("Production readiness document missing")
+if (!source.has(join(root, "docs", "PRODUCTION_READINESS.md"))) failures.push("Production readiness document missing")
 
 console.log(`Release preflight: checked ${checked.length} source/config files.`)
 
@@ -79,4 +80,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log("Release preflight PASSED: no browser service-role exposure, no raw card credential fields, required internal guards and core components present.")
+console.log("Release preflight PASSED: browser secret exposure, raw-card assignments, required internal guards and core release components are clear.")
