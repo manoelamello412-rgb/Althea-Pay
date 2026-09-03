@@ -37,7 +37,15 @@ assertNo(/\b(?:card_number|cardNumber|pan|cvc|cvv|security_code|securityCode)\b\
 const webhookFunctionFiles = checked.filter((file) => file.includes(`${join("supabase", "functions")}${join("")}`))
 assertNo(/from\(['"]webhook_integrations['"]\)\.select\([^)]*\bsecret\b/i, "Plaintext webhook secret selected directly from webhook_integrations", webhookFunctionFiles)
 
-const protectedFunctions = ["event-worker", "automation-engine-v2", "reconciliation-worker", "risk-engine", "core-worker"]
+const protectedFunctions = [
+  "event-worker",
+  "automation-engine-v2",
+  "reconciliation-worker",
+  "risk-engine",
+  "core-worker",
+  "integration-event-processor",
+  "gateway-webhook-processor",
+]
 for (const name of protectedFunctions) {
   const file = join(root, "supabase", "functions", name, "index.ts")
   try {
@@ -50,6 +58,8 @@ const requiredFiles = [
   "supabase/functions/gateway-orchestrator/index.ts",
   "supabase/functions/checkout-engine-v2/index.ts",
   "supabase/functions/gateway-webhook/index.ts",
+  "supabase/functions/gateway-webhook-processor/index.ts",
+  "supabase/functions/gateway-refund/index.ts",
   "supabase/functions/althea-public-api/index.ts",
   "supabase/functions/althea-webhook/index.ts",
   "supabase/functions/health/index.ts",
