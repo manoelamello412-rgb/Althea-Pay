@@ -131,6 +131,6 @@ Deno.serve(withSupabase({ auth: 'user' }, async (req, ctx) => {
     return json({ ok: false, error: 'not_found' }, 404)
   } catch (e) {
     console.error(e)
-    return json({ ok: false, error: e instanceof Error ? e.message : 'webhook_integrations_error' }, 500)
+    return json({ ok: false, error: 'webhook_integrations_error' }, 500)
   }
 }))
