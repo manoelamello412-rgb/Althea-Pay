@@ -63,10 +63,11 @@ Deno.serve(async (req) => {
     const key = endpointKey(req)
     if (!key || key.length > 300) return json({ ok: false, error: 'webhook_endpoint_required' }, 400)
 
-    const integration = await db.from('webhook_integrations').select('id,secret,status').eq('endpoint_key', key).eq('status', 'active').maybeSingle()
+    const integration = await db.rpc('get_webhook_integration', { p_endpoint_key: key })
     if (integration.error) throw integration.error
-    if (!integration.data) return json({ ok: false, error: 'webhook_integration_not_found' }, 404)
-    const secret = String(integration.data.secret ?? '')
+    const row = Array.isArray(integration.data) ? (integration.data[0] ?? null) : integration.data
+    if (!row) return json({ ok: false, error: 'webhook_integration_not_found' }, 404)
+    const secret = String(row.secret ?? '')
     if (!secret) return json({ ok: false, error: 'webhook_secret_not_configured' }, 503)
 
     const expected = await hmac(secret, `${timestamp}.${raw}`)
