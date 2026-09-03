@@ -30,6 +30,10 @@ Deno.serve(async (req) => {
   const currency = String(body.currency || "BRL").toUpperCase();
   const action = body.action === "purchase" ? "purchase" : "start";
   const idempotencyKey = String(req.headers.get("x-idempotency-key") || req.headers.get("idempotency-key") || body.idempotency_key || crypto.randomUUID()).trim();
+  // Checkout lifecycle operations have independent idempotency scopes. A client may
+  // legitimately reuse a business correlation key for start and purchase; purchase
+  // must never replay a previously-created start session.
+  const checkoutIdempotencyKey = action === "purchase" ? idempotencyKey : `start:${idempotencyKey}`;
 
   if (!funnelId || !Number.isFinite(amount) || amount <= 0 || !idempotencyKey || idempotencyKey.length > 300) return json({ error: "invalid_checkout" }, 400);
 
@@ -49,12 +53,12 @@ Deno.serve(async (req) => {
   const { data: checkout, error: checkoutError } = await db.from("checkout_sessions").insert({
     user_id: user.id, funnel_id: funnelId, product_id: productId,
     status: action === "purchase" ? "processing" : "started", currency, amount,
-    customer, attribution, metadata, idempotency_key: idempotencyKey,
+    customer, attribution, metadata, idempotency_key: checkoutIdempotencyKey,
   }).select().single();
 
   if (checkoutError) {
     if (checkoutError.code === "23505") {
-      const { data: existing, error: existingError } = await db.from("checkout_sessions").select("*").eq("user_id", user.id).eq("funnel_id", funnelId).eq("idempotency_key", idempotencyKey).maybeSingle();
+      const { data: existing, error: existingError } = await db.from("checkout_sessions").select("*").eq("user_id", user.id).eq("funnel_id", funnelId).eq("idempotency_key", checkoutIdempotencyKey).maybeSingle();
       if (existingError) return json({ error: "checkout_lookup_failed", detail: existingError.message }, 500);
       if (existing) return json({ checkout: existing, replayed: true });
     }
