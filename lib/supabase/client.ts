@@ -1,23 +1,14 @@
 import { createBrowserClient } from '@supabase/ssr'
 
-function requireEnv(name: string): string {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`${name} is not configured. Set it in your environment before starting the app.`)
-  }
-  return value
-}
+const DEFAULT_SUPABASE_URL = 'https://hkraryqoziravulvqkid.supabase.co'
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl'
 
 export function createSupabaseBrowserClient(): any | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-
-  // Client components are also evaluated during the server render. Never throw
-  // there when public configuration is unavailable; callers can render a safe
-  // connection error and the browser can retry once the environment is fixed.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_PUBLISHABLE_KEY
   if (!url || !key) return null
 
-  const client = createBrowserClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), requireEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'))
+  const client = createBrowserClient(url, key)
   const originalGetUser = client.auth.getUser.bind(client.auth)
   client.auth.getUser = async (...args: any[]) => {
     const result = await originalGetUser(...args)
