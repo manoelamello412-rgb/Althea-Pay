@@ -9,6 +9,7 @@ import './official-brand.css'
 import './dashboard-polish.css'
 import './sales-center.css'
 import './session-actions.css'
+import './brand-manual.css'
 import DashboardSessionActions from '@/components/dashboard-session-actions'
 
 export const metadata: Metadata = {
