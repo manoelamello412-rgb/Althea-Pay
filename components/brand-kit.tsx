@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 export type AltheaBrand = {
@@ -92,11 +92,20 @@ export function BrandKit(): JSX.Element {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState<UploadKey | null>(null)
-  const supabase = createSupabaseBrowserClient()
+  const supabase = useMemo(() => createSupabaseBrowserClient(), [])
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      if (!supabase) {
+        hydrateAltheaBrand()
+        if (!cancelled) {
+          setError('Supabase não configurado. A identidade local continua disponível.')
+          setLoading(false)
+        }
+        return
+      }
+
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         if (!cancelled) {
@@ -137,6 +146,10 @@ export function BrandKit(): JSX.Element {
       setError('A imagem deve ter no máximo 5 MB.')
       return
     }
+    if (!supabase) {
+      setError('Supabase não configurado. Não é possível enviar a imagem agora.')
+      return
+    }
     setUploading(kind)
     setError('')
     const { data: { user } } = await supabase.auth.getUser()
@@ -160,6 +173,12 @@ export function BrandKit(): JSX.Element {
 
   async function save(): Promise<void> {
     setError('')
+    if (!supabase) {
+      cache(brand)
+      applyBrand(brand)
+      setError('Supabase não configurado. A identidade foi mantida localmente.')
+      return
+    }
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       setError('Sua sessão expirou.')
@@ -191,8 +210,10 @@ export function BrandKit(): JSX.Element {
 
   async function reset(): Promise<void> {
     setError('')
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) await supabase.from('brand_identity_settings').delete().eq('user_id', user.id)
+    if (supabase) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) await supabase.from('brand_identity_settings').delete().eq('user_id', user.id)
+    }
     setBrand(DEFAULT_ALTHEA_BRAND)
     applyBrand(DEFAULT_ALTHEA_BRAND)
     try {
