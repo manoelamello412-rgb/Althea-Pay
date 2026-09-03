@@ -1,19 +1,21 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-function resolveEnv(...names: string[]): string {
+const DEFAULT_SUPABASE_URL = 'https://hkraryqoziravulvqkid.supabase.co'
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl'
+
+function resolveEnv(fallback: string, ...names: string[]): string {
   for (const name of names) {
     const value = process.env[name]
     if (value) return value
   }
-  throw new Error(`${names[0]} is not configured. Set it in your environment before starting the app.`)
+  return fallback
 }
 
 export async function proxy(request: NextRequest) {
-  // Support both the app's public names and the Supabase/Vercel integration names.
-  // The Supabase URL and publishable/anon key are intended to be client-safe values.
-  const url = resolveEnv('NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL')
+  const url = resolveEnv(DEFAULT_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL')
   const key = resolveEnv(
+    DEFAULT_SUPABASE_PUBLISHABLE_KEY,
     'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
     'SUPABASE_PUBLISHABLE_KEY',
@@ -26,7 +28,7 @@ export async function proxy(request: NextRequest) {
     cookies: {
       getAll() { return request.cookies.getAll() },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+        cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value, options))
         response = NextResponse.next({ request })
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options))
       },
