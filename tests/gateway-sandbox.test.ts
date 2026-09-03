@@ -14,6 +14,19 @@ describe('Gateway Sandbox', () => {
     expect(result.id).toContain('sb_tx_')
   })
 
+  it('models pending provider confirmation deterministically', () => {
+    const result = simulateSandboxPayment({
+      amount: 1000,
+      currency: 'BRL',
+      scenario: 'pending',
+      idempotency_key: 'sandbox-pending-1',
+    })
+
+    expect(result.status).toBe('pending')
+    expect(result.retryable).toBe(false)
+    expect(result.reason).toBe('awaiting_provider_confirmation')
+  })
+
   it('returns stable transaction ids for the same idempotency key', () => {
     const first = simulateSandboxPayment({
       amount: 1000,
