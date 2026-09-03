@@ -64,8 +64,14 @@ Deno.serve(async (req) => {
       const result = await db.from("sales").update({ status, data: payload }).eq("user_id", userId).eq("external_id", externalId);
       if (result.error) throw result.error;
     }
-    const automation = await fetch(`${supabaseUrl}/functions/v1/automation-engine-v2`, { method: "POST", headers: { "content-type": "application/json", "x-internal-secret": internalSecret }, body: JSON.stringify({ user_id: userId, funnel_id: event.funnel_id, event_id: event.id, event_type: event.event_type, transaction_id: transactionId || null, checkout_id: checkoutId || null, external_id: payload.external_id ?? null, payload }) });
-    if (!automation.ok) throw new Error(`automation_http_${automation.status}`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
+    try {
+      const automation = await fetch(`${supabaseUrl}/functions/v1/automation-engine-v2`, { method: "POST", signal: controller.signal, headers: { "content-type": "application/json", "x-internal-secret": internalSecret }, body: JSON.stringify({ user_id: userId, funnel_id: event.funnel_id, event_id: event.id, event_type: event.event_type, transaction_id: transactionId || null, checkout_id: checkoutId || null, external_id: payload.external_id ?? null, payload }) });
+      if (!automation.ok) throw new Error(`automation_http_${automation.status}`);
+    } finally {
+      clearTimeout(timer);
+    }
     const done = await db.rpc("mark_integration_event_processed", { p_event_id: eventId, p_status: "processed", p_error: null });
     if (done.error) throw done.error;
     return json({ ok: true, processed: true, event_id: eventId });
