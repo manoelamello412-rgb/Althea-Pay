@@ -8,13 +8,14 @@ function requireEnv(name: string): string {
   return value
 }
 
-export function createSupabaseBrowserClient(): any {
+export function createSupabaseBrowserClient(): any | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
-  // Next.js may prerender the client component during `next build`.
-  // Defer the hard failure to the browser/runtime instead of breaking CI.
-  if ((!url || !key) && typeof window === 'undefined') return {}
+  // Client components are also evaluated during the server render. Never throw
+  // there when public configuration is unavailable; callers can render a safe
+  // connection error and the browser can retry once the environment is fixed.
+  if (!url || !key) return null
 
   const client = createBrowserClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), requireEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'))
   const originalGetUser = client.auth.getUser.bind(client.auth)
