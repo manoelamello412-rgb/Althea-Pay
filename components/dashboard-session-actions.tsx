@@ -17,7 +17,7 @@ export default function DashboardSessionActions() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (AUTH_ROUTES.has(pathname)) return
+    if (AUTH_ROUTES.has(pathname) || !supabase) return
     let active = true
     supabase.auth.getUser().then(({ data }: { data: { user: AuthUser | null } }) => {
       if (!active || !data.user) return
@@ -32,7 +32,7 @@ export default function DashboardSessionActions() {
   const initials = name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'AP'
 
   async function signOut() {
-    if (loading) return
+    if (loading || !supabase) return
     setLoading(true)
     await supabase.auth.signOut()
     router.replace('/login')
@@ -48,7 +48,7 @@ export default function DashboardSessionActions() {
         <strong>{name}</strong>
         <span><ShieldCheck size={12} /> Sessão segura</span>
       </div>
-      <button type="button" onClick={signOut} disabled={loading} aria-label="Sair da conta" title="Sair da conta">
+      <button type="button" onClick={signOut} disabled={loading || !supabase} aria-label="Sair da conta" title="Sair da conta">
         <LogOut size={17} />
         <span>{loading ? 'Saindo…' : 'Sair'}</span>
       </button>
