@@ -1,12 +1,17 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const DEFAULT_SUPABASE_URL = 'https://hkraryqoziravulvqkid.supabase.co'
-const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl'
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value) {
+    throw new Error(`${name} is not configured. Set it in your environment before starting the app.`)
+  }
+  return value
+}
 
 export async function proxy(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_PUBLISHABLE_KEY
+  const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL')
+  const key = requireEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY')
   const isLogin = request.nextUrl.pathname === '/login'
 
   let response = NextResponse.next({ request })
@@ -36,5 +41,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }
