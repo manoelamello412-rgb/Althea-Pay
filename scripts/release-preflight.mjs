@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises"
+import { readdir, readFile, access } from "node:fs/promises"
 import { join, relative } from "node:path"
 
 const root = process.cwd()
@@ -34,7 +34,7 @@ const cardDataProductionFiles = checked.filter((file) =>
   !file.endsWith(join("lib", "vault.ts")) &&
   !file.includes(`${join("supabase", "migrations")}${join("")}`)
 )
-assertNo(/(?:card_number|pan|cvc|cvv|security_code)\s*[:=]/i, "Raw card credential field assignment detected", cardDataProductionFiles)
+assertNo(/(?:card_number|cardNumber|pan|cvc|cvv|security_code|securityCode)\s*[:=]/i, "Raw card credential field assignment detected", cardDataProductionFiles)
 
 const webhookFunctionFiles = checked.filter((file) => file.includes(`${join("supabase", "functions")}${join("")}`))
 assertNo(/from\(['"]webhook_integrations['"]\)\.select\([^)]*\bsecret\b/i, "Plaintext webhook secret selected directly from webhook_integrations", webhookFunctionFiles)
@@ -73,7 +73,11 @@ for (const file of requiredFiles) {
   if (!source.has(join(root, file))) failures.push(`Required release component missing: ${file}`)
 }
 
-if (!source.has(join(root, "docs", "PRODUCTION_READINESS.md"))) failures.push("Production readiness document missing")
+try {
+  await access(join(root, "docs", "PRODUCTION_READINESS.md"))
+} catch {
+  failures.push("Production readiness document missing")
+}
 
 console.log(`Release preflight: checked ${checked.length} source/config files.`)
 
