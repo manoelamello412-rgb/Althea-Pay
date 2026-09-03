@@ -54,7 +54,8 @@ Deno.serve(async (req) => {
 
   const { data: reservation, error: reservationError } = await db.rpc("reserve_idempotency_key", { p_user_id: user.id, p_scope: `checkout-engine-v2:${funnelId}:${action}`, p_idempotency_key: checkoutIdempotencyKey, p_request_digest: requestDigest, p_ttl: "24 hours" });
   if (reservationError) return json({ error: "idempotency_reservation_failed" }, 500);
-  const lock = Array.isArray(reservation) ? reservation[0] as Record<string, unknown> | undefined : undefined;
+  const rr = reservation && typeof reservation === "object" ? (Array.isArray(reservation) ? reservation[0] : reservation) : undefined;
+  const lock = isRecord(rr) ? rr : undefined;
   if (!lock?.acquired) {
     if (lock?.response_payload) return json(lock.response_payload, Number(lock.response_code ?? 200));
     return json({ error: "request_in_progress", idempotency_key: idempotencyKey }, 409);
