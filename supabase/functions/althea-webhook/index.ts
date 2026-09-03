@@ -36,6 +36,16 @@ function endpointKey(request: Request): string {
   return index >= 0 ? (parts[index + 1] ?? '') : ''
 }
 
+function transactionStatus(value: string, current: string): string {
+  if (!value) return current
+  if (SUCCESS.includes(value)) return 'approved'
+  if (value === 'refund') return 'refunded'
+  if (value === 'chargeback') return 'chargeback'
+  if (value === 'declined' || value === 'rejected' || value === 'failed' || value === 'error') return 'failed'
+  if (value === 'pending' || value === 'processing' || value === 'created') return value
+  return current
+}
+
 Deno.serve(
   withSupabase({ auth: 'none' }, async (req, ctx) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -66,7 +76,6 @@ Deno.serve(
 
       const secret = integration?.secret || Deno.env.get('ALTHEA_WEBHOOK_SECRET') || ''
       if (!secret) return Response.json({ ok: false, error: 'webhook_secret_not_configured' }, { status: 503, headers: corsHeaders })
-
       const expected = await hmac(secret, `${timestamp}.${raw}`)
       if (!safeEqual(signature, expected)) return Response.json({ ok: false, error: 'invalid_signature' }, { status: 401, headers: corsHeaders })
 
@@ -103,14 +112,8 @@ Deno.serve(
         if (result.error) throw result.error
         transaction = result.data
         if (transaction) {
-          const nextStatus = status || transaction.status
-          const transitioned = await db.rpc('transition_gateway_transaction_status', {
-            p_transaction_id: transaction.id,
-            p_user_id: userId,
-            p_next_status: nextStatus,
-            p_failure_code: payload.failure_code ? String(payload.failure_code) : null,
-            p_external_id: externalId,
-          })
+          const nextStatus = transactionStatus(status, transaction.status)
+          const transitioned = await db.rpc('transition_gateway_transaction_status', { p_transaction_id: transaction.id, p_user_id: userId, p_next_status: nextStatus, p_failure_code: payload.failure_code ? String(payload.failure_code) : null, p_external_id: externalId })
           if (transitioned.error) throw transitioned.error
           transaction = transitioned.data
         }
@@ -137,27 +140,7 @@ Deno.serve(
       if (purchase && transaction) {
         const saleExternalId = externalId || transaction.external_id || eventId
         const attribution = checkout?.attribution && typeof checkout.attribution === 'object' ? checkout.attribution : {}
-        const sale: any = {
-          funnel_id: funnelId,
-          product_id: checkout?.product_id ?? transaction.product_id ?? null,
-          checkout_id: checkoutId,
-          transaction_id: transaction.id,
-          amount: transaction.amount ?? checkout?.amount ?? payload.amount ?? 0,
-          currency: transaction.currency ?? checkout?.currency ?? payload.currency ?? 'BRL',
-          status: 'approved',
-          attribution,
-          source: attribution.source ?? null,
-          medium: attribution.medium ?? null,
-          campaign: attribution.campaign ?? null,
-          content: attribution.content ?? null,
-          term: attribution.term ?? null,
-          click_id: attribution.click_id ?? null,
-          external_id: saleExternalId,
-          gateway_id: transaction.gateway_id ?? null,
-          occurred_at: new Date(Number(timestamp)).toISOString(),
-          data: payload,
-          user_id: userId,
-        }
+        const sale: any = { funnel_id: funnelId, product_id: checkout?.product_id ?? transaction.product_id ?? null, checkout_id: checkoutId, transaction_id: transaction.id, amount: transaction.amount ?? checkout?.amount ?? payload.amount ?? 0, currency: transaction.currency ?? checkout?.currency ?? payload.currency ?? 'BRL', status: 'approved', attribution, source: attribution.source ?? null, medium: attribution.medium ?? null, campaign: attribution.campaign ?? null, content: attribution.content ?? null, term: attribution.term ?? null, click_id: attribution.click_id ?? null, external_id: saleExternalId, gateway_id: transaction.gateway_id ?? null, occurred_at: new Date(Number(timestamp)).toISOString(), data: payload, user_id: userId }
         const existingSale = await db.from('sales').select('id').eq('user_id', userId).eq('external_id', saleExternalId).maybeSingle()
         if (existingSale.error) throw existingSale.error
         if (existingSale.data) {
@@ -181,13 +164,11 @@ Deno.serve(
       let automationTriggered = false
       let universalWebhookTriggered = false
       if (internalSecret) {
-        const automationUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/automation-engine-v2`
-        const automationResponse = await fetch(automationUrl, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': internalSecret }, body: JSON.stringify({ user_id: userId, funnel_id: funnelId, event_id: event.data.id, event_type: eventType, transaction_id: transactionId, checkout_id: checkoutId, sale_id: saleId, external_id: externalId, payload }) })
+        const automationResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/automation-engine-v2`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': internalSecret }, body: JSON.stringify({ user_id: userId, funnel_id: funnelId, event_id: event.data.id, event_type: eventType, transaction_id: transactionId, checkout_id: checkoutId, sale_id: saleId, external_id: externalId, payload }) })
         automationTriggered = automationResponse.ok
         if (!automationResponse.ok) throw new Error(`automation_engine_http_${automationResponse.status}`)
         if (purchase) {
-          const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/outbound-webhook-dispatcher`
-          const webhookResponse = await fetch(webhookUrl, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': internalSecret }, body: JSON.stringify({ user_id: userId, event_id: event.data.id, event_type: 'order.approved', event_db_id: event.data.id, payload: { ...payload, sale_id: saleId, transaction_id: transactionId, funnel_id: funnelId } }) })
+          const webhookResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/outbound-webhook-dispatcher`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': internalSecret }, body: JSON.stringify({ user_id: userId, event_id: event.data.id, event_type: 'order.approved', event_db_id: event.data.id, payload: { ...payload, sale_id: saleId, transaction_id: transactionId, funnel_id: funnelId } }) })
           universalWebhookTriggered = webhookResponse.ok
           if (!webhookResponse.ok) throw new Error(`outbound_webhook_http_${webhookResponse.status}`)
         }
