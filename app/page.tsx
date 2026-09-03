@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Activity, BarChart3, CheckCircle2, Clock3, CreditCard, DollarSign, GitBranch, LayoutDashboard, LogOut, MessageSquare, Package, Plug, Radio, Search, Settings, ShieldCheck, ShoppingCart, Tag, Users, WalletCards, X } from 'lucide-react'
 import { ALTHEA_PAY } from '@/lib/althea'
 import { hydrateAltheaBrand } from '@/components/brand-kit'
+import { BrandPillars, RevenueChart, VirtualCard } from '@/components/althea-visual-system'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Module = 'Visão geral' | 'Funis' | 'Produtos' | 'Gateways' | 'Vendas' | 'Clientes' | 'Chats' | 'Analytics' | 'Integrações' | 'Configurações'
@@ -278,13 +279,16 @@ export default function DashboardPage() {
             <div className="revenue-top"><div><span>VISÃO DA OPERAÇÃO</span><small>Dados reais sincronizados com o banco</small></div><div className="period-switch"><button className={period === 7 ? 'selected' : ''} onClick={() => setPeriod(7)}>7D</button><button className={period === 30 ? 'selected' : ''} onClick={() => setPeriod(30)}>30D</button></div></div>
             <div className="revenue-value-row"><strong>{money.format(revenue)}</strong><span className="trend"><Activity size={14} /> operação em tempo real</span></div>
             <div className="revenue-meta"><span>{approved.length} vendas aprovadas</span><span>Atualização automática ativa</span></div>
-            <div className="mini-chart" aria-hidden="true"><span style={{ height: '28%' }} /><span style={{ height: '42%' }} /><span style={{ height: '34%' }} /><span style={{ height: '58%' }} /><span style={{ height: '49%' }} /><span style={{ height: '72%' }} /><span style={{ height: '66%' }} /><span style={{ height: '86%' }} /><span style={{ height: '77%' }} /><span style={{ height: '92%' }} /></div>
+            <RevenueChart />
           </div>
           <div className="quick-panel althea-card">
             <div className="panel-heading"><div><span>OPERAÇÃO</span><h2>Status agora</h2></div><span className="live-dot"><Radio size={11} /> LIVE</span></div>
             <div className="health-list"><div><i className="health-good" /><span>Banco de dados</span><strong>Online</strong></div><div><i className={connectedFunnels ? 'health-good' : 'health-muted'} /><span>Funis conectados</span><strong>{connectedFunnels}</strong></div><div><i className={counts.gateways ? 'health-good' : 'health-muted'} /><span>Gateways cadastrados</span><strong>{counts.gateways || 0}</strong></div><div><i className={integrationEvents ? 'health-good' : 'health-muted'} /><span>Eventos recentes</span><strong>{integrationEvents}</strong></div></div>
+            <div className="dashboard-card-preview"><VirtualCard /></div>
           </div>
         </section>
+
+        <BrandPillars />
 
         <section className="dashboard-lower-grid">
           <div className="dashboard-table-card althea-card">
