@@ -100,7 +100,7 @@ export default function CRMPage() {
 
   async function executeRecovery(event: WebhookEvent): Promise<void> {
     setError('')
-    const { data: auth, error: authError } = await supabase.auth.getUser()
+    const { data: auth, error: authError } = await supabase.auth.getSession()
     if (authError || !auth.session) { setError('Sessão expirada.'); return }
     const response = await fetch('/api/crm/recovery', { method: 'POST', headers: { Authorization: `Bearer ${auth.session.access_token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ event_id: event.id }) })
     if (!response.ok) { const body = await response.json().catch(() => null) as { error?: string } | null; setError(body?.error ?? 'Gatilho não executado.'); return }
