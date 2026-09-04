@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Bell, Eye, EyeOff, Calendar, ChevronDown, RefreshCw } from 'lucide-react'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 interface HeaderProps {
   userName?: string
@@ -12,13 +13,44 @@ interface HeaderProps {
 }
 
 export function MobileHeaderDashboard({
-  userName = 'Manoela',
+  userName,
   currentScreen = 'DASHBOARD',
   onRefresh,
   refreshing = false,
 }: HeaderProps) {
+  const db = useMemo(() => createSupabaseBrowserClient(), [])
+  const [profileName, setProfileName] = useState('')
   const [hideValues, setHideValues] = useState(false)
   const [currentTime, setCurrentTime] = useState('')
+
+  useEffect(() => {
+    let active = true
+
+    const loadUserName = async () => {
+      const { data: auth } = await db.auth.getUser()
+      if (!active || !auth.user) return
+
+      const metadata = auth.user.user_metadata as Record<string, unknown> | null
+      const metadataName = String(metadata?.full_name ?? metadata?.name ?? '').trim()
+
+      const { data: profile } = await db
+        .from('profiles')
+        .select('display_name')
+        .eq('id', auth.user.id)
+        .maybeSingle()
+
+      if (!active) return
+
+      const displayName = String(profile?.display_name ?? '').trim()
+      const emailName = String(auth.user.email ?? '').split('@')[0].trim()
+      setProfileName(displayName || metadataName || emailName || 'Usuário')
+    }
+
+    void loadUserName()
+    return () => {
+      active = false
+    }
+  }, [db])
 
   useEffect(() => {
     const updateDateTime = () => {
@@ -39,6 +71,8 @@ export function MobileHeaderDashboard({
     const interval = window.setInterval(updateDateTime, 1000)
     return () => window.clearInterval(interval)
   }, [])
+
+  const greetingName = userName?.trim() || profileName || 'Usuário'
 
   return (
     <div className="w-full select-none bg-[#0B0B0D] text-white">
@@ -70,7 +104,7 @@ export function MobileHeaderDashboard({
       <div className="flex flex-col gap-5 px-4 pb-2 pt-6">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-white">Olá, {userName}!</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Olá, {greetingName}!</h1>
             <motion.span
               animate={{ rotate: [0, 15, -10, 15, 0] }}
               transition={{ repeat: Infinity, duration: 1.5, repeatDelay: 1 }}
