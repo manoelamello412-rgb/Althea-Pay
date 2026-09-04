@@ -1,26 +1,17 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const DEFAULT_SUPABASE_URL = 'https://hkraryqoziravulvqkid.supabase.co'
-const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl'
-
-function resolveEnv(fallback: string, ...names: string[]): string {
+function requireEnv(...names: string[]): string {
   for (const name of names) {
     const value = process.env[name]
     if (value) return value
   }
-  return fallback
+  throw new Error(`Missing required Supabase environment variable. Set one of: ${names.join(', ')}`)
 }
 
 export async function proxy(request: NextRequest) {
-  const url = resolveEnv(DEFAULT_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL')
-  const key = resolveEnv(
-    DEFAULT_SUPABASE_PUBLISHABLE_KEY,
-    'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
-    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-    'SUPABASE_PUBLISHABLE_KEY',
-    'SUPABASE_ANON_KEY',
-  )
+  const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL')
+  const key = requireEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_ANON_KEY')
   const isLogin = request.nextUrl.pathname === '/login'
 
   let response = NextResponse.next({ request })
