@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
 import DashboardMobile from '@/components/dashboard-control'
 import SalesMobile from '@/components/sales-mobile'
@@ -37,7 +37,7 @@ export default function MobileDashboardOrchestrator() {
     root.style.setProperty('--althea-silver', '#A6A6A6')
   }, [])
 
-  const screens: Record<MobileShellTab, React.ReactNode> = {
+  const screens: Record<MobileShellTab, ReactNode> = {
     dashboard: <DashboardMobile />,
     vendas: <SalesMobile />,
     funis: <FunnelsMobile />,
