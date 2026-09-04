@@ -41,16 +41,24 @@ export default function DashboardMobile() {
   const selectedLabel = useMemo(() => range.start === range.end ? formatDate(range.start) : `${formatDate(range.start)} — ${formatDate(range.end)}`, [range])
   const daysSelected = Math.floor((parse(range.end).getTime() - parse(range.start).getTime()) / DAY_MS) + 1
   const metrics: Metric[] = [
-    { label: 'Receita', value: 'R$ 0,00', note: 'Sem dados no período' },
-    { label: 'Transações', value: '0', note: 'Sem transações' },
-    { label: 'Ticket Médio', value: 'R$ 0,00', note: 'Sem vendas aprovadas' },
-    { label: 'Novos Clientes', value: '0', note: 'Sem clientes cadastrados' },
+    { label: 'Receita Bruta', value: money(0), note: 'Sem dados no período' },
+    { label: 'Faturamento Líquido', value: money(0), note: 'Sem dados no período' },
+    { label: 'Taxas Acumuladas', value: money(0), note: 'Sem taxas registradas' },
+    { label: 'Taxa de Aprovação', value: '0,0%', note: 'Sem transações' },
+    { label: 'Ticket Médio', value: money(0), note: 'Sem vendas aprovadas' },
+    { label: 'Reembolsos', value: money(0), note: 'Sem reembolsos' },
+    { label: 'Chargebacks', value: '0', note: 'Sem ocorrências' },
+    { label: 'Pagamentos Pendentes', value: '0', note: 'Sem pagamentos pendentes' },
   ]
 
-  const applyPreset = (days: number | null) => {
-    const start = days === null ? today : addDays(today, -(days - 1))
-    setRange({ start, end: today })
-    setDraftRange({ start, end: today })
+  const applyPreset = (preset: 'today' | 'yesterday' | '7' | '30' | '90') => {
+    const next: Range = preset === 'today'
+      ? { start: today, end: today }
+      : preset === 'yesterday'
+        ? { start: addDays(today, -1), end: addDays(today, -1) }
+        : { start: addDays(today, -(Number(preset) - 1)), end: today }
+    setRange(next)
+    setDraftRange(next)
     setPeriodOpen(false)
     setCustomOpen(false)
   }
@@ -92,26 +100,23 @@ export default function DashboardMobile() {
   const canNextMonth = calendarMonth.getFullYear() < maxMonth.getFullYear() || calendarMonth.getMonth() < maxMonth.getMonth()
 
   return <section className="althea-mobile-dashboard" aria-label="Dashboard mobile">
-    <header className="amd-header">
-      <div className="amd-brand"><img src="/althea-logo.png" alt="Althea Pay" /></div>
-      <button className="amd-icon-button" aria-label="Mais opções" type="button"><MoreHorizontal size={19} /></button>
-    </header>
+    <header className="amd-header"><div className="amd-brand"><img src="/althea-logo.png" alt="Althea Pay" /></div><button className="amd-icon-button" aria-label="Mais opções" type="button"><MoreHorizontal size={19} /></button></header>
 
     <div className="amd-heading"><span className="amd-eyebrow">CONTROL PLANE</span><h1>Dashboard</h1><p>Visão geral do seu negócio</p></div>
 
     <div className="amd-period-wrap">
       <button className="amd-period" type="button" onClick={() => setPeriodOpen(value => !value)} aria-expanded={periodOpen}><span className="amd-period-copy"><CalendarDays size={14} /><span>{selectedLabel}</span></span><span aria-hidden="true">⌄</span></button>
       {periodOpen && <div className="amd-period-menu" role="menu">
-        <button type="button" onClick={() => applyPreset(1)}>Hoje</button>
-        <button type="button" onClick={() => applyPreset(2)}>Ontem</button>
-        <button type="button" onClick={() => applyPreset(7)}>Últimos 7 dias</button>
-        <button type="button" onClick={() => applyPreset(30)}>Últimos 30 dias</button>
-        <button type="button" onClick={() => applyPreset(90)}>Últimos 90 dias</button>
+        <button type="button" onClick={() => applyPreset('today')}>Hoje</button>
+        <button type="button" onClick={() => applyPreset('yesterday')}>Ontem</button>
+        <button type="button" onClick={() => applyPreset('7')}>Últimos 7 dias</button>
+        <button type="button" onClick={() => applyPreset('30')}>Últimos 30 dias</button>
+        <button type="button" onClick={() => applyPreset('90')}>Últimos 90 dias</button>
         <button type="button" className="amd-period-custom" onClick={openCustom}>Personalizado <span>›</span></button>
       </div>}
     </div>
 
-    <div className="amd-filter-caption"><span>{daysSelected} {daysSelected === 1 ? 'dia selecionado' : 'dias selecionados'}</span><button type="button" onClick={() => applyPreset(null)}>Voltar para hoje</button></div>
+    <div className="amd-filter-caption"><span>{daysSelected} {daysSelected === 1 ? 'dia selecionado' : 'dias selecionados'}</span><button type="button" onClick={() => applyPreset('today')}>Hoje</button></div>
 
     <div className="amd-kpis">{metrics.map(metric => <article className={`amd-card amd-kpi ${loading ? 'amd-loading' : ''}`} key={metric.label}><span>{metric.label}</span>{loading ? <div className="amd-skeleton-line" /> : <strong>{metric.value}</strong>}<small>{metric.note}</small></article>)}</div>
 
