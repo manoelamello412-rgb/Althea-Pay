@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { BarChart3, CreditCard, MessageSquare, Settings, WalletCards } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import MotionButton from '@/components/motion-button'
 import DashboardMobile from '@/components/dashboard-control'
 import SalesMobile from '@/components/sales-mobile'
@@ -20,7 +20,7 @@ const tabs = [
 
 type TabId = (typeof tabs)[number]['id']
 
-const panels: Record<TabId, React.ComponentType> = {
+const panels: Record<TabId, ComponentType> = {
   dashboard: DashboardMobile,
   vendas: SalesMobile,
   chat: FunnelsMobile,
