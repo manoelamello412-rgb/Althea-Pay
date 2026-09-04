@@ -23,7 +23,13 @@ export default function DashboardPage() {
   const mobile = ['dashboard', 'vendas', 'funis', 'gateways', 'configuracoes'].includes(mobilePage)
 
   return <>
-    <div className="althea-mobile-stage-host" style={{ display: mobile ? 'block' : 'none' }}>
+    <div
+      className="althea-mobile-stage-host"
+      style={{
+        display: mobile ? 'block' : 'none',
+        paddingBottom: mobile ? '5.5rem' : undefined,
+      }}
+    >
       <div style={{ display: mobilePage === 'dashboard' ? 'block' : 'none' }}><DashboardControl /></div>
       <div style={{ display: mobilePage === 'vendas' ? 'block' : 'none' }}><SalesMobile /></div>
       <div style={{ display: mobilePage === 'funis' ? 'block' : 'none' }}><FunnelsMobile /></div>
@@ -31,6 +37,6 @@ export default function DashboardPage() {
       <div style={{ display: mobilePage === 'configuracoes' ? 'block' : 'none' }}><SettingsMobile /></div>
     </div>
     <div style={{ display: mobile ? 'none' : 'block' }}><WhiteLabelWorkspace /></div>
-    <div style={{ display: mobile ? 'none' : 'block' }}><MobileBottomNav /></div>
+    <div style={{ display: mobile ? 'block' : 'none' }}><MobileBottomNav /></div>
   </>
 }
