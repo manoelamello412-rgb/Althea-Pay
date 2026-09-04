@@ -13,7 +13,7 @@ type BrandLogoProps = {
 }
 
 const BRAND_ASSETS: Record<BrandLogoVariant, string> = {
-  main: '/althea-logo.png.PNG',
+  main: '/althea-logo.png',
   mark: '/althea-mark.png',
   wordmark: '/althea-wordmark.png',
 }

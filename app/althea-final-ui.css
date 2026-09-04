@@ -1,1 +1,195 @@
-.wl-period-control{position:fixed;z-index:60;top:18px;right:28px;margin:0}.wl-period-trigger{display:inline-flex;align-items:center;gap:9px;min-height:38px;padding:0 12px;border:1px solid rgba(29,184,84,.22);border-radius:9px;background:rgba(11,21,17,.96);color:#edf7f1;cursor:pointer;box-shadow:0 8px 25px rgba(0,0,0,.2);font-size:12px;white-space:nowrap}.wl-period-trigger:hover{border-color:rgba(29,184,84,.45)}.wl-periods{display:none!important}.wl-toolbar:has(.wl-periods){min-height:0!important;padding:0!important;margin:0!important;border:0!important}.wl-period-overlay{position:fixed;z-index:100;inset:0;background:rgba(0,0,0,.48);display:flex;align-items:flex-start;justify-content:flex-end;padding:70px 28px 30px}.wl-period-popover{width:min(390px,calc(100vw - 24px));background:#0b1511;border:1px solid rgba(29,184,84,.22);border-radius:16px;box-shadow:0 30px 90px rgba(0,0,0,.55);padding:16px}.wl-period-popover header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.wl-period-popover header small{color:#5f7e6c;font-size:9px;letter-spacing:.16em}.wl-period-popover header h2{font-size:15px;margin:6px 0 0}.wl-period-popover header button{border:0;background:none;color:#fff;cursor:pointer}.wl-period-presets{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:15px 0}.wl-period-presets button{background:#101d18;border:1px solid rgba(255,255,255,.08);color:#b9c9c1;border-radius:8px;padding:8px;cursor:pointer;text-align:left}.wl-period-presets button:hover{border-color:rgba(29,184,84,.4);color:#fff}.wl-calendar-head{display:grid;grid-template-columns:36px 1fr 36px;align-items:center;text-align:center;margin:7px 0}.wl-calendar-head button{border:0;background:none;color:#dfeae4;cursor:pointer}.wl-calendar-head b{text-transform:capitalize;font-size:13px}.wl-calendar-week,.wl-calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}.wl-calendar-week span{text-align:center;color:#5e7568;font-size:9px;padding:5px 0}.wl-calendar-grid button{height:38px;border:0;border-radius:8px;background:transparent;color:#dbe7e0;cursor:pointer;font-size:12px}.wl-calendar-grid button:hover{background:rgba(29,184,84,.12)}.wl-calendar-grid button.muted{color:#405149}.wl-calendar-grid button.range{background:rgba(29,184,84,.13);border-radius:0}.wl-calendar-grid button.start{border-radius:8px 0 0 8px;background:rgba(29,184,84,.32)}.wl-calendar-grid button.end{border-radius:0 8px 8px 0;background:rgba(29,184,84,.32)}.wl-calendar-grid button.start.end{border-radius:8px}.wl-period-popover footer{display:flex;justify-content:space-between;gap:8px;margin-top:14px;padding-top:13px;border-top:1px solid rgba(255,255,255,.08)}.wl-period-popover footer button{border:1px solid rgba(255,255,255,.08);background:#101d18;color:#dce9e2;border-radius:8px;padding:9px 13px;cursor:pointer}.wl-period-popover footer .wl-primary:disabled{opacity:.45;cursor:not-allowed}.wl-period-ok{color:#62d889!important}.wl-period-bad{color:#ff9b9b!important}.wl-mobile-bottom-nav{display:none}@media(max-width:900px){.wl-period-control{top:10px;right:54px}.wl-period-trigger{max-width:calc(100vw - 110px);overflow:hidden;text-overflow:ellipsis}.wl-period-overlay{padding:62px 12px 20px;justify-content:center}.wl-period-popover{width:min(410px,100%)}.wl-mobile-bottom-nav{position:fixed;z-index:90;left:8px;right:8px;bottom:8px;display:grid;grid-template-columns:repeat(5,1fr);gap:3px;padding:6px;border:1px solid rgba(29,184,84,.18);border-radius:15px;background:rgba(8,13,11,.96);backdrop-filter:blur(18px);box-shadow:0 14px 40px rgba(0,0,0,.45)}.wl-mobile-bottom-nav button{display:flex;min-width:0;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;border-radius:9px;background:transparent;color:#82958b;padding:7px 2px;font-size:9px}.wl-mobile-bottom-nav button:hover{background:rgba(29,184,84,.1);color:#fff}.wl-mobile-bottom-nav svg{width:17px;height:17px}.wl-main{padding-bottom:90px!important}}@media(min-width:901px){.wl-mobile-bottom-nav{display:none!important}}
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+/* ALTHEA PAY — FINAL VISUAL SYSTEM
+   Single visual authority for the operational workspace. */
+:root{--althea-bg:#0B0B0D;--althea-surface:#0F1A16;--althea-surface-2:#111F19;--althea-green:#1DB854;--althea-text:#F1F6F3;--althea-muted:#82958B;--althea-border:rgba(63,77,70,.48);--althea-border-strong:rgba(29,184,84,.22);--althea-radius:12px;--althea-shadow:0 18px 50px rgba(0,0,0,.24)}
+
+.wl-shell,.wl-shell *{box-sizing:border-box}
+.wl-shell{min-height:100dvh;background:var(--althea-bg)!important;color:var(--althea-text);font-family:'Space Grotesk',ui-sans-serif,system-ui,sans-serif!important;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+.wl-shell button,.wl-shell input,.wl-shell select,.wl-shell textarea{font:inherit}
+.wl-shell button{transition:all .2s ease;cursor:pointer}
+.wl-shell button:active{transform:scale(.98)}
+.wl-shell button:disabled{cursor:not-allowed;opacity:.5}
+
+/* Layout / alignment */
+.wl-sidebar{width:252px!important;background:#0F1A16!important;border-right:1px solid var(--althea-border)!important;padding:18px 12px!important}
+.wl-main{width:calc(100% - 252px)!important;margin-left:252px!important;padding:28px 34px 52px!important;min-width:0}
+.wl-shell.is-collapsed .wl-sidebar{width:76px!important}
+.wl-shell.is-collapsed .wl-main{width:calc(100% - 76px)!important;margin-left:76px!important}
+.wl-header{min-width:0;align-items:center!important;margin-bottom:20px!important;padding-bottom:4px}
+.wl-header>div{min-width:0}
+.wl-header h1{font-size:27px!important;line-height:1.12!important;font-weight:600!important;letter-spacing:-.035em!important;margin:5px 0!important}
+.wl-header p{font-size:13px!important;line-height:1.6!important;color:var(--althea-muted)!important;max-width:720px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wl-kicker,.wl-eyebrow{font-size:9px!important;line-height:1.3!important;letter-spacing:.16em!important;color:#6F897B!important;text-transform:uppercase}
+
+/* Brand / navigation */
+.wl-brand{height:48px!important;margin-bottom:22px!important}
+.wl-brand img{width:32px!important;height:38px!important}
+.wl-brand>b{font-size:14px!important;font-weight:600!important;letter-spacing:.12em!important;white-space:nowrap}
+.wl-sidebar nav{scrollbar-width:none}
+.wl-sidebar nav::-webkit-scrollbar{display:none}
+.wl-sidebar nav>div{margin-bottom:10px}
+.wl-sidebar nav small{display:block;color:#52665C;font-size:8px;letter-spacing:.14em;padding:0 9px 5px;line-height:1.3}
+.wl-sidebar nav button{width:100%;min-height:40px;display:flex;align-items:center;gap:10px;padding:9px 10px!important;border:1px solid transparent;border-radius:10px!important;background:transparent!important;color:#91A29A!important;font-size:11px!important;font-weight:500!important;white-space:nowrap}
+.wl-sidebar nav button svg{width:17px;height:17px;flex:0 0 auto}
+.wl-sidebar nav button:hover{background:rgba(29,184,84,.06)!important;color:#E9F5EE!important;border-color:rgba(29,184,84,.08)!important}
+.wl-sidebar nav button.active{background:rgba(29,184,84,.10)!important;color:#70DB93!important;border-color:rgba(29,184,84,.18)!important;box-shadow:inset 2px 0 0 var(--althea-green)}
+.wl-shell.is-collapsed .wl-sidebar nav button{justify-content:center}
+
+/* Surfaces, cards and controls */
+.wl-panel,.wl-metric,.wl-gateway,.wl-setting,.wl-audit,.wl-chat-list button,.wl-search,.wl-key-row,.wl-inline{background:var(--althea-surface)!important;border:1px solid var(--althea-border)!important;border-radius:var(--althea-radius)!important;box-shadow:none}
+.wl-panel{padding:16px!important;overflow:hidden}
+.wl-panel>header{margin-bottom:14px!important;align-items:center!important}
+.wl-panel>header h2{font-size:14px!important;line-height:1.3!important;font-weight:600!important;letter-spacing:-.01em!important}
+.wl-toolbar{display:flex;align-items:center!important;justify-content:space-between;gap:10px;margin:0!important;padding:0!important;min-height:40px!important}
+.wl-toolbar:has(.wl-periods){display:none!important}
+.wl-toolbar input,.wl-toolbar select,.wl-editor input,.wl-editor select,.wl-editor textarea,.wl-form input,.wl-form select,.wl-gateway input,.wl-search input,.wl-composer textarea{background:#0B0B0D!important;border:1px solid var(--althea-border)!important;border-radius:10px!important;color:var(--althea-text)!important;outline:none!important}
+.wl-toolbar input:focus,.wl-toolbar select:focus,.wl-editor input:focus,.wl-editor select:focus,.wl-editor textarea:focus,.wl-form input:focus,.wl-form select:focus,.wl-gateway input:focus,.wl-search:focus-within,.wl-composer textarea:focus{border-color:rgba(29,184,84,.42)!important;box-shadow:0 0 0 3px rgba(29,184,84,.07)!important}
+.wl-search{height:40px!important;padding:0 11px!important;display:flex!important;align-items:center!important;gap:8px!important;min-width:min(100%,430px);background:#0F1A16!important}
+.wl-search svg{width:15px;height:15px;color:#71877B;flex:0 0 auto}
+.wl-search input{border:0!important;box-shadow:none!important;width:100%;height:100%;padding:0!important}
+
+/* KPI grid — strict symmetry */
+.wl-metric-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px!important}
+.wl-metric{min-height:112px!important;padding:15px!important;text-align:left!important;display:flex!important;flex-direction:column;justify-content:space-between;align-items:flex-start!important}
+.wl-metric:hover{border-color:var(--althea-border-strong)!important;transform:translateY(-1px)}
+.wl-metric span,.wl-mini-metric span{font-size:10px!important;line-height:1.4!important;color:var(--althea-muted)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.wl-metric b{font-size:22px!important;line-height:1.1!important;font-weight:600!important;letter-spacing:-.025em!important;margin:10px 0!important;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.wl-metric small{display:flex;align-items:center;gap:4px;color:#64D58A!important;font-size:9px!important}
+.wl-metric small svg{width:12px;height:12px}
+.wl-metric-grid.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+
+/* Tables */
+.wl-table{width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+.wl-table table{width:100%;min-width:720px;border-collapse:separate;border-spacing:0}
+.wl-table th{height:34px;padding:7px 9px!important;color:#60756A!important;font-size:8px!important;line-height:1.2!important;font-weight:600!important;letter-spacing:.13em!important;text-transform:uppercase;text-align:left!important;white-space:nowrap;border-bottom:1px solid var(--althea-border)!important}
+.wl-table td{height:48px;padding:9px!important;color:#D6E1DB!important;font-size:11px!important;line-height:1.35!important;vertical-align:middle!important;border-bottom:1px solid rgba(255,255,255,.045)!important;white-space:nowrap}
+.wl-table tr:last-child td{border-bottom:0!important}
+.wl-table td small,.wl-table td b small{font-size:9px!important;line-height:1.35!important;color:var(--althea-muted)!important}
+.wl-status{display:inline-flex!important;align-items:center;gap:5px;padding:4px 7px!important;border-radius:999px!important;font-size:9px!important;font-weight:500!important;line-height:1!important;white-space:nowrap;border:1px solid transparent}
+.wl-status.ok{color:#69D98E!important;background:rgba(29,184,84,.08)!important;border-color:rgba(29,184,84,.15)!important}
+.wl-status.bad{color:#E99A9A!important;background:rgba(233,100,100,.06)!important;border-color:rgba(233,100,100,.10)!important}
+.wl-status i{width:5px!important;height:5px!important;margin:0!important}
+
+/* Gateway / routing */
+.wl-gateway-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px!important}
+.wl-gateway{padding:14px!important;min-width:0}
+.wl-gateway header,.wl-gateway footer{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:10px}
+.wl-gateway header span{font-size:11px!important;font-weight:600!important;color:#71D995!important}
+.wl-gateway header b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace!important;font-size:8px!important;font-weight:500!important;color:#657970!important;letter-spacing:.03em;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.wl-gateway label,.wl-editor label,.wl-form label{font-size:10px!important;line-height:1.4!important;color:var(--althea-muted)!important}
+.wl-gateway footer{margin-top:13px!important}
+.wl-gateway footer button{font-size:9px!important;padding:7px 9px!important;border:1px solid var(--althea-border)!important;background:#111F19!important;border-radius:8px!important;color:#D8E5DE!important}
+.wl-gateway footer button:hover{border-color:rgba(29,184,84,.3)!important;color:#fff!important}
+.wl-switch{flex:0 0 auto!important;width:38px!important;height:22px!important;border:1px solid rgba(255,255,255,.08)!important;background:#28352F!important;padding:2px!important}
+.wl-switch i{width:16px!important;height:16px!important;margin-left:14px!important}
+.wl-switch:not(.off){background:var(--althea-green)!important}
+.wl-route-tree{gap:7px!important}
+.wl-route-tree b{width:min(620px,100%);padding:11px!important;border:1px solid var(--althea-border)!important;background:var(--althea-surface)!important;border-radius:10px!important;font-size:10px!important;font-weight:500!important}
+.wl-route-tree span{color:#5F7469!important}
+
+/* Funnel + omnichannel */
+.wl-tabs{display:flex!important;align-items:center!important;gap:6px!important;max-width:100%;overflow-x:auto;white-space:nowrap;scrollbar-width:none;padding-bottom:2px}
+.wl-tabs::-webkit-scrollbar{display:none}
+.wl-tabs button{flex:0 0 auto!important;border:1px solid var(--althea-border)!important;background:#0B0B0D!important;color:#7F9189!important;border-radius:999px!important;padding:7px 11px!important;font-size:9px!important;font-weight:500!important;line-height:1!important}
+.wl-tabs button:hover{color:#DDEAE2!important;border-color:rgba(29,184,84,.18)!important}
+.wl-tabs button.active{background:#0F1A16!important;color:var(--althea-green)!important;border-color:rgba(29,184,84,.26)!important}
+.wl-editor{max-width:720px!important;display:grid!important;gap:11px!important;padding-top:14px!important}
+.wl-editor b{font-size:10px!important;color:#DCE8E1}
+.wl-editor textarea{min-height:100px!important}
+.wl-chat-grid{grid-template-columns:300px minmax(0,1fr)!important;gap:10px!important}
+.wl-chat-list{gap:5px!important}
+.wl-chat-list button{padding:10px!important;text-align:left!important}
+.wl-chat-list button.active{background:rgba(29,184,84,.07)!important;border-color:rgba(29,184,84,.28)!important}
+.wl-chat-list button b{font-size:11px!important;font-weight:600!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wl-chat-list small,.wl-chat-list em{font-size:9px!important}
+.wl-chat-window{grid-template-columns:minmax(0,1fr) 260px!important;min-height:420px!important;gap:12px!important}
+.wl-message{font-size:11px!important;line-height:1.5!important;border-radius:10px!important;padding:9px 11px!important}
+.wl-context{padding-left:12px!important}
+.wl-context h3{font-size:12px!important}
+.wl-info{font-size:10px!important;padding:7px 0!important}
+.wl-composer textarea{min-height:42px!important;padding:9px!important;font-size:11px!important}
+
+/* Settings: pill subnavigation */
+.wl-form{max-width:620px!important;display:grid!important;gap:12px!important}
+.wl-form h2{font-size:16px!important;font-weight:600!important;line-height:1.3!important}
+.wl-setting{padding:11px!important;font-size:10px!important;line-height:1.5!important;color:#C5D2CB!important}
+
+/* Monospace identifiers */
+.wl-table td:first-child,.wl-table td code,.wl-secret,.wl-audit b,.wl-gateway header b{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace!important;letter-spacing:.015em}
+.wl-secret{font-size:10px!important;line-height:1.5!important;word-break:break-all}
+
+/* Sheets / overlays */
+.wl-overlay{z-index:80!important;background:rgba(0,0,0,.68)!important;backdrop-filter:blur(3px)}
+.wl-sheet{background:#0F1A16!important;border-left:1px solid var(--althea-border)!important;box-shadow:-24px 0 70px rgba(0,0,0,.32);padding:20px!important}
+.wl-sheet header h2{font-size:18px!important;font-weight:600!important;line-height:1.25!important;word-break:break-word}
+.wl-sheet-total{font-size:28px!important;font-weight:600!important;letter-spacing:-.03em}
+.wl-audit-grid{gap:8px!important}
+.wl-audit{background:#0B0B0D!important;padding:11px!important}
+.wl-audit h3{font-size:10px!important;font-weight:600!important;color:#8EA299!important}
+.wl-audit div{font-size:9px!important;padding:5px 0!important}
+
+/* Period control: compact, never a giant toolbar */
+.wl-period-control{position:fixed!important;z-index:60!important;top:16px!important;right:28px!important;margin:0!important}
+.wl-period-trigger{display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;min-height:36px!important;max-width:330px!important;padding:0 11px!important;border:1px solid var(--althea-border-strong)!important;border-radius:9px!important;background:#0F1A16!important;color:#DDEAE3!important;box-shadow:0 8px 25px rgba(0,0,0,.18)!important;font-size:10px!important;font-weight:500!important;white-space:nowrap!important}
+.wl-period-trigger:hover{border-color:rgba(29,184,84,.4)!important;color:#fff!important}
+.wl-periods{display:none!important}
+.wl-period-overlay{position:fixed!important;z-index:100!important;inset:0!important;background:rgba(0,0,0,.58)!important;display:flex!important;align-items:flex-start!important;justify-content:flex-end!important;padding:64px 28px 28px!important;backdrop-filter:blur(3px)}
+.wl-period-popover{width:min(390px,calc(100vw - 24px))!important;background:#0F1A16!important;border:1px solid var(--althea-border)!important;border-radius:14px!important;box-shadow:0 30px 90px rgba(0,0,0,.55)!important;padding:15px!important}
+.wl-period-popover header{display:flex!important;align-items:flex-start!important;justify-content:space-between!important;gap:10px}
+.wl-period-popover header h2{font-size:14px!important;font-weight:600!important;margin:5px 0 0!important}
+.wl-period-presets{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important;margin:13px 0!important}
+.wl-period-presets button,.wl-period-popover footer button{background:#0B0B0D!important;border:1px solid var(--althea-border)!important;color:#AABAB2!important;border-radius:8px!important;padding:8px 9px!important;font-size:9px!important}
+.wl-period-presets button:hover,.wl-period-popover footer button:hover{border-color:rgba(29,184,84,.25)!important;color:#fff!important}
+.wl-calendar-head{margin:6px 0!important}
+.wl-calendar-head b{font-size:12px!important;font-weight:600!important}
+.wl-calendar-grid{gap:2px!important}
+.wl-calendar-grid button{height:34px!important;border-radius:7px!important;font-size:10px!important}
+.wl-calendar-grid button.range{background:rgba(29,184,84,.10)!important}
+.wl-calendar-grid button.start,.wl-calendar-grid button.end{background:rgba(29,184,84,.28)!important}
+.wl-period-popover footer{margin-top:12px!important;padding-top:11px!important}
+
+/* Loading states */
+.wl-shell .animate-pulse{animation:pulse-soft 1.6s ease-in-out infinite}
+@keyframes pulse-soft{0%,100%{opacity:.45}50%{opacity:.8}}
+
+/* Fixed mobile navigation + collision safe area */
+.wl-mobile-bottom-nav{display:none}
+@media(max-width:900px){
+  .wl-sidebar{width:250px!important;transform:translateX(-105%);padding-top:18px!important}
+  .wl-sidebar.mobile-open{transform:translateX(0)}
+  .wl-main,.wl-shell.is-collapsed .wl-main{width:100%!important;margin-left:0!important;padding:62px 14px 112px!important}
+  .wl-mobile-menu{display:flex!important;position:fixed!important;z-index:90!important;top:12px!important;left:12px!important;align-items:center;justify-content:center;width:38px;height:38px;padding:0!important;background:#0F1A16!important;border:1px solid var(--althea-border)!important;border-radius:9px!important;color:#fff!important}
+  .wl-mobile-menu svg{width:17px;height:17px}
+  .wl-mobile-close{display:flex!important;align-items:center;justify-content:center;margin-top:auto;width:100%;height:38px;background:#0B0B0D!important;border:1px solid var(--althea-border)!important;border-radius:9px!important;color:#9AACA3!important}
+  .wl-header{display:block!important;margin-bottom:14px!important;padding-left:0!important}
+  .wl-header h1{font-size:22px!important;margin-top:4px!important}
+  .wl-header p{font-size:11px!important;white-space:normal!important;line-height:1.5!important;max-width:calc(100vw - 28px)}
+  .wl-header>button{margin-top:10px!important;width:auto!important;min-height:36px!important;font-size:10px!important}
+  .wl-metric-grid,.wl-metric-grid.four{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+  .wl-metric{min-height:100px!important;padding:12px!important}
+  .wl-metric b{font-size:18px!important}
+  .wl-gateway-grid{grid-template-columns:1fr!important}
+  .wl-chat-grid{grid-template-columns:1fr!important}
+  .wl-chat-window{grid-template-columns:1fr!important}
+  .wl-context{border-left:0!important;border-top:1px solid var(--althea-border)!important;padding:12px 0 0!important}
+  .wl-table table{min-width:690px}
+  .wl-panel{padding:13px!important}
+  .wl-panel>header h2{font-size:13px!important}
+  .wl-toolbar{align-items:stretch!important;justify-content:flex-start!important}
+  .wl-toolbar>*{max-width:100%;min-width:0}
+  .wl-period-control{top:12px!important;right:12px!important}
+  .wl-period-trigger{max-width:calc(100vw - 64px)!important;min-height:36px!important;font-size:9px!important}
+  .wl-period-overlay{padding:58px 10px 20px!important;justify-content:center!important}
+  .wl-period-popover{width:min(410px,100%)!important;max-height:calc(100dvh - 78px);overflow:auto}
+  .wl-mobile-bottom-nav{position:fixed!important;z-index:95!important;left:8px!important;right:8px!important;bottom:max(8px,env(safe-area-inset-bottom))!important;display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:2px!important;padding:5px!important;border:1px solid var(--althea-border-strong)!important;border-radius:14px!important;background:rgba(15,26,22,.96)!important;backdrop-filter:blur(18px)!important;box-shadow:0 16px 42px rgba(0,0,0,.46)!important}
+  .wl-mobile-bottom-nav button{min-width:0!important;min-height:48px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important;border:1px solid transparent!important;border-radius:9px!important;background:transparent!important;color:#7F9189!important;padding:5px 2px!important;font-size:8px!important;font-weight:500!important;line-height:1!important;white-space:nowrap!important;overflow:hidden!important}
+  .wl-mobile-bottom-nav button:hover,.wl-mobile-bottom-nav button:focus-visible{background:rgba(29,184,84,.08)!important;color:#CFEBDD!important;border-color:rgba(29,184,84,.12)!important}
+  .wl-mobile-bottom-nav svg{width:16px!important;height:16px!important;flex:0 0 auto}
+  .wl-shell{padding-bottom:0!important}
+}
+@media(min-width:901px){.wl-mobile-bottom-nav{display:none!important}}
+
+/* Prevent accidental horizontal layout breaks */
+.wl-shell,.wl-main,.wl-content,.wl-panel,.wl-chat-grid,.wl-chat-window{max-width:100%;overflow-wrap:anywhere}
+.wl-shell .wl-table,.wl-shell .wl-calendar-grid{overflow-wrap:normal}
