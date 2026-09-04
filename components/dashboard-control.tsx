@@ -1,3 +1,3 @@
 'use client'
 
-export { default } from './dashboard-mobile'
+export { default } from './dashboard-mobile-modern'
