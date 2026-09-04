@@ -15,6 +15,7 @@ import './advanced-hub.css'
 import './white-label-workspace.css'
 import './althea-final-ui.css'
 import './dashboard-mobile.css'
+import './sales-mobile.css'
 import DashboardSessionActions from '@/components/dashboard-session-actions'
 export const metadata:Metadata={title:'ALTHEA PAY — Control Center',description:'Central de controle, inteligência e operações dos seus funis.',icons:{icon:'/althea-mark.png',shortcut:'/althea-mark.png',apple:'/althea-mark.png'}}
 export default function RootLayout({children}:{children:ReactNode}){return <html lang="pt-BR"><body>{children}<DashboardSessionActions/></body></html>}
