@@ -1,25 +1,137 @@
 'use client'
 
-import { BarChart3, CreditCard, LayoutDashboard, MoreHorizontal, ReceiptText, Users, WalletCards, Settings, Network, GitBranch } from 'lucide-react'
+import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, CreditCard, GitBranch, LayoutDashboard, MoreHorizontal, Network, Settings, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-const money=(value:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(value)||0)
-const paid=(status:string)=>['approved','paid','completed','success','succeeded'].includes((status||'').toLowerCase())
-const obj=(value:any)=>value&&typeof value==='object'&&!Array.isArray(value)?value:{}
-type Sale={id:string;amount:number;status:string;created_at:string;data?:Record<string,unknown>}
+type Range = { start: string; end: string }
+type Metric = { label: string; value: string; note: string }
 
-export default function DashboardMobile(){
- const db=useMemo(()=>createSupabaseBrowserClient(),[])
- const [active,setActive]=useState('dashboard'),[sales,setSales]=useState<Sale[]>([]),[customerCount,setCustomerCount]=useState(0),[gatewayCount,setGatewayCount]=useState(0),[loading,setLoading]=useState(true)
- async function load(){const {data:{user}}=await db.auth.getUser();if(!user){setLoading(false);return}const [s,c,g]=await Promise.all([db.from('sales').select('id,amount,status,created_at,occurred_at,data').eq('user_id',user.id).order('created_at',{ascending:false}).limit(5000),db.from('customers').select('id',{count:'exact',head:true}).eq('user_id',user.id),db.from('gateways').select('id',{count:'exact',head:true}).eq('user_id',user.id)]);setSales((s.data||[]).map((x:any)=>({id:String(x.id),amount:Number(x.amount??obj(x.data).amount??0),status:String(x.status??obj(x.data).status??''),created_at:String(x.occurred_at||x.created_at),data:obj(x.data)})));setCustomerCount(c.count??0);setGatewayCount(g.count??0);setLoading(false)}
- useEffect(()=>{void load()},[])
- useEffect(()=>{const h=(e:Event)=>setActive((e as CustomEvent<string>).detail||'dashboard');window.addEventListener('althea-mobile-page',h);return()=>window.removeEventListener('althea-mobile-page',h)},[])
- useEffect(()=>{void db.auth.getUser().then(({data:{user}})=>{if(!user)return;const channel=db.channel(`dashboard-mobile-${user.id}`).on('postgres_changes',{event:'*',schema:'public',table:'sales',filter:`user_id=eq.${user.id}`},()=>void load()).on('postgres_changes',{event:'*',schema:'public',table:'gateways',filter:`user_id=eq.${user.id}`},()=>void load()).subscribe();return()=>{void db.removeChannel(channel)}})},[db])
- const stats=useMemo(()=>{const approved=sales.filter(s=>paid(s.status)),revenue=approved.reduce((n,s)=>n+s.amount,0),avg=approved.length?revenue/approved.length:0;return{revenue,transactions:sales.length,averageTicket:avg}},[sales])
- const methods=useMemo(()=>{const counts:Record<string,number>={};sales.filter(s=>paid(s.status)).forEach(s=>{const d=obj(s.data);const method=String(d.payment_method||d.paymentMethod||'Outros');const key=/pix/i.test(method)?'Pix':/boleto/i.test(method)?'Boleto':/card|cart[aã]o/i.test(method)?'Cartão':'Outros';counts[key]=(counts[key]||0)+s.amount});const total=Object.values(counts).reduce((a,b)=>a+b,0);return ['Cartão','Boleto','Pix','Outros'].map(name=>({name,value:total?Math.round(((counts[name]||0)/total)*100):0}))},[sales])
- const hasTransactions=sales.length>0
- const go=(page:string)=>{setActive(page);window.dispatchEvent(new CustomEvent('althea-mobile-page',{detail:page}))}
- if(active!=='dashboard')return null
- return <section className="althea-mobile-dashboard" aria-label="Dashboard mobile"><header className="amd-header"><div className="amd-brand"><img src="/althea-logo.png" alt="Althea Pay"/></div><button className="amd-icon-button" aria-label="Mais opções" type="button"><MoreHorizontal size={19}/></button></header><div className="amd-heading"><span className="amd-eyebrow">CONTROL PLANE</span><h1>Dashboard</h1><p>Visão geral do seu negócio</p></div><button className="amd-period" type="button"><span>Todo o período</span><span aria-hidden="true">⌄</span></button><div className="amd-kpis">{[['Receita',loading?'—':money(stats.revenue),'Período atual'],['Transações',loading?'—':String(stats.transactions),'Total processado'],['Ticket Médio',loading?'—':money(stats.averageTicket),'Por transação'],['Novos Clientes',loading?'—':String(customerCount),'Clientes cadastrados']].map(([label,value,note])=><article className={`amd-card amd-kpi ${loading?'amd-loading':''}`} key={label}><span>{label}</span><strong>{value}</strong><small>{note}</small></article>)}</div><article className="amd-card amd-chart-card"><div className="amd-card-heading"><div><span className="amd-label">Receita ao longo do tempo</span><strong>{loading?'—':money(stats.revenue)}</strong></div><BarChart3 size={17}/></div><div className={`amd-chart-state ${hasTransactions?'has-data':''}`}>{loading?<span className="amd-skeleton-line"/>:<><svg className="amd-chart" viewBox="0 0 252 104" role="img" aria-label="Receita ao longo do tempo" preserveAspectRatio="none"><path className="amd-chart-grid" d="M8 18H244 M8 44H244 M8 70H244 M8 96H244"/>{hasTransactions&&<path className="amd-chart-line" d="M8 88 C34 82 48 74 68 76 S101 55 119 63 S149 38 166 49 S193 30 216 27 S235 20 244 14"/>}</svg>{!hasTransactions&&<span>Sem dados no período</span>}</>}</div><div className="amd-chart-axis"><span>Início</span><span>Período atual</span></div></article><article className="amd-card amd-revenue-card"><div className="amd-section-title"><span>Fontes de Receita</span><small>Distribuição</small></div><div className="amd-source-layout"><div className="amd-donut"><span>{hasTransactions?`${methods.reduce((a,b)=>a+b.value,0)}%`:'0%'}</span><small>Total</small></div><div className="amd-source-list">{methods.map(item=><div key={item.name}><i/><span>{item.name}</span><b>{item.value}%</b></div>)}</div></div>{!hasTransactions&&<p className="amd-data-note">A distribuição aparecerá quando houver transações reais.</p>}</article><article className="amd-card amd-empty-card"><div className="amd-section-title"><span>Transações Recentes</span><small>{hasTransactions?'Ver todas':'Últimas vendas'}</small></div>{hasTransactions?<div className="amd-recent-list">{sales.slice(0,3).map(s=><div key={s.id}><span>{s.id.slice(0,8)}</span><b>{money(s.amount)}</b></div>)}</div>:<><div className="amd-empty-icon"><CreditCard size={21}/></div><strong>Nenhuma transação encontrada</strong><p>As transações recentes aparecerão aqui.</p></>}<button type="button" className="amd-secondary-button" onClick={()=>go('vendas')}>Ir para Vendas</button></article><article className="amd-card amd-gateway-card"><div className="amd-section-title"><span>Status dos Gateways</span><small>Infraestrutura</small></div>{loading?<span className="amd-skeleton-line"/>:gatewayCount===0?<div className="amd-gateway-empty"><Network size={18}/><strong>Nenhum gateway conectado</strong><p>Conecte um gateway para acompanhar o status nesta área.</p></div>:<div className="amd-gateway-live"><Network size={18}/><strong>{gatewayCount} gateway{gatewayCount===1?' conectado':'s conectados'}</strong><span>Dados sincronizados</span></div>}</article><nav className="amd-bottom-nav" aria-label="Navegação principal">{[['Dashboard',LayoutDashboard,'dashboard'],['Vendas',CreditCard,'vendas'],['Funis',GitBranch,'funis'],['Gateway',Network,'gateways'],['Configuração',Settings,'configuracoes']].map(([label,Icon,page])=><button key={page} type="button" className={page===active?'active':''} onClick={()=>go(page as string)}><Icon size={18}/><span>{label}</span></button>)}</nav></section>
+const DAY_MS = 86_400_000
+const pad = (n: number) => String(n).padStart(2, '0')
+const iso = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+const parse = (value: string) => { const [y, m, d] = value.split('-').map(Number); return new Date(y, m - 1, d) }
+const addDays = (value: string, amount: number) => { const d = parse(value); d.setDate(d.getDate() + amount); return iso(d) }
+const formatDate = (value: string) => parse(value).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+const today = iso(new Date())
+const minDate = addDays(today, -89)
+
+function buildCalendar(month: Date) {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1)
+  const start = new Date(first)
+  start.setDate(first.getDate() - first.getDay())
+  return Array.from({ length: 42 }, (_, index) => { const d = new Date(start.getTime() + index * DAY_MS); return { value: iso(d), day: d.getDate(), current: d.getMonth() === month.getMonth() } })
+}
+
+export default function DashboardMobile() {
+  const [active, setActive] = useState('dashboard')
+  const [range, setRange] = useState<Range>({ start: today, end: today })
+  const [draftRange, setDraftRange] = useState<Range>({ start: today, end: today })
+  const [periodOpen, setPeriodOpen] = useState(false)
+  const [customOpen, setCustomOpen] = useState(false)
+  const [calendarMonth, setCalendarMonth] = useState(parse(today))
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const handler = (event: Event) => setActive((event as CustomEvent<string>).detail || 'dashboard')
+    window.addEventListener('althea-mobile-page', handler)
+    return () => window.removeEventListener('althea-mobile-page', handler)
+  }, [])
+
+  const selectedLabel = useMemo(() => range.start === range.end ? formatDate(range.start) : `${formatDate(range.start)} — ${formatDate(range.end)}`, [range])
+  const daysSelected = Math.floor((parse(range.end).getTime() - parse(range.start).getTime()) / DAY_MS) + 1
+  const metrics: Metric[] = [
+    { label: 'Receita', value: 'R$ 0,00', note: 'Sem dados no período' },
+    { label: 'Transações', value: '0', note: 'Sem transações' },
+    { label: 'Ticket Médio', value: 'R$ 0,00', note: 'Sem vendas aprovadas' },
+    { label: 'Novos Clientes', value: '0', note: 'Sem clientes cadastrados' },
+  ]
+
+  const applyPreset = (days: number | null) => {
+    const start = days === null ? today : addDays(today, -(days - 1))
+    setRange({ start, end: today })
+    setDraftRange({ start, end: today })
+    setPeriodOpen(false)
+    setCustomOpen(false)
+  }
+
+  const openCustom = () => {
+    setDraftRange(range)
+    setCalendarMonth(parse(range.start))
+    setPeriodOpen(false)
+    setCustomOpen(true)
+  }
+
+  const selectDay = (value: string) => {
+    if (value < minDate || value > today) return
+    if (draftRange.start === draftRange.end || value < draftRange.start) {
+      setDraftRange({ start: value, end: value })
+      return
+    }
+    setDraftRange({ start: draftRange.start, end: value })
+  }
+
+  const applyCustom = () => {
+    if (draftRange.start > draftRange.end) return
+    setLoading(true)
+    window.setTimeout(() => { setRange(draftRange); setLoading(false); setCustomOpen(false) }, 180)
+  }
+
+  const go = (page: string) => {
+    setActive(page)
+    window.dispatchEvent(new CustomEvent('althea-mobile-page', { detail: page }))
+  }
+
+  if (active !== 'dashboard') return null
+
+  const calendarDays = buildCalendar(calendarMonth)
+  const monthLabel = calendarMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const minMonth = parse(minDate)
+  const maxMonth = parse(today)
+  const canPrevMonth = calendarMonth.getFullYear() > minMonth.getFullYear() || calendarMonth.getMonth() > minMonth.getMonth()
+  const canNextMonth = calendarMonth.getFullYear() < maxMonth.getFullYear() || calendarMonth.getMonth() < maxMonth.getMonth()
+
+  return <section className="althea-mobile-dashboard" aria-label="Dashboard mobile">
+    <header className="amd-header">
+      <div className="amd-brand"><img src="/althea-logo.png" alt="Althea Pay" /></div>
+      <button className="amd-icon-button" aria-label="Mais opções" type="button"><MoreHorizontal size={19} /></button>
+    </header>
+
+    <div className="amd-heading"><span className="amd-eyebrow">CONTROL PLANE</span><h1>Dashboard</h1><p>Visão geral do seu negócio</p></div>
+
+    <div className="amd-period-wrap">
+      <button className="amd-period" type="button" onClick={() => setPeriodOpen(value => !value)} aria-expanded={periodOpen}><span className="amd-period-copy"><CalendarDays size={14} /><span>{selectedLabel}</span></span><span aria-hidden="true">⌄</span></button>
+      {periodOpen && <div className="amd-period-menu" role="menu">
+        <button type="button" onClick={() => applyPreset(1)}>Hoje</button>
+        <button type="button" onClick={() => applyPreset(2)}>Ontem</button>
+        <button type="button" onClick={() => applyPreset(7)}>Últimos 7 dias</button>
+        <button type="button" onClick={() => applyPreset(30)}>Últimos 30 dias</button>
+        <button type="button" onClick={() => applyPreset(90)}>Últimos 90 dias</button>
+        <button type="button" className="amd-period-custom" onClick={openCustom}>Personalizado <span>›</span></button>
+      </div>}
+    </div>
+
+    <div className="amd-filter-caption"><span>{daysSelected} {daysSelected === 1 ? 'dia selecionado' : 'dias selecionados'}</span><button type="button" onClick={() => applyPreset(null)}>Voltar para hoje</button></div>
+
+    <div className="amd-kpis">{metrics.map(metric => <article className={`amd-card amd-kpi ${loading ? 'amd-loading' : ''}`} key={metric.label}><span>{metric.label}</span>{loading ? <div className="amd-skeleton-line" /> : <strong>{metric.value}</strong>}<small>{metric.note}</small></article>)}</div>
+
+    <article className="amd-card amd-chart-card"><div className="amd-card-heading"><div><span className="amd-label">Receita ao longo do tempo</span><strong>{loading ? '—' : money(0)}</strong></div><BarChart3 size={17} /></div><div className="amd-chart-state"><svg className="amd-chart" viewBox="0 0 252 104" role="img" aria-label="Receita ao longo do tempo" preserveAspectRatio="none"><path className="amd-chart-grid" d="M8 18H244 M8 44H244 M8 70H244 M8 96H244" /></svg><span>{loading ? 'Atualizando período…' : 'Sem dados no período selecionado'}</span></div><div className="amd-chart-axis"><span>{formatDate(range.start)}</span><span>{formatDate(range.end)}</span></div></article>
+
+    <article className="amd-card amd-revenue-card"><div className="amd-section-title"><span>Fontes de Receita</span><small>Distribuição</small></div><div className="amd-source-layout"><div className="amd-donut"><span>0%</span><small>Total</small></div><div className="amd-source-list">{['Cartão', 'Pix', 'Boleto', 'Outros'].map(name => <div key={name}><i /><span>{name}</span><b>0%</b></div>)}</div></div><p className="amd-data-note">A distribuição aparecerá quando houver transações reais.</p></article>
+
+    <article className="amd-card amd-empty-card"><div className="amd-section-title"><span>Transações Recentes</span><small>Últimas vendas</small></div><div className="amd-empty-icon"><CreditCard size={21} /></div><strong>Nenhuma transação encontrada</strong><p>As transações do período selecionado aparecerão aqui quando houver dados.</p><button type="button" className="amd-secondary-button" onClick={() => go('vendas')}>Ir para Vendas</button></article>
+
+    <article className="amd-card amd-gateway-card"><div className="amd-section-title"><span>Status dos Gateways</span><small>Infraestrutura</small></div><div className="amd-gateway-empty"><Network size={18} /><strong>Nenhum gateway conectado</strong><p>Conecte um gateway para acompanhar disponibilidade, saúde e processamento.</p><button type="button" className="amd-secondary-button" onClick={() => go('gateways')}>Configurar gateway</button></div></article>
+
+    <nav className="amd-bottom-nav" aria-label="Navegação principal">{[['Dashboard', LayoutDashboard, 'dashboard'], ['Vendas', CreditCard, 'vendas'], ['Funis', GitBranch, 'funis'], ['Gateway', Network, 'gateways'], ['Configuração', Settings, 'configuracoes']].map(([label, Icon, page]) => <button key={page as string} type="button" className={page === active ? 'active' : ''} onClick={() => go(page as string)}><Icon size={18} /><span>{label as string}</span></button>)}</nav>
+
+    {customOpen && <div className="amd-calendar-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setCustomOpen(false) }}><div className="amd-calendar-sheet" role="dialog" aria-modal="true" aria-label="Selecionar período">
+      <div className="amd-calendar-head"><div><span className="amd-eyebrow">PERÍODO</span><strong>Selecionar datas</strong><small>Disponível nos últimos 90 dias</small></div><button type="button" aria-label="Fechar" onClick={() => setCustomOpen(false)}><X size={18} /></button></div>
+      <div className="amd-calendar-range"><div><span>De</span><b>{formatDate(draftRange.start)}</b></div><div><span>Até</span><b>{formatDate(draftRange.end)}</b></div></div>
+      <div className="amd-calendar-nav"><button type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))} disabled={!canPrevMonth}><ChevronLeft size={17} /></button><strong>{monthLabel}</strong><button type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))} disabled={!canNextMonth}><ChevronRight size={17} /></button></div>
+      <div className="amd-weekdays">{['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}</div>
+      <div className="amd-calendar-grid">{calendarDays.map(day => { const disabled = day.value < minDate || day.value > today; const selected = day.value >= draftRange.start && day.value <= draftRange.end; const edge = day.value === draftRange.start || day.value === draftRange.end; return <button key={day.value} type="button" disabled={disabled} className={`${day.current ? '' : 'outside'} ${selected ? 'selected' : ''} ${edge ? 'edge' : ''}`} onClick={() => selectDay(day.value)}>{day.day}</button> })}</div>
+      <div className="amd-calendar-footer"><button type="button" className="amd-calendar-clear" onClick={() => setDraftRange({ start: today, end: today })}>Hoje</button><button type="button" className="amd-calendar-apply" onClick={applyCustom}>Aplicar período</button></div>
+    </div></div>}
+  </section>
 }
