@@ -25,11 +25,11 @@ jobs:
           set -euo pipefail
           test -f supabase/config.toml
           test -f supabase/functions/gateway-orchestrator/index.ts
-          test -f supabase/functions/checkout-engine/index.ts
+          test -f supabase/functions/checkout-engine-v2/index.ts
           test -f supabase/functions/health/index.ts
           grep -q 'verify_jwt = true' supabase/config.toml
           grep -q '\[functions.gateway-orchestrator\]' supabase/config.toml
-          grep -q '\[functions.checkout-engine\]' supabase/config.toml
+          grep -q '\[functions.checkout-engine-v2\]' supabase/config.toml
 
       - name: Health endpoint
         shell: bash
