@@ -1,7 +1,9 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
-import { BarChart3, CreditCard, MessageSquare, Settings, WalletCards, MoreVertical } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { BarChart3, CreditCard, MessageSquare, Settings, WalletCards } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import MotionButton from '@/components/motion-button'
 import DashboardMobile from '@/components/dashboard-control'
 import SalesMobile from '@/components/sales-mobile'
 import FunnelsMobile from '@/components/ChatOmnichannel'
@@ -16,8 +18,18 @@ const tabs = [
   { id: 'config', label: 'Configuração', icon: Settings },
 ] as const
 
+type TabId = (typeof tabs)[number]['id']
+
+const panels: Record<TabId, React.ComponentType> = {
+  dashboard: DashboardMobile,
+  vendas: SalesMobile,
+  chat: FunnelsMobile,
+  gateways: GatewaysMobile,
+  config: SettingsMobile,
+}
+
 export default function MobileDashboardOrchestrator() {
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]['id']>('dashboard')
+  const [activeTab, setActiveTab] = useState<TabId>('dashboard')
   const [logo, setLogo] = useState('/althea-logo.png')
 
   useEffect(() => {
@@ -36,37 +48,58 @@ export default function MobileDashboardOrchestrator() {
     return () => window.removeEventListener('althea-brand-updated', syncBrand)
   }, [])
 
-  const selectTab = (tab: (typeof tabs)[number]['id']) => {
+  const selectTab = (tab: TabId) => {
     setActiveTab(tab)
     window.dispatchEvent(new CustomEvent('althea-mobile-page', { detail: tab }))
   }
 
+  const ActivePanel = panels[activeTab]
+
   return (
     <div className="althea-dashboard-orchestrator">
       <header className="ado-header">
-        <button type="button" className="ado-brand" aria-label="Voltar ao Dashboard" onClick={() => selectTab('dashboard')}>
+        <MotionButton
+          type="button"
+          className="ado-brand"
+          aria-label="Voltar ao Dashboard"
+          onClick={() => selectTab('dashboard')}
+          glow
+        >
           <img src={logo} alt="ALTHEA PAY" />
-        </button>
-        <button type="button" className="ado-menu" aria-label="Opções">
-          <MoreVertical size={19} />
-        </button>
+        </MotionButton>
       </header>
 
-      <main className="ado-content">
-        <div className={activeTab === 'dashboard' ? 'ado-panel active' : 'ado-panel'}><DashboardMobile /></div>
-        <div className={activeTab === 'vendas' ? 'ado-panel active' : 'ado-panel'}><SalesMobile /></div>
-        <div className={activeTab === 'chat' ? 'ado-panel active' : 'ado-panel'}><FunnelsMobile /></div>
-        <div className={activeTab === 'gateways' ? 'ado-panel active' : 'ado-panel'}><GatewaysMobile /></div>
-        <div className={activeTab === 'config' ? 'ado-panel active' : 'ado-panel'}><SettingsMobile /></div>
+      <main className="ado-content" aria-live="polite">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={activeTab}
+            className="ado-panel active"
+            initial={{ opacity: 0, x: 18, scale: 0.985 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -12, scale: 0.99 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 30, mass: 0.75 }}
+          >
+            <ActivePanel />
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <nav className="ado-bottom-nav" aria-label="Navegação principal">
-        {tabs.map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" className={activeTab === id ? 'active' : ''} aria-current={activeTab === id ? 'page' : undefined} onClick={() => selectTab(id)}>
-            <Icon size={18} aria-hidden="true" />
-            <span>{label}</span>
-          </button>
-        ))}
+        {tabs.map(({ id, label, icon: Icon }) => {
+          const active = activeTab === id
+          return (
+            <MotionButton
+              key={id}
+              type="button"
+              className={active ? 'active' : ''}
+              aria-current={active ? 'page' : undefined}
+              onClick={() => selectTab(id)}
+            >
+              <Icon size={18} aria-hidden="true" />
+              <span>{label}</span>
+            </MotionButton>
+          )
+        })}
       </nav>
     </div>
   )
