@@ -1,9 +1,6 @@
 /* ALTHEA PAY — official brand variants */
-/* Assets are the approved artwork supplied in /public. */
-.app-brand{display:block!important;width:92px;height:92px;margin:8px auto 24px!important;padding:0!important;border-radius:18px;background:transparent url('/althea-mark.png') center/contain no-repeat;box-shadow:none;overflow:hidden}
-.app-brand>img,.app-brand>div,.app-brand>.app-brand-tag{display:none!important}
-.brand-lockup img{width:min(100%,340px)!important;height:auto!important;object-fit:contain!important}
-.althea-wordmark{display:block;width:min(100%,220px);height:48px;background:transparent url('/althea-wordmark.png') center/contain no-repeat}
-.althea-mark{display:block;width:48px;height:48px;background:transparent url('/althea-mark.png') center/contain no-repeat}
-@media(max-width:1100px) and (min-width:801px){.app-brand{width:78px;height:78px}}
-@media(max-width:800px){.app-brand{width:64px;height:64px;margin:6px auto 18px!important}}
+/* The supplied logo is the visual reference; platform palette remains canonical. */
+.app-brand{display:block!important;width:172px;height:72px;margin:7px auto 25px!important;padding:0!important;border-radius:14px;background:transparent url('/althea-logo.png') center/contain no-repeat;box-shadow:none;overflow:hidden;filter:drop-shadow(0 0 14px rgba(29,184,84,.14));transition:filter .25s ease,transform .2s ease}.app-brand:hover{filter:drop-shadow(0 0 18px rgba(29,184,84,.22));transform:translateY(-1px)}.app-brand>img,.app-brand>div,.app-brand>.app-brand-tag{display:none!important}.brand-lockup img{width:min(100%,340px)!important;height:auto!important;object-fit:contain!important}.althea-wordmark{display:block;width:min(100%,220px);height:48px;background:transparent url('/althea-wordmark.png') center/contain no-repeat}.althea-mark{display:block;width:48px;height:48px;background:transparent url('/althea-mark.png') center/contain no-repeat}.amg-brand img,.ams-brand img,.amd-brand img{object-fit:contain;object-position:left center;filter:drop-shadow(0 0 14px rgba(29,184,84,.16));transition:filter .25s ease,transform .2s ease}.amg-brand img:hover,.ams-brand img:hover,.amd-brand img:hover{filter:drop-shadow(0 0 18px rgba(29,184,84,.23));transform:translateY(-1px)}
+@media(max-width:1100px) and (min-width:801px){.app-brand{width:150px;height:64px}}
+@media(max-width:800px){.app-brand{width:150px;height:62px;margin:4px auto 18px!important}}
+@media(prefers-reduced-motion:reduce){.app-brand,.amg-brand img,.ams-brand img,.amd-brand img{transition:none!important}.app-brand:hover,.amg-brand img:hover,.ams-brand img:hover,.amd-brand img:hover{transform:none!important}}
