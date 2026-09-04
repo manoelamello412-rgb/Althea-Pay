@@ -1,6 +1,7 @@
 import type {Metadata} from 'next'
 import type {ReactNode} from 'react'
 import './globals.css'
+import './motion.css'
 import './althea-design-system.css'
 import './brand-kit.css'
 import './althea-visual.css'
