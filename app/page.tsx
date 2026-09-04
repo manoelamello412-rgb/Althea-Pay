@@ -1,7 +1,6 @@
 'use client'
 
 import { WhiteLabelWorkspace } from '@/components/white-label-workspace'
-import DashboardPeriodController from '@/components/dashboard-period-controller'
 import MobileBottomNav from '@/components/mobile-bottom-nav'
 import DashboardControl from '@/components/dashboard-control'
 import SalesMobile from '@/components/sales-mobile'
@@ -24,7 +23,6 @@ export default function DashboardPage() {
   const mobile = ['dashboard', 'vendas', 'funis', 'gateways', 'configuracoes'].includes(mobilePage)
 
   return <>
-    <DashboardPeriodController />
     <div className="althea-mobile-stage-host" style={{ display: mobile ? 'block' : 'none' }}>
       <div style={{ display: mobilePage === 'dashboard' ? 'block' : 'none' }}><DashboardControl /></div>
       <div style={{ display: mobilePage === 'vendas' ? 'block' : 'none' }}><SalesMobile /></div>
