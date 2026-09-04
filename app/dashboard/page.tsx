@@ -6,9 +6,9 @@ import { useEffect, useState, type ComponentType } from 'react'
 import MotionButton from '@/components/motion-button'
 import DashboardMobile from '@/components/dashboard-control'
 import SalesMobile from '@/components/sales-mobile'
-import FunnelsMobile from '@/components/ChatOmnichannel'
-import GatewaysMobile from '@/components/GatewaysControl'
-import SettingsMobile from '@/components/SettingsControl'
+import FunnelsMobile from '@/components/funnels-mobile'
+import GatewaysMobile from '@/components/gateways-mobile'
+import SettingsMobile from '@/components/settings-mobile'
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
