@@ -16,7 +16,8 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.checkout-engine]
-verify_jwt = true
+# retired: 410 stub, see checkout-engine-v2
+verify_jwt = false
 
 [functions.checkout-engine-v2]
 verify_jwt = true
@@ -28,7 +29,8 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.api]
-verify_jwt = true
+# retired: 410 stub, see althea-public-api
+verify_jwt = false
 
 [functions.health]
 verify_jwt = false
@@ -37,12 +39,14 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.integration-webhook]
+# retired: 410 stub, see althea-webhook
 verify_jwt = false
 
 [functions.webhook-integrations]
 verify_jwt = true
 
 [functions.automation-engine]
+# retired: 410 stub, see automation-engine-v2
 verify_jwt = false
 
 [functions.automation-engine-v2]
