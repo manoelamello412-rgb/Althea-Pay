@@ -1,16 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-
-function requireEnv(name: string): string {
-  const value = process.env[name]
-  if (!value) throw new Error(`Missing required environment variable: ${name}`)
-  return value
-}
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './public-config'
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies()
-  const url = requireEnv('NEXT_PUBLIC_SUPABASE_URL')
-  const key = requireEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY')
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? SUPABASE_URL
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? SUPABASE_PUBLISHABLE_KEY
 
   return createServerClient(url, key, {
     cookies: {

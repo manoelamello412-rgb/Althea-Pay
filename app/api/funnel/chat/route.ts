@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/supabase/public-config'
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hkraryqoziravulvqkid.supabase.co'
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl'
-const TARGET = `${SUPABASE_URL}/functions/v1/funnel-events`
+const TARGET = `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? SUPABASE_URL}/functions/v1/funnel-events`
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? SUPABASE_PUBLISHABLE_KEY
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type,x-funnel-event-token', 'Access-Control-Allow-Methods': 'POST,OPTIONS' } })

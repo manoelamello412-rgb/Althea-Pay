@@ -1,13 +1,8 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './public-config'
 
 let browserClient: SupabaseClient | undefined
-
-function requireBrowserEnv(name: string): string {
-  const value = process.env[name]
-  if (!value) throw new Error(`Missing required environment variable: ${name}`)
-  return value
-}
 
 function getBrowserClient(): SupabaseClient {
   if (browserClient) return browserClient
@@ -17,8 +12,8 @@ function getBrowserClient(): SupabaseClient {
   }
 
   browserClient = createBrowserClient(
-    requireBrowserEnv('NEXT_PUBLIC_SUPABASE_URL'),
-    requireBrowserEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'),
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? SUPABASE_PUBLISHABLE_KEY,
   )
 
   return browserClient
