@@ -9,13 +9,11 @@ function requireBrowserEnv(name: string): string {
   return value
 }
 
-export function createSupabaseBrowserClient(): SupabaseClient {
+function getBrowserClient(): SupabaseClient {
   if (browserClient) return browserClient
 
   if (typeof window === 'undefined') {
-    // Client components can be prerendered by Next.js. The browser client must
-    // only be constructed with public runtime configuration in the browser.
-    return undefined as unknown as SupabaseClient
+    throw new Error('Supabase browser client accessed before browser hydration')
   }
 
   browserClient = createBrowserClient(
@@ -24,4 +22,16 @@ export function createSupabaseBrowserClient(): SupabaseClient {
   )
 
   return browserClient
+}
+
+const lazyBrowserClient = new Proxy({} as SupabaseClient, {
+  get(_target, property) {
+    const client = getBrowserClient()
+    const value = Reflect.get(client as object, property)
+    return typeof value === 'function' ? value.bind(client) : value
+  },
+})
+
+export function createSupabaseBrowserClient(): SupabaseClient {
+  return lazyBrowserClient
 }
