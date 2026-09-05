@@ -106,7 +106,7 @@ export default function SettingsPage() {
       setAvatarUrl(typeof metadata.avatar_url === 'string' ? metadata.avatar_url : '')
       const [businessResult, credentialsResult, factorsResult] = await Promise.all([
         supabase.from('merchant_business_profiles').select('document_type,document_number,legal_name,operation_metadata').eq('user_id', user.id).maybeSingle(),
-        supabase.from('user_gateway_credentials').select('id,gateway_name,is_active,priority_order,metadata').eq('user_id', user.id).order('priority_order', { ascending: true }),
+        supabase.rpc('list_gateway_credentials'),
         supabase.auth.mfa.listFactors(),
       ])
       if (cancelled) return
@@ -247,7 +247,7 @@ export default function SettingsPage() {
       const result = await supabase.rpc('upsert_gateway_credential', { p_gateway_name: credentialGateway, p_api_key: credentialKey.trim(), p_metadata: { source: 'settings', configured_at: new Date().toISOString() }, p_is_active: credentialActive, p_priority_order: priority })
       if (result.error) throw result.error
       setCredentialKey('')
-      const refreshed = await supabase.from('user_gateway_credentials').select('id,gateway_name,is_active,priority_order,metadata').order('priority_order', { ascending: true })
+      const refreshed = await supabase.rpc('list_gateway_credentials')
       if (refreshed.error) throw refreshed.error
       setCredentials((refreshed.data ?? []) as Credential[])
       setMessage(`${GATEWAYS.find((gateway) => gateway.value === credentialGateway)?.label ?? credentialGateway} configurado sem expor a chave ao navegador.`)
@@ -258,7 +258,7 @@ export default function SettingsPage() {
 
   async function toggleCredential(credential: Credential): Promise<void> {
     setError(''); setMessage('')
-    const result = await supabase.from('user_gateway_credentials').update({ is_active: !credential.is_active }).eq('id', credential.id)
+    const result = await supabase.rpc('set_gateway_credential_status', { p_credential_id: credential.id, p_is_active: !credential.is_active })
     if (result.error) setError(result.error.message)
     else setCredentials((current) => current.map((item) => item.id === credential.id ? { ...item, is_active: !item.is_active } : item))
   }
