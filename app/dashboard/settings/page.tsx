@@ -119,7 +119,7 @@ export default function SettingsPage() {
         })
       }
       if (!credentialsResult.error && credentialsResult.data) setCredentials(credentialsResult.data as Credential[])
-      if (!factorsResult.error) setFactors((factorsResult.data.totp ?? []).map((factor) => ({ id: factor.id, friendly_name: factor.friendly_name, status: factor.status })))
+      if (!factorsResult.error) setFactors((factorsResult.data.totp ?? []).map((factor) => ({ id: factor.id, friendly_name: factor.friendly_name ?? null, status: factor.status })))
       if (businessResult.error && businessResult.error.code !== 'PGRST116') setError(`Negócio: ${businessResult.error.message}`)
       setLoading(false)
     }
@@ -204,7 +204,7 @@ export default function SettingsPage() {
       if (result.error) throw result.error
       const listed = await supabase.auth.mfa.listFactors()
       if (listed.error) throw listed.error
-      setFactors((listed.data.totp ?? []).map((factor) => ({ id: factor.id, friendly_name: factor.friendly_name, status: factor.status })))
+      setFactors((listed.data.totp ?? []).map((factor) => ({ id: factor.id, friendly_name: factor.friendly_name ?? null, status: factor.status })))
       setEnrollingFactor(null); setMfaCode(''); setMessage('MFA TOTP ativado com sucesso.')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Código MFA inválido.')
