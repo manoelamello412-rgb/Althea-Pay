@@ -1,0 +1,31 @@
+name: one-time-settings-type-fix
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-settings-type-fix.yml'
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Normalize MFA factor projection
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/dashboard/settings/page.tsx')
+          s = p.read_text()
+          s = s.replace('friendly_name: factor.friendly_name, status: factor.status', 'friendly_name: factor.friendly_name ?? null, status: factor.status')
+          p.write_text(s)
+          PY
+      - name: Commit and remove one-time workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/dashboard/settings/page.tsx
+          git rm .github/workflows/one-time-settings-type-fix.yml
+          git commit -m 'fix(settings): normalize optional MFA friendly name' || exit 0
+          git push
