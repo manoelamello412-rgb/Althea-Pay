@@ -10,8 +10,8 @@ const tabs: Array<{ id: MobileShellTab; label: string; icon: typeof BarChart3 }>
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
   { id: 'vendas', label: 'Vendas', icon: CreditCard },
   { id: 'funis', label: 'Chat & Funis', icon: MessageSquare },
-  { id: 'gateways', label: 'Gateways', icon: WalletCards },
-  { id: 'configuracoes', label: 'Configurações', icon: Settings },
+  { id: 'gateways', label: 'Gateway', icon: WalletCards },
+  { id: 'configuracoes', label: 'Configuração', icon: Settings },
 ]
 
 type Props = {
@@ -22,8 +22,8 @@ type Props = {
 
 export default function MobileShell({ activeTab, onTabChange, children }: Props) {
   return (
-    <div className="althea-shell">
-      <aside className="althea-glass-sidebar" aria-label="Navegação principal">
+    <div className="althea-shell min-h-screen">
+      <aside className="althea-glass-sidebar">
         <button className="althea-shell-brand" type="button" aria-label="Voltar ao Dashboard" onClick={() => onTabChange('dashboard')}>
           <img src="/althea-logo.png" alt="ALTHEA PAY" />
         </button>
@@ -34,12 +34,13 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
         </div>
       </aside>
 
-      <main className="althea-shell-main">
+      <main className="althea-shell-main pb-32 md:pb-8">
         <div className="althea-bento-stage">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={activeTab}
-              className="althea-screen-transition"
+              className="althea-screen-transition will-change-transform transform-gpu"
+              style={{ transform: 'translate3d(0,0,0)', backfaceVisibility: 'hidden' }}
               initial={{ opacity: 0, x: 18, scale: 0.985, filter: 'blur(4px)' }}
               animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, x: -18, scale: 0.985, filter: 'blur(4px)' }}
@@ -51,7 +52,7 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
         </div>
       </main>
 
-      <nav className="althea-mobile-nav" aria-label="Navegação principal">
+      <nav className="althea-mobile-nav transform-gpu will-change-transform" style={{ transform: 'translate3d(0,0,0)', backfaceVisibility: 'hidden' }} aria-label="Navegação principal">
         {tabs.map(({ id, label, icon: Icon }) => (
           <ShellNavButton key={id} id={id} label={label} icon={Icon} active={activeTab === id} onClick={onTabChange} mobile />
         ))}
@@ -64,7 +65,7 @@ function ShellNavButton({ id, label, icon: Icon, active, onClick, mobile = false
   return (
     <motion.button
       type="button"
-      className={`althea-shell-nav-button${active ? ' active' : ''}${mobile ? ' mobile' : ''}`}
+      className={`althea-shell-nav-button${active ? ' active' : ''}${mobile ? ' mobile' : ''} transform-gpu will-change-transform`}
       aria-current={active ? 'page' : undefined}
       aria-label={label}
       onClick={() => onClick(id)}
