@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BarChart3, CalendarDays, CreditCard, Network, RefreshCw, ShoppingBag, TrendingUp, Users, Wallet } from 'lucide-react'
+import { BarChart3, CreditCard, Network, RefreshCw, ShoppingBag, TrendingUp, Users, Wallet } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Sale = {
@@ -98,7 +98,7 @@ function MetricCard({
 
 export default function DashboardMobileModern() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
-  const [range, setRange] = useState<Range>(() => {
+  const [range] = useState<Range>(() => {
     const current = today()
     return { start: current, end: current }
   })
@@ -216,11 +216,6 @@ export default function DashboardMobileModern() {
     })
     .join(' ')
 
-  const selectPreset = (days: number) => {
-    const current = today()
-    setRange({ start: addDays(current, -(days - 1)), end: current })
-  }
-
   return (
     <section className="min-h-full bg-[#0B0B0D] px-4 pb-8 pt-5 text-slate-100">
       <div className="mx-auto w-full max-w-xl space-y-5">
@@ -230,39 +225,10 @@ export default function DashboardMobileModern() {
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-white">Dashboard</h1>
             <p className="mt-1 text-xs text-slate-500">Visão operacional em tempo real</p>
           </div>
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={loading}
-            aria-label="Atualizar dashboard"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-slate-300 active:scale-95 disabled:opacity-50"
-          >
+          <button type="button" onClick={() => void load()} disabled={loading} aria-label="Atualizar dashboard" className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-slate-300 active:scale-95 disabled:opacity-50">
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
           </button>
         </header>
-
-        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {[
-            ['Hoje', 1],
-            ['7 dias', 7],
-            ['30 dias', 30],
-            ['90 dias', 90],
-          ].map(([label, days]) => {
-            const current = today()
-            const selected = range.end === current && range.start === addDays(current, -(Number(days) - 1))
-            return (
-              <button
-                key={String(days)}
-                type="button"
-                onClick={() => selectPreset(Number(days))}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-medium transition ${selected ? 'border-[#1D8B54]/40 bg-[#1D8B54]/10 text-[#4DDA8A]' : 'border-white/[0.07] bg-white/[0.025] text-slate-400'}`}
-              >
-                <CalendarDays size={13} />
-                {label}
-              </button>
-            )
-          })}
-        </div>
 
         {error && (
           <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4">
@@ -274,7 +240,7 @@ export default function DashboardMobileModern() {
 
         <div className="grid grid-cols-2 gap-3">
           <MetricCard label="Receita" value={money(revenue)} detail="Vendas aprovadas" icon={Wallet} loading={loading} />
-          <MetricCard label="Transações" value={String(periodSales.length)} detail="No período" icon={CreditCard} loading={loading} />
+          <MetricCard label="Transações" value={String(periodSales.length)} detail="No período padrão" icon={CreditCard} loading={loading} />
           <MetricCard label="Ticket médio" value={money(ticket)} detail="Por venda aprovada" icon={TrendingUp} loading={loading} />
           <MetricCard label="Clientes" value={String(customers)} detail="Identificados nas vendas" icon={Users} loading={loading} />
         </div>
@@ -287,22 +253,18 @@ export default function DashboardMobileModern() {
             </div>
             <BarChart3 size={17} className="text-[#1D8B54]" />
           </div>
-
           {daily.some((item) => item.value > 0) ? (
             <>
               <svg viewBox="0 0 300 120" preserveAspectRatio="none" className="mt-5 h-32 w-full" role="img" aria-label="Gráfico de receita">
                 <path d="M8 25H292 M8 55H292 M8 85H292 M8 115H292" stroke="currentColor" strokeOpacity=".06" fill="none" />
                 <polyline points={chartPoints} fill="none" stroke="currentColor" strokeWidth="2.5" className="text-[#1D8B54]" vectorEffect="non-scaling-stroke" />
               </svg>
-              <div className="flex justify-between text-[9px] text-slate-600">
-                <span>{shortDate(range.start)}</span>
-                <span>{shortDate(range.end)}</span>
-              </div>
+              <div className="flex justify-between text-[9px] text-slate-600"><span>{shortDate(range.start)}</span><span>{shortDate(range.end)}</span></div>
             </>
           ) : (
             <div className="flex h-32 flex-col items-center justify-center text-center">
               <BarChart3 size={22} className="text-slate-700" />
-              <p className="mt-2 text-[11px] text-slate-500">{loading ? 'Sincronizando dados…' : 'Sem receita aprovada no período.'}</p>
+              <p className="mt-2 text-[11px] text-slate-500">{loading ? 'Sincronizando dados…' : 'Sem receita aprovada no período padrão.'}</p>
             </div>
           )}
         </article>
@@ -311,11 +273,10 @@ export default function DashboardMobileModern() {
           <div className="flex items-center justify-between">
             <div>
               <span className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">Transações recentes</span>
-              <p className="mt-1 text-[10px] text-slate-600">Últimas operações do período</p>
+              <p className="mt-1 text-[10px] text-slate-600">Últimas operações do período padrão</p>
             </div>
             <ShoppingBag size={17} className="text-slate-600" />
           </div>
-
           {periodSales.length ? (
             <div className="mt-3 divide-y divide-white/[0.05]">
               {periodSales.slice(0, 5).map((sale) => {
@@ -336,7 +297,7 @@ export default function DashboardMobileModern() {
             <div className="flex flex-col items-center justify-center py-9 text-center">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.03] text-slate-700"><CreditCard size={20} /></span>
               <strong className="mt-3 text-xs text-white">Nenhuma transação encontrada</strong>
-              <p className="mt-1 max-w-[260px] text-[10px] leading-4 text-slate-600">As operações reais aparecerão aqui assim que existirem no período selecionado.</p>
+              <p className="mt-1 max-w-[260px] text-[10px] leading-4 text-slate-600">As operações reais aparecerão aqui assim que existirem.</p>
             </div>
           )}
         </article>
@@ -349,7 +310,6 @@ export default function DashboardMobileModern() {
             </div>
             <Network size={17} className="text-[#1D8B54]" />
           </div>
-
           {gateways.length ? (
             <div className="mt-3 space-y-2">
               {gateways.slice(0, 5).map((gateway) => {
