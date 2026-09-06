@@ -1,5 +1,6 @@
 import type {Metadata} from 'next'
 import type {ReactNode} from 'react'
+import './tailwind.css'
 import './globals.css'
 import './motion.css'
 import './mobile-modernization.css'
