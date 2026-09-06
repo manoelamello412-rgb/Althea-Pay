@@ -24,5 +24,5 @@ import './funnels-mobile.css'
 import './settings-mobile.css'
 import './mobile-shell-global.css'
 
-export const metadata:Metadata={title:'ALTHEA PAY — Control Center',description:'Central de controle, inteligência e operações dos seus funis.',icons:{icon:'/althea-logo.png',shortcut:'/althea-logo.png',apple:'/althea-logo.png'}}
+export const metadata:Metadata={title:'ALTHEA PAY — Control Center',description:'Central de controle, inteligência e operações dos seus funis.',icons:{icon:'/althea-logo-inner.png',shortcut:'/althea-logo-inner.png',apple:'/althea-logo-inner.png'}}
 export default function RootLayout({children}:{children:ReactNode}){return <html lang="pt-BR"><body>{children}</body></html>}
