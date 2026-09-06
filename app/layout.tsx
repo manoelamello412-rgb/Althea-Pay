@@ -22,6 +22,6 @@ import './sales-mobile.css'
 import './gateways-mobile.css'
 import './funnels-mobile.css'
 import './settings-mobile.css'
-import DashboardSessionActions from '@/components/dashboard-session-actions'
+
 export const metadata:Metadata={title:'ALTHEA PAY — Control Center',description:'Central de controle, inteligência e operações dos seus funis.',icons:{icon:'/althea-mark.png',shortcut:'/althea-mark.png',apple:'/althea-mark.png'}}
-export default function RootLayout({children}:{children:ReactNode}){return <html lang="pt-BR"><body>{children}<DashboardSessionActions/></body></html>}
+export default function RootLayout({children}:{children:ReactNode}){return <html lang="pt-BR"><body>{children}</body></html>}
