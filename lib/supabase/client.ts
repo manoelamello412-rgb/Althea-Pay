@@ -1,6 +1,8 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './public-config'
+
+const SUPABASE_URL = 'https://hkraryqoziravulvqkid.supabase.co'
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl'
 
 let browserClient: SupabaseClient | undefined
 
@@ -11,11 +13,7 @@ function getBrowserClient(): SupabaseClient {
     throw new Error('Supabase browser client accessed before browser hydration')
   }
 
-  browserClient = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? SUPABASE_PUBLISHABLE_KEY,
-  )
-
+  browserClient = createBrowserClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
   return browserClient
 }
 
