@@ -1,19 +1,23 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/supabase/public-config'
+
+const FALLBACK_SUPABASE_URL = 'https://hkraryqoziravulvqkid.supabase.co'
+const FALLBACK_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl'
 
 export async function proxy(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? SUPABASE_URL
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || FALLBACK_SUPABASE_URL
   const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    SUPABASE_PUBLISHABLE_KEY
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    FALLBACK_SUPABASE_PUBLISHABLE_KEY
   const isLogin = request.nextUrl.pathname === '/login'
 
   let response = NextResponse.next({ request })
   const supabase = createServerClient(url, key, {
     cookies: {
-      getAll() { return request.cookies.getAll() },
+      getAll() {
+        return request.cookies.getAll()
+      },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
         response = NextResponse.next({ request })
@@ -32,7 +36,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(target)
   }
 
-  if (isAuthenticated && isLogin) return NextResponse.redirect(new URL('/', request.url))
+  if (isAuthenticated && isLogin) return NextResponse.redirect(new URL('/dashboard', request.url))
   return response
 }
 
