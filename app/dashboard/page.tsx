@@ -3,12 +3,25 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
 import DashboardMobile from '@/components/dashboard-control'
-import SalesMobile from '@/components/sales-mobile'
 import FunnelsMobile from '@/components/funnels-mobile'
 import GatewaysMobile from '@/components/gateways-mobile'
 import SettingsMobile from '@/components/settings-mobile'
 
-const tabs: MobileShellTab[] = ['dashboard', 'vendas', 'funis', 'gateways', 'configuracoes']
+const tabs: MobileShellTab[] = ['dashboard', 'gateways', 'funis', 'ia', 'configuracoes']
+
+function IAVIsual() {
+  return (
+    <section className="althea-mobile-ia" aria-labelledby="ia-title">
+      <div className="althea-ia-card">
+        <div className="althea-ia-icon" aria-hidden="true">✦</div>
+        <div>
+          <h1 id="ia-title">IA</h1>
+          <p>Inteligência e automações da sua operação.</p>
+        </div>
+      </div>
+    </section>
+  )
+}
 
 export default function MobileDashboardOrchestrator() {
   const [activeTab, setActiveTab] = useState<MobileShellTab>('dashboard')
@@ -39,9 +52,9 @@ export default function MobileDashboardOrchestrator() {
 
   const screens: Record<MobileShellTab, ReactNode> = {
     dashboard: <DashboardMobile />,
-    vendas: <SalesMobile />,
-    funis: <FunnelsMobile />,
     gateways: <GatewaysMobile />,
+    funis: <FunnelsMobile />,
+    ia: <IAVIsual />,
     configuracoes: <SettingsMobile />,
   }
 
