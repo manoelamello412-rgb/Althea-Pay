@@ -28,6 +28,7 @@
     "zod": "^4.1.5"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "latest",
     "@types/node": "latest",
     "@types/pg": "^8.15.5",
     "@types/react": "latest",
@@ -35,6 +36,7 @@
     "typescript": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
+    "tailwindcss": "latest",
     "vitest": "latest"
   }
 }
