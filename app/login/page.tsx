@@ -16,7 +16,6 @@ function friendlyAuthError(message: string) {
 
 export default function LoginPage() {
   const router = useRouter()
-  const supabase = createSupabaseBrowserClient()
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,12 +28,15 @@ export default function LoginPage() {
     event.preventDefault()
     setError('')
     setMessage('')
-    if (!supabase) {
-      setError('O ALTHEA PAY ainda não está conectado ao Supabase neste ambiente.')
-      return
-    }
     setLoading(true)
+
     try {
+      const supabase = createSupabaseBrowserClient()
+      if (!supabase) {
+        setError('O ALTHEA PAY ainda não está conectado ao Supabase neste ambiente.')
+        return
+      }
+
       if (mode === 'login') {
         const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
         if (error) throw error
@@ -43,7 +45,7 @@ export default function LoginPage() {
           return
         }
         setMessage('Login realizado. Abrindo seu painel...')
-        router.replace('/')
+        router.replace('/dashboard')
         router.refresh()
       } else {
         if (password.length < 6) {
@@ -54,7 +56,7 @@ export default function LoginPage() {
         if (error) throw error
         if (data.session) {
           setMessage('Conta criada e acesso liberado. Abrindo seu painel...')
-          router.replace('/')
+          router.replace('/dashboard')
           router.refresh()
         } else {
           setMessage('Conta criada. Se a confirmação por e-mail estiver ativada, será necessário confirmar o endereço antes de entrar.')
