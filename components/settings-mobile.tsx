@@ -38,7 +38,7 @@ export default function SettingsMobile() {
     void db.auth.getUser().then(({ data }) => {
       if (!mounted || !data.user) return
       const metadata = data.user.user_metadata ?? {}
-      setName(String(metadata.full_name ?? metadata.name ?? ''))
+      setName(String(metadata.full_name ?? metadata.name ?? metadata.display_name ?? ''))
       setEmail(data.user.email ?? '')
       setAvatarUrl(String(metadata.avatar_url ?? metadata.picture ?? ''))
     })
@@ -54,10 +54,7 @@ export default function SettingsMobile() {
   async function logout() {
     setNotice('Encerrando sessão…')
     const { error } = await db.auth.signOut()
-    if (error) {
-      setNotice(error.message)
-      return
-    }
+    if (error) { setNotice(error.message); return }
     router.replace('/login')
   }
 
@@ -69,27 +66,27 @@ export default function SettingsMobile() {
     return (
       <>
         <header className="pr-24">
-          <h1 className="text-xl font-bold tracking-tight text-white">Configurações</h1>
-          <p className="text-xs font-medium text-zinc-500">Gerencie as diretrizes gerais da sua operação</p>
+          <h1 className="text-2xl font-black tracking-tight text-white">Configurações</h1>
+          <p className="mt-1 text-xs font-medium text-zinc-500">Gerencie as diretrizes gerais da sua operação</p>
         </header>
 
         <button
           type="button"
           onClick={() => setCurrentSubPage('perfil')}
-          className="flex w-full items-center gap-3 rounded-2xl border border-[#1DB854]/20 bg-[#0F1A16]/40 p-4 text-left transition-all duration-200 active:scale-[0.99] hover:border-[#1DB854]/35"
+          className="flex w-full items-center gap-4 bg-transparent py-4 text-left transition-all duration-200 active:scale-[0.99]"
         >
-          <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full border border-[#1DB854]/30 bg-[#060608] text-lg font-bold text-[#1DB854]">
+          <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-[#131C18] text-sm font-bold text-[#1DB854]">
             {avatarUrl ? <img src={avatarUrl} alt="Avatar do usuário" className="h-full w-full object-cover" onError={() => setAvatarUrl('')} /> : initials(name)}
           </span>
           <span className="min-w-0 flex-1">
             <strong className="block text-sm font-bold text-white">Meu Perfil</strong>
             <span className="mt-0.5 block truncate text-xs text-zinc-400">{name || 'Conta autenticada'}</span>
-            <span className="block truncate text-[10px] text-zinc-600">{email || 'E-mail de acesso'}</span>
+            <span className="mt-0.5 block truncate font-mono text-[10px] text-zinc-600">{email || 'E-mail de acesso'}</span>
           </span>
-          <ChevronRight size={20} className="shrink-0 text-zinc-500" />
+          <ChevronRight size={18} className="shrink-0 text-zinc-600" />
         </button>
 
-        <section className="space-y-2 pt-1">
+        <section className="flex flex-col gap-1 pt-2">
           {items.map(([label, Icon, desc, target]) => (
             <button
               key={label}
@@ -100,20 +97,21 @@ export default function SettingsMobile() {
                 else if (target === 'recuperacao') window.location.assign('/dashboard/settings/recuperacao')
                 else setNotice(`${label}: área preparada para configuração.`)
               }}
-              className="flex w-full items-center justify-between gap-3 rounded-xl border border-zinc-900/60 bg-[#090F11] p-4 text-left transition-all duration-200 active:scale-[0.99] hover:border-zinc-800"
+              className="flex w-full items-center justify-between gap-4 bg-transparent py-4 text-left transition-all duration-200 active:scale-[0.99]"
             >
-              <span className="flex min-w-0 items-center gap-3">
-                <span className="amsg-icon"><Icon size={22} /></span>
-                <span>
-                  <strong className="block text-sm font-bold text-zinc-200">{label}</strong>
-                  <small className="mt-0.5 block text-[11px] text-zinc-500">{desc}</small>
+              <span className="flex min-w-0 items-center gap-4">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#111312] text-zinc-500"><Icon size={18} strokeWidth={1.8} /></span>
+                <span className="min-w-0">
+                  <strong className="block text-sm font-bold text-white">{label}</strong>
+                  <small className="mt-0.5 block text-[11px] leading-relaxed text-zinc-500">{desc}</small>
                 </span>
               </span>
-              <ChevronRight size={20} className="shrink-0 text-zinc-600" />
+              <ChevronRight size={18} className="shrink-0 text-zinc-600" />
             </button>
           ))}
         </section>
-        {notice && <div className="rounded-xl border border-zinc-900 bg-[#060608] p-3 text-[10px] text-zinc-500" role="status">{notice}</div>}
+
+        {notice && <div className="mt-2 bg-transparent py-3 text-[10px] text-zinc-500" role="status">{notice}</div>}
       </>
     )
   }
@@ -121,13 +119,14 @@ export default function SettingsMobile() {
   const subPage = currentSubPage !== 'menu'
 
   return (
-    <section className="althea-mobile-settings relative min-h-[500px] space-y-5 pb-32 font-['Space_Grotesk'] text-white" aria-label="Configurações mobile">
+    <section className="relative min-h-[500px] space-y-5 pb-32 font-['Space_Grotesk'] text-white" aria-label="Configurações mobile">
       <button
         type="button"
         onClick={() => void logout()}
-        className="absolute right-0 top-0 z-50 rounded-xl border border-red-900/40 bg-red-950/40 px-4 py-2 text-xs font-bold text-red-400 transition-all duration-200 active:scale-95 hover:bg-red-950/60"
+        className="absolute right-0 top-0 z-50 flex items-center gap-1 bg-transparent py-2 text-xs font-bold text-red-400 transition-all duration-200 active:scale-95 hover:text-red-300"
       >
-        Sair 🚪
+        <LogOut size={15} strokeWidth={2.5} />
+        <span>Sair</span>
       </button>
 
       {subPage && (
