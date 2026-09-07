@@ -1,22 +1,45 @@
 'use client'
 
 import { ChevronRight, CircleDollarSign, FileText, LogOut, ShieldCheck, UserRound } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import PerfilSettingsPage from '@/app/dashboard/settings/perfil/page'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
+type SubPage = 'menu' | 'perfil'
+
 const items = [
-  ['Conta & Equipe', UserRound, 'Dados da conta e membros'],
   ['Financeiro', CircleDollarSign, 'Moeda, taxas e preferências financeiras'],
   ['Checkout & Domínios', FileText, 'Checkout e domínios da operação'],
   ['Segurança & Auditoria', ShieldCheck, 'Acesso, segurança e auditoria'],
 ] as const
 
+function initials(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean).slice(0, 2)
+  return parts.map((part) => part[0]?.toUpperCase()).join('') || 'U'
+}
+
 export default function SettingsMobile() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
+  const [currentSubPage, setCurrentSubPage] = useState<SubPage>('menu')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
   const [notice, setNotice] = useState('')
 
+  useEffect(() => {
+    let mounted = true
+    void db.auth.getUser().then(({ data, error }) => {
+      if (!mounted) return
+      if (error || !data.user) return
+      const metadata = data.user.user_metadata ?? {}
+      setName(String(metadata.full_name ?? metadata.name ?? ''))
+      setEmail(data.user.email ?? '')
+      setAvatarUrl(String(metadata.avatar_url ?? metadata.picture ?? ''))
+    })
+    return () => { mounted = false }
+  }, [db])
+
   async function logout() {
-    if (!db) return
     setNotice('Encerrando sessão…')
     const { error } = await db.auth.signOut()
     if (error) {
@@ -26,26 +49,55 @@ export default function SettingsMobile() {
     window.location.assign('/login')
   }
 
+  if (currentSubPage === 'perfil') {
+    return (
+      <div className="relative min-h-[500px] space-y-5 pb-32 font-['Space_Grotesk'] text-white">
+        <button type="button" onClick={() => setCurrentSubPage('menu')} className="text-xs font-bold text-zinc-500 transition-colors hover:text-white">← Voltar</button>
+        <PerfilSettingsPage />
+      </div>
+    )
+  }
+
+  const displayName = name || 'Usuário'
+
   return (
     <section className="althea-mobile-settings" aria-label="Configurações mobile">
-      <main className="amsg-content">
-        <h1>Configurações</h1>
-        <p>Ajustes da conta</p>
-        <section className="amsg-list">
+      <main className="relative min-h-[500px] space-y-5 pb-32">
+        <button
+          type="button"
+          onClick={() => void logout()}
+          className="absolute right-0 top-0 z-50 rounded-xl border border-red-900/40 bg-red-950/40 px-4 py-2 text-xs font-bold text-red-400 transition-all active:scale-95 hover:bg-red-950/60"
+        >
+          Sair 🚪
+        </button>
+
+        <header className="pr-24">
+          <h1 className="text-xl font-bold tracking-tight text-white">Configurações</h1>
+          <p className="text-xs font-medium text-zinc-500">Gerencie as diretrizes gerais da sua operação</p>
+        </header>
+
+        <button type="button" onClick={() => setCurrentSubPage('perfil')} className="flex w-full items-center gap-3 rounded-2xl border border-[#1DB854]/20 bg-[#0F1A16]/40 p-4 text-left transition-all duration-200 active:scale-[0.99] hover:border-[#1DB854]/35">
+          <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full border border-[#1DB854]/30 bg-[#060608] text-lg font-bold text-[#1DB854]">
+            {avatarUrl ? <img src={avatarUrl} alt="Avatar do usuário" className="h-full w-full object-cover" onError={() => setAvatarUrl('')} /> : initials(displayName)}
+          </span>
+          <span className="min-w-0 flex-1">
+            <strong className="block text-sm font-bold text-white">Meu Perfil</strong>
+            <span className="mt-0.5 block truncate text-xs text-zinc-400">{displayName}</span>
+            <span className="block truncate text-[10px] text-zinc-600">{email || 'E-mail de acesso'}</span>
+          </span>
+          <ChevronRight size={20} className="shrink-0 text-zinc-500" />
+        </button>
+
+        <section className="space-y-2 pt-1">
           {items.map(([label, Icon, desc]) => (
-            <button key={label} type="button" onClick={() => setNotice(`${label}: área pronta para configuração.`)}>
-              <span className="amsg-icon"><Icon size={22} /></span>
-              <span><strong>{label}</strong><small>{desc}</small></span>
-              <ChevronRight size={20} />
+            <button key={label} type="button" onClick={() => setNotice(`${label}: área pronta para configuração.`)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-zinc-900/60 bg-[#090F11] p-4 text-left transition-all duration-200 active:scale-[0.99] hover:border-zinc-800">
+              <span className="flex min-w-0 items-center gap-3"><span className="amsg-icon"><Icon size={22} /></span><span><strong className="block text-sm font-bold text-zinc-200">{label}</strong><small className="mt-0.5 block text-[11px] text-zinc-500">{desc}</small></span></span>
+              <ChevronRight size={20} className="shrink-0 text-zinc-600" />
             </button>
           ))}
-          <button type="button" className="amsg-logout" onClick={() => void logout()}>
-            <span className="amsg-icon"><LogOut size={22} /></span>
-            <strong>Sair da Conta</strong>
-            <ChevronRight size={20} />
-          </button>
         </section>
-        {notice && <div className="amsg-notice" role="status">{notice}</div>}
+
+        {notice && <div className="rounded-xl border border-zinc-900 bg-[#060608] p-3 text-[10px] text-zinc-500" role="status">{notice}</div>}
       </main>
     </section>
   )
