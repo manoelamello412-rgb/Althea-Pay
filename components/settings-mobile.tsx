@@ -1,6 +1,6 @@
 'use client'
 
-import { Building2, ChevronRight, CircleDollarSign, FileText, Globe2, LogOut, RefreshCcw, ShieldCheck, UserRound, Users, Webhook, Network } from 'lucide-react'
+import { Building2, ChevronRight, CircleDollarSign, FileText, Globe2, LogOut, RefreshCcw, ShieldCheck, Upload, UserRound, Users, Webhook, Network } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import PerfilSettingsPage from '@/app/dashboard/settings/perfil/page'
