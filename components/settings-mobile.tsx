@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronRight, CircleDollarSign, FileText, LogOut, ShieldCheck, UserRound, Building2, RefreshCcw, PlugZap } from 'lucide-react'
+import { Building2, ChevronRight, CircleDollarSign, FileText, Globe2, LogOut, RefreshCcw, ShieldCheck, UserRound, Users, Webhook, Network } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import PerfilSettingsPage from '@/app/dashboard/settings/perfil/page'
@@ -10,14 +10,24 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type SubPage = 'menu' | 'perfil' | 'empresa' | 'integracoes'
 
-const items = [
-  ['Minha Empresa', Building2, 'Dados jurídicos, fiscais e cadastrais da operação', 'empresa'],
-  ['Integrações', PlugZap, 'API, tokens e webhooks para sistemas externos', 'integracoes'],
-  ['Recuperação', RefreshCcw, 'Réguas para carrinhos, PIX expirado e boleto sem pagamento', 'recuperacao'],
-  ['Financeiro', CircleDollarSign, 'Moeda, taxas e preferências financeiras', 'none'],
-  ['Checkout & Domínios', FileText, 'Checkout e domínios da operação', 'none'],
-  ['Segurança & Auditoria', ShieldCheck, 'Acesso, segurança e auditoria', 'none'],
-] as const
+type SettingItem = {
+  label: string
+  description: string
+  icon: typeof UserRound
+  target: 'perfil' | 'empresa' | 'integracoes' | 'recuperacao' | 'funil' | 'usuarios' | 'gateways' | 'seguranca' | 'desempenho' | 'vendas'
+}
+
+const items: SettingItem[] = [
+  { label: 'Minha Empresa', description: 'Dados jurídicos, fiscais e cadastrais da operação', icon: Building2, target: 'empresa' },
+  { label: 'Desempenho', description: 'Telemetria, disponibilidade e tempo de resposta', icon: RefreshCcw, target: 'desempenho' },
+  { label: 'Vendas', description: 'Auditoria transacional e acompanhamento da operação', icon: CircleDollarSign, target: 'vendas' },
+  { label: 'Funil e Domínio', description: 'URLs, domínios e infraestrutura dos funis', icon: Globe2, target: 'funil' },
+  { label: 'Recuperação', description: 'Réguas para carrinhos, PIX expirado e boleto', icon: Webhook, target: 'recuperacao' },
+  { label: 'Usuários', description: 'Acessos, equipe e permissões da operação', icon: Users, target: 'usuarios' },
+  { label: 'Gateways', description: 'Provedores, prioridades e configurações de pagamento', icon: Network, target: 'gateways' },
+  { label: 'Integrações', description: 'APIs, tokens e webhooks para sistemas externos', icon: FileText, target: 'integracoes' },
+  { label: 'Segurança & Auditoria', description: 'Autenticação, proteção e trilhas de acesso', icon: ShieldCheck, target: 'seguranca' },
+]
 
 function initials(value: string) {
   const parts = value.trim().split(/\s+/).filter(Boolean).slice(0, 2)
@@ -45,17 +55,32 @@ export default function SettingsMobile() {
     return () => { mounted = false }
   }, [db])
 
-  useEffect(() => {
-    const handler = () => setCurrentSubPage('menu')
-    window.addEventListener('althea-settings-back', handler)
-    return () => window.removeEventListener('althea-settings-back', handler)
-  }, [])
-
   async function logout() {
     setNotice('Encerrando sessão…')
     const { error } = await db.auth.signOut()
-    if (error) { setNotice(error.message); return }
+    if (error) {
+      setNotice(error.message)
+      return
+    }
     router.replace('/login')
+  }
+
+  function openItem(item: SettingItem) {
+    setNotice('')
+    if (item.target === 'perfil') return setCurrentSubPage('perfil')
+    if (item.target === 'empresa') return setCurrentSubPage('empresa')
+    if (item.target === 'integracoes') return setCurrentSubPage('integracoes')
+
+    const routes: Record<Exclude<SettingItem['target'], 'perfil' | 'empresa' | 'integracoes'>, string> = {
+      recuperacao: '/dashboard/settings/recuperacao',
+      funil: '/dashboard/settings/funil-dominio',
+      usuarios: '/dashboard/settings/usuarios',
+      gateways: '/dashboard/settings/gateways',
+      seguranca: '/dashboard/settings/seguranca',
+      desempenho: '/dashboard/desempenho',
+      vendas: '/dashboard/vendas',
+    }
+    router.push(routes[item.target])
   }
 
   function pageContent(): ReactNode {
@@ -65,7 +90,7 @@ export default function SettingsMobile() {
 
     return (
       <>
-        <header className="pr-24">
+        <header className="pr-20">
           <h1 className="text-2xl font-black tracking-tight text-white">Configurações</h1>
           <p className="mt-1 text-xs font-medium text-zinc-500">Gerencie as diretrizes gerais da sua operação</p>
         </header>
@@ -73,7 +98,7 @@ export default function SettingsMobile() {
         <button
           type="button"
           onClick={() => setCurrentSubPage('perfil')}
-          className="flex w-full items-center gap-4 bg-transparent py-4 text-left transition-all duration-200 active:scale-[0.99]"
+          className="mt-4 flex w-full items-center gap-4 rounded-xl bg-[#0E1110] p-4 text-left transition-all duration-200 active:scale-[0.99]"
         >
           <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-[#131C18] text-sm font-bold text-[#1DB854]">
             {avatarUrl ? <img src={avatarUrl} alt="Avatar do usuário" className="h-full w-full object-cover" onError={() => setAvatarUrl('')} /> : initials(name)}
@@ -86,32 +111,32 @@ export default function SettingsMobile() {
           <ChevronRight size={18} className="shrink-0 text-zinc-600" />
         </button>
 
-        <section className="flex flex-col gap-1 pt-2">
-          {items.map(([label, Icon, desc, target]) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => {
-                if (target === 'empresa') setCurrentSubPage('empresa')
-                else if (target === 'integracoes') setCurrentSubPage('integracoes')
-                else if (target === 'recuperacao') window.location.assign('/dashboard/settings/recuperacao')
-                else setNotice(`${label}: área preparada para configuração.`)
-              }}
-              className="flex w-full items-center justify-between gap-4 bg-transparent py-4 text-left transition-all duration-200 active:scale-[0.99]"
-            >
-              <span className="flex min-w-0 items-center gap-4">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#111312] text-zinc-500"><Icon size={18} strokeWidth={1.8} /></span>
-                <span className="min-w-0">
-                  <strong className="block text-sm font-bold text-white">{label}</strong>
-                  <small className="mt-0.5 block text-[11px] leading-relaxed text-zinc-500">{desc}</small>
+        <section className="mt-3 flex flex-col gap-1.5">
+          {items.map((item) => {
+            const Icon = item.icon
+            return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => openItem(item)}
+                className="flex w-full items-center justify-between gap-4 rounded-xl bg-[#0E1110] p-4 text-left transition-all duration-200 active:scale-[0.99]"
+              >
+                <span className="flex min-w-0 items-center gap-3.5">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#111312] text-zinc-400">
+                    <Icon size={18} strokeWidth={1.8} />
+                  </span>
+                  <span className="min-w-0">
+                    <strong className="block text-sm font-bold text-white">{item.label}</strong>
+                    <small className="mt-0.5 block text-[11px] leading-relaxed text-zinc-500">{item.description}</small>
+                  </span>
                 </span>
-              </span>
-              <ChevronRight size={18} className="shrink-0 text-zinc-600" />
-            </button>
-          ))}
+                <ChevronRight size={18} className="shrink-0 text-zinc-600" />
+              </button>
+            )
+          })}
         </section>
 
-        {notice && <div className="mt-2 bg-transparent py-3 text-[10px] text-zinc-500" role="status">{notice}</div>}
+        {notice && <div className="mt-2 bg-transparent py-2 text-[10px] text-zinc-500" role="status">{notice}</div>}
       </>
     )
   }
@@ -123,7 +148,7 @@ export default function SettingsMobile() {
       <button
         type="button"
         onClick={() => void logout()}
-        className="absolute right-0 top-0 z-50 flex items-center gap-1 bg-transparent py-2 text-xs font-bold text-red-400 transition-all duration-200 active:scale-95 hover:text-red-300"
+        className="absolute right-0 top-0 z-50 flex items-center gap-1 bg-transparent px-4 py-2 text-xs font-bold text-red-400 transition-all duration-200 active:scale-95 hover:text-red-300"
       >
         <LogOut size={15} strokeWidth={2.5} />
         <span>Sair</span>
