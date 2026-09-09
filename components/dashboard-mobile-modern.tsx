@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BarChart3, CreditCard, Network, RefreshCw, ShoppingBag, TrendingUp, Users, Wallet } from 'lucide-react'
+import { BarChart3, CreditCard, Eye, EyeOff, Network, RefreshCw, ShoppingBag, TrendingUp, Users, Wallet } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Sale = {
@@ -71,27 +71,27 @@ function MetricCard({
   detail,
   icon: Icon,
   loading,
+  masked,
 }: {
   label: string
   value: string
   detail: string
   icon: typeof Wallet
   loading: boolean
+  masked: boolean
 }) {
   return (
     <article className="rounded-2xl border border-white/[0.07] bg-[#101713] p-4 shadow-[0_12px_40px_rgba(0,0,0,.14)]">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#71817A]">{label}</span>
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#1D8B54]/10 text-[#1D8B54]">
-          <Icon size={15} />
-        </span>
+        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#1DB854]/10 text-[#1DB854]"><Icon size={15} /></span>
       </div>
       {loading ? (
         <div className="mt-3 h-7 w-24 animate-pulse rounded-md bg-white/[0.06]" />
       ) : (
-        <strong className="mt-3 block truncate text-xl font-bold tracking-tight text-white">{value}</strong>
+        <strong className="mt-3 block truncate text-xl font-bold tracking-tight text-white">{masked ? '••••••' : value}</strong>
       )}
-      <span className="mt-1 block truncate text-[10px] text-slate-500">{detail}</span>
+      <span className="mt-1 block truncate text-[10px] text-[#A6A6A6]">{detail}</span>
     </article>
   )
 }
@@ -106,6 +106,7 @@ export default function DashboardMobileModern() {
   const [gateways, setGateways] = useState<Gateway[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showValues, setShowValues] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -119,9 +120,7 @@ export default function DashboardMobileModern() {
         return
       }
 
-      const current = today()
-      const since = addDays(current, -89)
-
+      const since = addDays(today(), -89)
       const [salesResult, gatewaysResult] = await Promise.all([
         db
           .from('sales')
@@ -171,16 +170,8 @@ export default function DashboardMobileModern() {
     [sales, range],
   )
 
-  const approvedSales = useMemo(
-    () => periodSales.filter((sale) => isApproved(sale.status)),
-    [periodSales],
-  )
-
-  const revenue = useMemo(
-    () => approvedSales.reduce((total, sale) => total + amountOf(sale), 0),
-    [approvedSales],
-  )
-
+  const approvedSales = useMemo(() => periodSales.filter((sale) => isApproved(sale.status)), [periodSales])
+  const revenue = useMemo(() => approvedSales.reduce((total, sale) => total + amountOf(sale), 0), [approvedSales])
   const ticket = approvedSales.length ? revenue / approvedSales.length : 0
 
   const customers = useMemo(() => {
@@ -188,7 +179,12 @@ export default function DashboardMobileModern() {
       periodSales
         .map((sale) => {
           const data = sale.data ?? {}
-          return String(data.customer_id ?? (data.customer as Record<string, unknown> | undefined)?.id ?? (data.customer as Record<string, unknown> | undefined)?.email ?? '')
+          return String(
+            data.customer_id ??
+              (data.customer as Record<string, unknown> | undefined)?.id ??
+              (data.customer as Record<string, unknown> | undefined)?.email ??
+              '',
+          )
         })
         .filter(Boolean),
     ).size
@@ -200,6 +196,7 @@ export default function DashboardMobileModern() {
       const date = dateOf(sale)
       map.set(date, (map.get(date) ?? 0) + amountOf(sale))
     }
+
     const output: Array<{ date: string; value: number }> = []
     for (let cursor = range.start; cursor <= range.end; cursor = addDays(cursor, 1)) {
       output.push({ date: cursor, value: map.get(cursor) ?? 0 })
@@ -221,12 +218,17 @@ export default function DashboardMobileModern() {
       <div className="mx-auto w-full max-w-xl space-y-5">
         <header className="flex items-center justify-between">
           <div>
-            <span className="text-[9px] font-semibold uppercase tracking-[.2em] text-[#1D8B54]">ALTHEA PAY</span>
+            <span className="text-[9px] font-semibold uppercase tracking-[.2em] text-[#1DB854]">ALTHEA PAY</span>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-white">Dashboard</h1>
-            <p className="mt-1 text-xs text-slate-500">Visão operacional em tempo real</p>
+            <p className="mt-1 text-xs text-[#A6A6A6]">Visão operacional em tempo real</p>
           </div>
-          <button type="button" onClick={() => void load()} disabled={loading} aria-label="Atualizar dashboard" className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-slate-300 active:scale-95 disabled:opacity-50">
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          <button
+            type="button"
+            onClick={() => setShowValues((value) => !value)}
+            aria-label={showValues ? 'Ocultar valores' : 'Mostrar valores'}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-[#A6A6A6] transition-all duration-200 active:scale-95 hover:border-[#1DB854]/40 hover:text-[#1DB854]"
+          >
+            {showValues ? <Eye size={17} /> : <EyeOff size={17} />}
           </button>
         </header>
 
@@ -239,32 +241,33 @@ export default function DashboardMobileModern() {
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <MetricCard label="Receita" value={money(revenue)} detail="Vendas aprovadas" icon={Wallet} loading={loading} />
-          <MetricCard label="Transações" value={String(periodSales.length)} detail="No período padrão" icon={CreditCard} loading={loading} />
-          <MetricCard label="Ticket médio" value={money(ticket)} detail="Por venda aprovada" icon={TrendingUp} loading={loading} />
-          <MetricCard label="Clientes" value={String(customers)} detail="Identificados nas vendas" icon={Users} loading={loading} />
+          <MetricCard label="Receita" value={money(revenue)} detail="Vendas aprovadas" icon={Wallet} loading={loading} masked={!showValues} />
+          <MetricCard label="Transações" value={String(periodSales.length)} detail="No período padrão" icon={CreditCard} loading={loading} masked={!showValues} />
+          <MetricCard label="Ticket médio" value={money(ticket)} detail="Por venda aprovada" icon={TrendingUp} loading={loading} masked={!showValues} />
+          <MetricCard label="Clientes" value={String(customers)} detail="Identificados nas vendas" icon={Users} loading={loading} masked={!showValues} />
         </div>
 
         <article className="rounded-2xl border border-white/[0.07] bg-[#101713] p-4">
           <div className="flex items-start justify-between">
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">Receita ao longo do tempo</span>
-              <strong className="mt-1 block text-lg font-bold text-white">{loading ? '—' : money(revenue)}</strong>
+              <span className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#A6A6A6]">Receita ao longo do tempo</span>
+              <strong className="mt-1 block text-lg font-bold text-white">{loading ? '—' : showValues ? money(revenue) : '••••••'}</strong>
             </div>
-            <BarChart3 size={17} className="text-[#1D8B54]" />
+            <BarChart3 size={17} className="text-[#1DB854]" />
           </div>
+
           {daily.some((item) => item.value > 0) ? (
             <>
               <svg viewBox="0 0 300 120" preserveAspectRatio="none" className="mt-5 h-32 w-full" role="img" aria-label="Gráfico de receita">
                 <path d="M8 25H292 M8 55H292 M8 85H292 M8 115H292" stroke="currentColor" strokeOpacity=".06" fill="none" />
-                <polyline points={chartPoints} fill="none" stroke="currentColor" strokeWidth="2.5" className="text-[#1D8B54]" vectorEffect="non-scaling-stroke" />
+                <polyline points={chartPoints} fill="none" stroke="currentColor" strokeWidth="2.5" className="text-[#1DB854]" vectorEffect="non-scaling-stroke" />
               </svg>
-              <div className="flex justify-between text-[9px] text-slate-600"><span>{shortDate(range.start)}</span><span>{shortDate(range.end)}</span></div>
+              <div className="flex justify-between text-[9px] text-[#A6A6A6]"><span>{shortDate(range.start)}</span><span>{shortDate(range.end)}</span></div>
             </>
           ) : (
             <div className="flex h-32 flex-col items-center justify-center text-center">
               <BarChart3 size={22} className="text-slate-700" />
-              <p className="mt-2 text-[11px] text-slate-500">{loading ? 'Sincronizando dados…' : 'Sem receita aprovada no período padrão.'}</p>
+              <p className="mt-2 text-[11px] text-[#A6A6A6]">{loading ? 'Sincronizando dados…' : 'Sem receita aprovada no período padrão.'}</p>
             </div>
           )}
         </article>
@@ -272,23 +275,28 @@ export default function DashboardMobileModern() {
         <article className="rounded-2xl border border-white/[0.07] bg-[#101713] p-4">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">Transações recentes</span>
-              <p className="mt-1 text-[10px] text-slate-600">Últimas operações do período padrão</p>
+              <span className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#A6A6A6]">Transações recentes</span>
+              <p className="mt-1 text-[10px] text-[#A6A6A6]">Últimas operações do período padrão</p>
             </div>
             <ShoppingBag size={17} className="text-slate-600" />
           </div>
+
           {periodSales.length ? (
             <div className="mt-3 divide-y divide-white/[0.05]">
               {periodSales.slice(0, 5).map((sale) => {
                 const data = sale.data ?? {}
-                const customer = String((data.customer as Record<string, unknown> | undefined)?.name ?? (data.customer as Record<string, unknown> | undefined)?.email ?? 'Cliente')
+                const customer = String(
+                  (data.customer as Record<string, unknown> | undefined)?.name ??
+                    (data.customer as Record<string, unknown> | undefined)?.email ??
+                    'Cliente',
+                )
                 return (
                   <div key={sale.id} className="flex items-center justify-between gap-3 py-3">
                     <div className="min-w-0">
                       <p className="truncate text-xs font-medium text-white">{customer}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-slate-600">{dateOf(sale) ? shortDate(dateOf(sale)) : 'Data indisponível'} · {sale.gateway_id || 'Gateway'}</p>
+                      <p className="mt-0.5 truncate text-[10px] text-[#A6A6A6]">{dateOf(sale) ? shortDate(dateOf(sale)) : 'Data indisponível'} · {sale.gateway_id || 'Gateway'}</p>
                     </div>
-                    <strong className="shrink-0 text-xs text-white">{money(amountOf(sale))}</strong>
+                    <strong className="shrink-0 text-xs text-white">{showValues ? money(amountOf(sale)) : '••••'}</strong>
                   </div>
                 )
               })}
@@ -297,7 +305,7 @@ export default function DashboardMobileModern() {
             <div className="flex flex-col items-center justify-center py-9 text-center">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.03] text-slate-700"><CreditCard size={20} /></span>
               <strong className="mt-3 text-xs text-white">Nenhuma transação encontrada</strong>
-              <p className="mt-1 max-w-[260px] text-[10px] leading-4 text-slate-600">As operações reais aparecerão aqui assim que existirem.</p>
+              <p className="mt-1 max-w-[260px] text-[10px] leading-4 text-[#A6A6A6]">As operações reais aparecerão aqui assim que existirem.</p>
             </div>
           )}
         </article>
@@ -305,11 +313,12 @@ export default function DashboardMobileModern() {
         <article className="rounded-2xl border border-white/[0.07] bg-[#101713] p-4">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">Gateways</span>
-              <p className="mt-1 text-[10px] text-slate-600">Infraestrutura conectada</p>
+              <span className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#A6A6A6]">Gateways</span>
+              <p className="mt-1 text-[10px] text-[#A6A6A6]">Infraestrutura conectada</p>
             </div>
-            <Network size={17} className="text-[#1D8B54]" />
+            <Network size={17} className="text-[#1DB854]" />
           </div>
+
           {gateways.length ? (
             <div className="mt-3 space-y-2">
               {gateways.slice(0, 5).map((gateway) => {
@@ -318,15 +327,15 @@ export default function DashboardMobileModern() {
                 return (
                   <div key={gateway.id} className="flex items-center justify-between rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-3">
                     <span className="truncate text-xs font-medium text-white">{name}</span>
-                    <span className="ml-3 inline-flex items-center gap-1.5 text-[10px] text-[#4DDA8A]"><i className="h-1.5 w-1.5 rounded-full bg-[#1D8B54]" /> Conectado</span>
+                    <span className="ml-3 inline-flex items-center gap-1.5 text-[10px] text-[#1DB854]"><i className="h-1.5 w-1.5 rounded-full bg-[#1DB854]" />Conectado</span>
                   </div>
                 )
               })}
             </div>
           ) : (
             <div className="mt-3 rounded-xl border border-dashed border-white/[0.07] px-4 py-5 text-center">
-              <p className="text-[11px] text-slate-500">Nenhum gateway conectado.</p>
-              <p className="mt-1 text-[10px] text-slate-700">Configure sua infraestrutura de pagamentos para começar.</p>
+              <p className="text-[11px] text-[#A6A6A6]">Nenhum gateway conectado.</p>
+              <p className="mt-1 text-[10px] text-[#A6A6A6]">Configure sua infraestrutura de pagamentos para começar.</p>
             </div>
           )}
         </article>
