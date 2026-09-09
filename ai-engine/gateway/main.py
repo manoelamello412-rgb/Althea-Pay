@@ -4,13 +4,13 @@ import os
 import time
 import uuid
 from collections import defaultdict, deque
-from typing import Any
+from typing import Any, AsyncIterator
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 GATEWAY_KEY = os.getenv("ALTHEA_AI_ENGINE_KEY", "")
 FAST_UPSTREAM = os.getenv("FAST_UPSTREAM_URL", "http://worker-fast:8000/v1")
 REASONING_UPSTREAM = os.getenv("REASONING_UPSTREAM_URL", "http://worker-reasoning:8000/v1")
@@ -18,14 +18,7 @@ CODING_UPSTREAM = os.getenv("CODING_UPSTREAM_URL", "http://worker-coding:8000/v1
 DEFAULT_UPSTREAM = os.getenv("DEFAULT_UPSTREAM_URL", REASONING_UPSTREAM)
 MAX_BODY_BYTES = int(os.getenv("MAX_BODY_BYTES", "1048576"))
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
-ALLOWED_TOOLS = {
-    "sales_summary",
-    "transaction_search",
-    "funnel_summary",
-    "checkout_summary",
-    "gateway_health",
-    "crm_search",
-}
+ALLOWED_TOOLS = {"sales_summary", "transaction_search", "funnel_summary", "checkout_summary", "gateway_health", "crm_search"}
 
 app = FastAPI(title="Althea AI Engine", version=APP_VERSION, docs_url=None, redoc_url=None)
 _client = httpx.AsyncClient(timeout=httpx.Timeout(90.0, connect=5.0))
@@ -69,6 +62,17 @@ def _sanitize_tools(payload: dict[str, Any]) -> None:
         name = function.get("name") if isinstance(function, dict) else None
         if name not in ALLOWED_TOOLS:
             raise HTTPException(status_code=403, detail=f"Tool '{name}' is not permitted")
+
+
+async def _stream_upstream(url: str, payload: dict[str, Any], headers: dict[str, str]) -> AsyncIterator[bytes]:
+    async with _client.stream("POST", url, json=payload, headers=headers) as response:
+        if response.status_code >= 400:
+            body = await response.aread()
+            yield body
+            return
+        async for chunk in response.aiter_bytes():
+            if chunk:
+                yield chunk
 
 
 @app.get("/healthz")
@@ -121,17 +125,28 @@ async def chat_completions(
     payload.setdefault("stream", False)
     request_id = request.headers.get("x-request-id") or f"req_{uuid.uuid4().hex}"
     upstream = _upstream(payload.get("model"))
-    headers = {"Authorization": f"Bearer {os.getenv('UPSTREAM_API_KEY', 'internal')}", "Content-Type": "application/json", "X-Request-ID": request_id}
+    upstream_url = upstream.rstrip("/") + "/chat/completions"
+    upstream_headers = {"Authorization": f"Bearer {os.getenv('UPSTREAM_API_KEY', 'internal')}", "Content-Type": "application/json", "X-Request-ID": request_id}
+    out_headers = {"X-Request-ID": request_id, "X-Althea-AI-Engine": APP_VERSION}
+
+    if payload.get("stream"):
+        async def stream() -> AsyncIterator[bytes]:
+            try:
+                async for chunk in _stream_upstream(upstream_url, payload, upstream_headers):
+                    yield chunk
+            except httpx.TimeoutException:
+                yield b'data: {"error":{"message":"Inference upstream timeout"}}\n\ndata: [DONE]\n\n'
+            except httpx.HTTPError:
+                yield b'data: {"error":{"message":"Inference upstream unavailable"}}\n\ndata: [DONE]\n\n'
+        return StreamingResponse(stream(), status_code=200, media_type="text/event-stream", headers=out_headers)
+
     try:
-        upstream_response = await _client.post(upstream.rstrip("/") + "/chat/completions", json=payload, headers=headers)
+        upstream_response = await _client.post(upstream_url, json=payload, headers=upstream_headers)
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Inference upstream timeout")
     except httpx.HTTPError:
         raise HTTPException(status_code=502, detail="Inference upstream unavailable")
-    out_headers = {"X-Request-ID": request_id, "X-Althea-AI-Engine": APP_VERSION}
     content_type = upstream_response.headers.get("content-type", "application/json")
-    if payload.get("stream") and upstream_response.status_code < 400:
-        return StreamingResponse(iter([upstream_response.content]), status_code=upstream_response.status_code, media_type=content_type, headers=out_headers)
     return Response(content=upstream_response.content, status_code=upstream_response.status_code, media_type=content_type.split(";")[0], headers=out_headers)
 
 
