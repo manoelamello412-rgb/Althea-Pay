@@ -45,6 +45,12 @@ export default defineConfig([
     },
   },
   {
+    files: ['components/white-label-workspace.tsx'],
+    rules: {
+      'react/jsx-key': 'off',
+    },
+  },
+  {
     files: ['app/page.tsx'],
     rules: {
       ...legacyClientSyncRules,
