@@ -8,9 +8,9 @@ import IaraCopilot from '@/components/iara-copilot'
 const routes: Record<MobileShellTab, string> = {
   dashboard: '/dashboard',
   gateways: '/dashboard/gateways',
-  funis: '/dashboard/crm',
+  chat: '/dashboard/crm',
   ia: '/dashboard/ia',
-  configuracoes: '/dashboard/settings',
+  funil: '/dashboard/funil',
 }
 
 export default function IaraDashboardRoute() {
