@@ -19,10 +19,17 @@ type Gateway = {
   data?: Record<string, unknown> | null
 }
 
+type RangeDays = 7 | 30 | 90
+
 type Range = { start: string; end: string }
 
 const TZ = 'America/Sao_Paulo'
 const APPROVED = new Set(['approved', 'completed', 'paid', 'success', 'succeeded'])
+const RANGE_OPTIONS: Array<{ value: RangeDays; label: string }> = [
+  { value: 7, label: '7D' },
+  { value: 30, label: '30D' },
+  { value: 90, label: '90D' },
+]
 
 const today = () =>
   new Intl.DateTimeFormat('en-CA', {
@@ -63,7 +70,7 @@ const shortDate = (value: string) =>
 
 const amountOf = (sale: Sale) => Number(sale.amount ?? sale.data?.amount ?? 0) || 0
 const dateOf = (sale: Sale) => (sale.occurred_at || sale.created_at || '').slice(0, 10)
-const isApproved = (value: unknown) => APPROVED.has(String(value ?? '').toLowerCase())
+const isApproved = (value: unknown) => APPROVED.has(String(value ?? '').trim().toLowerCase())
 
 function MetricCard({
   label,
@@ -87,7 +94,7 @@ function MetricCard({
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#1DB854]/10 text-[#1DB854]"><Icon size={15} /></span>
       </div>
       {loading ? (
-        <div className="mt-3 h-7 w-24 animate-pulse rounded-md bg-white/[0.06]" />
+        <div className="mt-3 h-7 w-24 animate-pulse rounded-md bg-white/[0.06]" aria-hidden="true" />
       ) : (
         <strong className="mt-3 block truncate text-xl font-bold tracking-tight text-white">{masked ? '••••••' : value}</strong>
       )}
@@ -98,22 +105,28 @@ function MetricCard({
 
 export default function DashboardMobileModern() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
-  const [range] = useState<Range>(() => {
-    const current = today()
-    return { start: current, end: current }
-  })
+  const [rangeDays, setRangeDays] = useState<RangeDays>(30)
   const [sales, setSales] = useState<Sale[]>([])
   const [gateways, setGateways] = useState<Gateway[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showValues, setShowValues] = useState(true)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const range = useMemo<Range>(() => {
+    const end = today()
+    return { start: addDays(end, -(rangeDays - 1)), end }
+  }, [rangeDays])
+
+  const load = useCallback(async (silent = false) => {
+    if (silent) setRefreshing(true)
+    else setLoading(true)
     setError(null)
 
     try {
-      const { data: auth } = await db.auth.getUser()
+      const { data: auth, error: authError } = await db.auth.getUser()
+      if (authError) throw authError
+
       if (!auth.user) {
         setSales([])
         setGateways([])
@@ -141,7 +154,8 @@ export default function DashboardMobileModern() {
       console.error('[ALTHEA-DASHBOARD-MOBILE]', cause)
       setError('Não foi possível sincronizar os dados agora.')
     } finally {
-      setLoading(false)
+      if (silent) setRefreshing(false)
+      else setLoading(false)
     }
   }, [db])
 
@@ -150,7 +164,18 @@ export default function DashboardMobileModern() {
   }, [load])
 
   useEffect(() => {
-    const sync = () => void load()
+    const refreshHandler = () => void load(true)
+    window.addEventListener('althea-refresh', refreshHandler)
+    return () => window.removeEventListener('althea-refresh', refreshHandler)
+  }, [load])
+
+  useEffect(() => {
+    let timer: number | undefined
+    const sync = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => void load(true), 250)
+    }
+
     const channel = db
       .channel('althea-dashboard-mobile-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, sync)
@@ -158,6 +183,7 @@ export default function DashboardMobileModern() {
       .subscribe()
 
     return () => {
+      window.clearTimeout(timer)
       void db.removeChannel(channel)
     }
   }, [db, load])
@@ -179,12 +205,9 @@ export default function DashboardMobileModern() {
       periodSales
         .map((sale) => {
           const data = sale.data ?? {}
-          return String(
-            data.customer_id ??
-              (data.customer as Record<string, unknown> | undefined)?.id ??
-              (data.customer as Record<string, unknown> | undefined)?.email ??
-              '',
-          )
+          const customer = data.customer
+          const customerRecord = customer && typeof customer === 'object' ? customer as Record<string, unknown> : undefined
+          return String(data.customer_id ?? customerRecord?.id ?? customerRecord?.email ?? '')
         })
         .filter(Boolean),
     ).size
@@ -194,6 +217,7 @@ export default function DashboardMobileModern() {
     const map = new Map<string, number>()
     for (const sale of approvedSales) {
       const date = dateOf(sale)
+      if (!date) continue
       map.set(date, (map.get(date) ?? 0) + amountOf(sale))
     }
 
@@ -216,24 +240,54 @@ export default function DashboardMobileModern() {
   return (
     <section className="min-h-full bg-[#0B0B0D] px-4 pb-8 pt-5 text-slate-100">
       <div className="mx-auto w-full max-w-xl space-y-5">
-        <header className="flex items-center justify-between">
+        <header className="flex items-start justify-between gap-3">
           <div>
             <span className="text-[9px] font-semibold uppercase tracking-[.2em] text-[#1DB854]">ALTHEA PAY</span>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-white">Dashboard</h1>
             <p className="mt-1 text-xs text-[#A6A6A6]">Visão operacional em tempo real</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowValues((value) => !value)}
-            aria-label={showValues ? 'Ocultar valores' : 'Mostrar valores'}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-[#A6A6A6] transition-all duration-200 active:scale-95 hover:border-[#1DB854]/40 hover:text-[#1DB854]"
-          >
-            {showValues ? <Eye size={17} /> : <EyeOff size={17} />}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void load(true)}
+              disabled={loading || refreshing}
+              aria-label="Atualizar dados"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-[#A6A6A6] transition-all duration-200 active:scale-95 hover:border-[#1DB854]/40 hover:text-[#1DB854] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowValues((value) => !value)}
+              aria-label={showValues ? 'Ocultar valores' : 'Mostrar valores'}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-[#A6A6A6] transition-all duration-200 active:scale-95 hover:border-[#1DB854]/40 hover:text-[#1DB854]"
+            >
+              {showValues ? <Eye size={17} /> : <EyeOff size={17} />}
+            </button>
+          </div>
         </header>
 
+        <div className="flex items-center gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Período do dashboard">
+          {RANGE_OPTIONS.map((option) => {
+            const active = rangeDays === option.value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setRangeDays(option.value)}
+                className={`shrink-0 rounded-full border px-4 py-2 text-[10px] font-semibold tracking-[.08em] transition-all ${active ? 'border-[#1DB854]/50 bg-[#1DB854]/10 text-[#1DB854]' : 'border-white/[0.08] bg-white/[0.025] text-[#A6A6A6] hover:border-white/20 hover:text-white'}`}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+          <span className="ml-auto shrink-0 text-[9px] text-[#71817A]">{shortDate(range.start)} — {shortDate(range.end)}</span>
+        </div>
+
         {error && (
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4">
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4" role="alert">
             <p className="text-xs font-semibold text-red-300">Sincronização indisponível</p>
             <p className="mt-1 text-[11px] text-red-200/60">{error}</p>
             <button type="button" onClick={() => void load()} className="mt-3 rounded-lg border border-red-400/20 px-3 py-2 text-[11px] font-semibold text-red-200">Tentar novamente</button>
@@ -242,7 +296,7 @@ export default function DashboardMobileModern() {
 
         <div className="grid grid-cols-2 gap-3">
           <MetricCard label="Receita" value={money(revenue)} detail="Vendas aprovadas" icon={Wallet} loading={loading} masked={!showValues} />
-          <MetricCard label="Transações" value={String(periodSales.length)} detail="No período padrão" icon={CreditCard} loading={loading} masked={!showValues} />
+          <MetricCard label="Transações" value={String(periodSales.length)} detail="No período selecionado" icon={CreditCard} loading={loading} masked={!showValues} />
           <MetricCard label="Ticket médio" value={money(ticket)} detail="Por venda aprovada" icon={TrendingUp} loading={loading} masked={!showValues} />
           <MetricCard label="Clientes" value={String(customers)} detail="Identificados nas vendas" icon={Users} loading={loading} masked={!showValues} />
         </div>
@@ -267,7 +321,7 @@ export default function DashboardMobileModern() {
           ) : (
             <div className="flex h-32 flex-col items-center justify-center text-center">
               <BarChart3 size={22} className="text-slate-700" />
-              <p className="mt-2 text-[11px] text-[#A6A6A6]">{loading ? 'Sincronizando dados…' : 'Sem receita aprovada no período padrão.'}</p>
+              <p className="mt-2 text-[11px] text-[#A6A6A6]">{loading ? 'Sincronizando dados…' : 'Sem receita aprovada no período selecionado.'}</p>
             </div>
           )}
         </article>
@@ -276,7 +330,7 @@ export default function DashboardMobileModern() {
           <div className="flex items-center justify-between">
             <div>
               <span className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#A6A6A6]">Transações recentes</span>
-              <p className="mt-1 text-[10px] text-[#A6A6A6]">Últimas operações do período padrão</p>
+              <p className="mt-1 text-[10px] text-[#A6A6A6]">Últimas operações do período selecionado</p>
             </div>
             <ShoppingBag size={17} className="text-slate-600" />
           </div>
@@ -285,16 +339,16 @@ export default function DashboardMobileModern() {
             <div className="mt-3 divide-y divide-white/[0.05]">
               {periodSales.slice(0, 5).map((sale) => {
                 const data = sale.data ?? {}
-                const customer = String(
-                  (data.customer as Record<string, unknown> | undefined)?.name ??
-                    (data.customer as Record<string, unknown> | undefined)?.email ??
-                    'Cliente',
-                )
+                const customerValue = data.customer
+                const customer = customerValue && typeof customerValue === 'object'
+                  ? String((customerValue as Record<string, unknown>).name ?? (customerValue as Record<string, unknown>).email ?? 'Cliente')
+                  : String(data.customer_name ?? data.customer_email ?? 'Cliente')
+                const status = String(sale.status ?? 'pendente').toLowerCase()
                 return (
                   <div key={sale.id} className="flex items-center justify-between gap-3 py-3">
                     <div className="min-w-0">
                       <p className="truncate text-xs font-medium text-white">{customer}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-[#A6A6A6]">{dateOf(sale) ? shortDate(dateOf(sale)) : 'Data indisponível'} · {sale.gateway_id || 'Gateway'}</p>
+                      <p className="mt-0.5 truncate text-[10px] text-[#A6A6A6]">{dateOf(sale) ? shortDate(dateOf(sale)) : 'Data indisponível'} · {sale.gateway_id || 'Gateway'} · {status}</p>
                     </div>
                     <strong className="shrink-0 text-xs text-white">{showValues ? money(amountOf(sale)) : '••••'}</strong>
                   </div>
