@@ -60,9 +60,9 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
       </aside>
 
       <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#020203]/98 px-4 backdrop-blur-xl lg:ml-[250px]">
-        <div className="mx-auto flex h-[108px] w-full max-w-[1106px] items-center gap-0">
+        <div className="mx-auto flex h-[140px] w-full max-w-[1106px] items-center gap-0">
           <button type="button" onClick={() => onTabChange('dashboard')} aria-label="Voltar ao Dashboard" className="flex shrink-0 items-center">
-            <img src="/althea-logo-inner.PNG" alt="ALTHEA PAY" className="h-[56px] w-[92px] object-contain object-left" />
+            <img src="/althea-logo-inner.PNG" alt="ALTHEA PAY" className="h-[58px] w-[92px] object-contain object-left" />
           </button>
 
           <div className="mx-5 h-[48px] w-px shrink-0 bg-white/[0.14]" aria-hidden="true" />
@@ -72,21 +72,10 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
           </h1>
 
           <div className="ml-auto flex shrink-0 items-center gap-8 pl-5">
-            <button
-              type="button"
-              aria-label="Pesquisar"
-              onClick={() => setSearchOpen((value) => !value)}
-              className={`grid h-12 w-12 place-items-center rounded-full transition ${searchOpen ? 'text-[#1DB854]' : 'text-[#a8a8b5] hover:text-white'}`}
-            >
+            <button type="button" aria-label="Pesquisar" onClick={() => setSearchOpen((value) => !value)} className={`grid h-12 w-12 place-items-center rounded-full transition ${searchOpen ? 'text-[#1DB854]' : 'text-[#a8a8b5] hover:text-white'}`}>
               <Search size={38} strokeWidth={1.65} />
             </button>
-            <button
-              type="button"
-              aria-label="Configurações"
-              title="Configurações"
-              onClick={() => router.push('/dashboard/settings')}
-              className="grid h-12 w-12 place-items-center rounded-full text-[#a8a8b5] transition hover:text-white"
-            >
+            <button type="button" aria-label="Configurações" title="Configurações" onClick={() => router.push('/dashboard/settings')} className="grid h-12 w-12 place-items-center rounded-full text-[#a8a8b5] transition hover:text-white">
               <Settings size={38} strokeWidth={1.65} />
             </button>
           </div>
