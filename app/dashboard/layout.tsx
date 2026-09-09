@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
 
@@ -20,7 +20,7 @@ function tabFromPath(pathname: string): MobileShellTab {
   return 'dashboard'
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const activeTab = tabFromPath(pathname)
