@@ -24,7 +24,7 @@ const routes: readonly NavigationRoute[] = [
   { id: 'gateway', label: 'Gateway', href: '/dashboard/gateways', icon: Network },
   { id: 'chat', label: 'Chat', href: '/dashboard/crm', icon: MessageSquare },
   { id: 'ia', label: 'IA', href: '/dashboard/ia', icon: Sparkles },
-  { id: 'config', label: 'Configuração', href: '/dashboard/settings/funil-dominio', icon: Settings },
+  { id: 'config', label: 'Configuração', href: '/dashboard/settings', icon: Settings },
 ]
 
 function isRouteActive(pathname: string, route: NavigationRoute): boolean {
