@@ -41,6 +41,22 @@ $$;
 REVOKE ALL ON FUNCTION public.iara_allocate_memory_sequence(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.iara_allocate_memory_sequence(UUID) TO service_role;
 
+CREATE OR REPLACE FUNCTION public.iara_memory_journal_assign_sequence()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  NEW.sequence_id := public.iara_allocate_memory_sequence(NEW.tenant_id);
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_iara_memory_journal_assign_sequence ON public.iara_memory_journal;
+CREATE TRIGGER trg_iara_memory_journal_assign_sequence
+  BEFORE INSERT ON public.iara_memory_journal
+  FOR EACH ROW EXECUTE FUNCTION public.iara_memory_journal_assign_sequence();
+
 CREATE OR REPLACE FUNCTION public.iara_memory_journal_immutable()
 RETURNS trigger
 LANGUAGE plpgsql
