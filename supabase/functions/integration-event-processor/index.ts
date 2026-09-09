@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
       if (result.error) throw result.error;
       tx = result.data;
       if (tx && allowed[normalize(tx.status)]?.includes(status)) {
-        const transition = await db.rpc("transition_gateway_transaction_status", { p_transaction_id: tx.id, p_user_id: userId, p_next_status: status, p_failure_code: payload.failure_code ? String(payload.failure_code) : null, p_external_id: payload.external_id ? String(payload.external_id) : null });
+        const transition = await db.rpc("transition_gateway_transaction_status", { p_transaction_id: tx.id, p_user_id: userId, p_next_status: status, p_failure_code: payload.failure_code ? String(payload.failure_code) : null, p_external_id: payload.external_id ? String(payload.external_id) : null, p_expected_version: Number(tx.version) });
         if (transition.error) throw transition.error;
         tx = Array.isArray(transition.data) ? transition.data[0] : transition.data;
       }
