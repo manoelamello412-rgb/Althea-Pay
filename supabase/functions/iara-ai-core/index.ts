@@ -15,7 +15,7 @@ const headers = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const boundary = 'A Iara é um copiloto operacional. Ela nunca executa código, altera arquivos, modifica variáveis de ambiente, schema/tabelas, infraestrutura, credenciais ou configurações de build. Ela pode explicar procedimentos e consultar dados operacionais autorizados.'
+const operationalBoundary = `Você é a Iara, a inteligência nativa da Althea Pay. Converse de forma natural, profissional, objetiva e humana. Não mencione limitações internas, permissões, código, infraestrutura ou regras de segurança espontaneamente. Só explique uma limitação se o usuário pedir uma ação que esteja fora do escopo operacional. Nunca invente números, clientes, vendas, taxas, status ou eventos. Quando dados reais forem fornecidos no contexto, use-os. Quando não houver dados suficientes, seja transparente.`
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers })
@@ -23,6 +23,28 @@ function json(body: unknown, status = 200) {
 
 function isUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
+function looksLikeInfrastructureRequest(text: string) {
+  const value = text.toLowerCase()
+  return ['alterar código', 'editar código', 'mudar código', 'alterar banco', 'alterar tabela', 'drop table', 'alterar infraestrutura', 'mexer no github', 'mexer no supabase', 'mudar variável de ambiente', '.env', 'service_role'].some((term) => value.includes(term))
+}
+
+async function loadOperationalContext(userId: string) {
+  const [sales, conversations, funnels] = await Promise.all([
+    db.from('gateway_transactions').select('id,amount,currency,status,created_at,completed_at,gateway_id,customer').eq('user_id', userId).order('created_at', { ascending: false }).limit(25),
+    db.from('crm_conversations').select('id,buyer_name,buyer_email,status,funnel_id,transaction_id,updated_at').eq('user_id', userId).order('updated_at', { ascending: false }).limit(15),
+    db.from('funnels').select('id,name,status,url').eq('user_id', userId).order('created_at', { ascending: false }).limit(15),
+  ])
+
+  return {
+    vendas: sales.data ?? [],
+    vendas_error: sales.error?.message ?? null,
+    conversas: conversations.data ?? [],
+    conversas_error: conversations.error?.message ?? null,
+    funis: funnels.data ?? [],
+    funis_error: funnels.error?.message ?? null,
+  }
 }
 
 serve(async (req) => {
@@ -34,9 +56,7 @@ serve(async (req) => {
     if (!authHeader.startsWith('Bearer ')) return json({ error: 'Autenticação obrigatória.' }, 401)
 
     const token = authHeader.slice(7)
-    const authClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    })
+    const authClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? '', { global: { headers: { Authorization: `Bearer ${token}` } } })
     const { data: authData, error: authError } = await authClient.auth.getUser(token)
     if (authError || !authData.user) return json({ error: 'Sessão inválida.' }, 401)
     const userId = authData.user.id
@@ -46,31 +66,23 @@ serve(async (req) => {
     const message = typeof payload?.message === 'string' ? payload.message.trim() : ''
     if (!isUuid(sessionId) || !message || message.length > 8000) return json({ error: 'Mensagem ou sessão inválida.' }, 400)
 
-    const { data: chatSession, error: sessionError } = await db
-      .from('chat_sessions')
-      .select('id,title')
-      .eq('id', sessionId)
-      .eq('user_id', userId)
-      .maybeSingle()
+    const { data: chatSession, error: sessionError } = await db.from('chat_sessions').select('id,title').eq('id', sessionId).eq('user_id', userId).maybeSingle()
     if (sessionError) throw sessionError
     if (!chatSession) return json({ error: 'Sessão não encontrada.' }, 404)
 
     const { error: insertError } = await db.from('chat_messages').insert({ session_id: sessionId, user_id: userId, sender: 'user', content: message })
     if (insertError) throw insertError
 
-    const { data: history, error: historyError } = await db
-      .from('chat_messages')
-      .select('sender,content,created_at')
-      .eq('session_id', sessionId)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(30)
+    const [{ data: history, error: historyError }, context] = await Promise.all([
+      db.from('chat_messages').select('sender,content,created_at').eq('session_id', sessionId).eq('user_id', userId).order('created_at', { ascending: false }).limit(30),
+      loadOperationalContext(userId),
+    ])
     if (historyError) throw historyError
 
     let responseText = ''
     if (llmApiKey) {
       const messages = [
-        { role: 'system', content: `Você é Iara, copiloto nativo da Althea Pay. Seja clara, acolhedora, objetiva e tecnicamente correta. Não invente dados, taxas, status ou resultados. Quando a pergunta depender de dados da conta que não estejam disponíveis no contexto, diga isso. ${boundary}` },
+        { role: 'system', content: `${operationalBoundary}\n\nContexto operacional real da conta (use somente como fonte de fatos):\n${JSON.stringify(context)}` },
         ...(history ?? []).reverse().map((item) => ({ role: item.sender === 'iara' ? 'assistant' : 'user', content: item.content })),
       ]
       const llmResponse = await fetch(llmUrl, {
@@ -81,23 +93,15 @@ serve(async (req) => {
       if (!llmResponse.ok) throw new Error(`Provedor de IA retornou HTTP ${llmResponse.status}.`)
       const completion = await llmResponse.json()
       responseText = String(completion?.choices?.[0]?.message?.content ?? '').trim()
+    } else if (looksLikeInfrastructureRequest(message)) {
+      responseText = 'Posso te ajudar a analisar e orientar essa alteração, mas essa solicitação precisa ser tratada fora do chat operacional da Iara.'
     } else {
-      const normalized = message.toLowerCase()
-      const blocked = ['drop table', 'alter table', 'delete from', 'update schema', 'editar código', 'alterar código', 'mexer no código', '.env', 'service_role']
-      if (blocked.some((term) => normalized.includes(term))) {
-        responseText = 'Posso te orientar sobre a operação da Althea Pay, mas não posso executar nem alterar código, infraestrutura, banco estrutural, credenciais ou configurações de desenvolvimento. Posso, por exemplo, te ajudar a entender uma venda, gateway, checkout ou configuração disponível no painel.'
-      } else {
-        responseText = 'Entendi sua solicitação. A Iara está conectada ao núcleo operacional da sua conta, mas não vou inventar informações que não estejam disponíveis nos dados autorizados. Se a sua dúvida for sobre vendas, gateways, checkout, funis ou configurações do painel, me diga exatamente o que você quer consultar.'
-      }
+      responseText = 'Estou pronta para consultar e analisar os dados da sua operação. Para responder com números ou informações específicas, preciso que o dado esteja disponível no núcleo operacional da sua conta.'
     }
 
     if (!responseText) throw new Error('O provedor de IA não retornou conteúdo.')
 
-    const { data: savedReply, error: replyError } = await db
-      .from('chat_messages')
-      .insert({ session_id: sessionId, user_id: userId, sender: 'iara', content: responseText })
-      .select('id,sender,content,created_at')
-      .single()
+    const { data: savedReply, error: replyError } = await db.from('chat_messages').insert({ session_id: sessionId, user_id: userId, sender: 'iara', content: responseText }).select('id,sender,content,created_at').single()
     if (replyError) throw replyError
 
     await db.from('chat_sessions').update({ updated_at: new Date().toISOString() }).eq('id', sessionId).eq('user_id', userId)
