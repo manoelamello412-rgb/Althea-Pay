@@ -1,0 +1,125 @@
+name: "Althea-Pay: Core CI Infrastructure & Transaction Validation"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: althea-pay-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-infrastructure:
+    name: Validate infrastructure, migrations and security contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Static validation
+        run: |
+          npm run typecheck
+          npm run lint
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start ephemeral Supabase
+        run: supabase start
+
+      - name: Apply all migrations from a clean database
+        run: supabase db reset --local --yes
+
+      - name: Verify database invariants
+        run: |
+          supabase db lint --local
+          supabase db query --local <<'SQL'
+          DO $$
+          DECLARE
+            v_rls boolean;
+            v_version boolean;
+            v_occ boolean;
+            v_fsm boolean;
+          BEGIN
+            SELECT c.relrowsecurity
+              INTO v_rls
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'public'
+               AND c.relname = 'gateway_transactions';
+
+            IF NOT COALESCE(v_rls, false) THEN
+              RAISE EXCEPTION 'gateway_transactions must have RLS enabled';
+            END IF;
+
+            SELECT EXISTS (
+              SELECT 1 FROM information_schema.columns
+               WHERE table_schema = 'public'
+                 AND table_name = 'gateway_transactions'
+                 AND column_name = 'version'
+            ) INTO v_version;
+
+            IF NOT v_version THEN
+              RAISE EXCEPTION 'gateway_transactions.version is missing';
+            END IF;
+
+            SELECT EXISTS (
+              SELECT 1
+                FROM pg_proc p
+                JOIN pg_namespace n ON n.oid = p.pronamespace
+               WHERE n.nspname = 'public'
+                 AND p.proname = 'transition_gateway_transaction_status'
+                 AND pg_get_function_identity_arguments(p.oid) = 'p_transaction_id uuid, p_user_id uuid, p_next_status text, p_failure_code text, p_external_id text, p_expected_version bigint'
+            ) INTO v_occ;
+
+            IF NOT v_occ THEN
+              RAISE EXCEPTION '6-argument OCC transition RPC is missing';
+            END IF;
+
+            SELECT EXISTS (
+              SELECT 1
+                FROM pg_constraint con
+                JOIN pg_class rel ON rel.oid = con.conrelid
+                JOIN pg_namespace n ON n.oid = rel.relnamespace
+               WHERE n.nspname = 'public'
+                 AND rel.relname = 'gateway_transactions'
+                 AND con.contype = 'c'
+                 AND pg_get_constraintdef(con.oid) ILIKE '%status%'
+                 AND pg_get_constraintdef(con.oid) ILIKE '%approved%'
+            ) INTO v_fsm;
+
+            IF NOT v_fsm THEN
+              RAISE EXCEPTION 'gateway_transactions FSM status invariant is missing';
+            END IF;
+          END $$;
+          SQL
+
+      - name: Run security and transaction tests
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: local-ci-publishable-key
+          SUPABASE_SERVICE_ROLE_KEY: local-ci-service-role-key
+          GATEWAY_WEBHOOK_SECRET: ci-only-webhook-secret
+        run: npm test -- --run
+
+      - name: Stop ephemeral Supabase
+        if: always()
+        run: supabase stop --no-backup
