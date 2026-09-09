@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
 import DashboardMobile from '@/components/dashboard-control'
-import FunnelsMobile from '@/components/funnels-mobile'
 import GatewaysMobile from '@/components/gateways-mobile'
-import SettingsMobile from '@/components/settings-mobile'
+import FunnelsMobile from '@/components/funnels-mobile'
 import IaraCopilot from '@/components/iara-copilot'
+import SettingsMobile from '@/components/settings-mobile'
 
-const tabs: MobileShellTab[] = ['dashboard', 'gateways', 'funis', 'ia', 'configuracoes']
+const tabs: MobileShellTab[] = ['dashboard', 'gateways', 'chat', 'ia', 'funil']
 
 export default function MobileDashboardOrchestrator() {
   const [activeTab, setActiveTab] = useState<MobileShellTab>('dashboard')
@@ -40,9 +40,9 @@ export default function MobileDashboardOrchestrator() {
   const screens: Record<MobileShellTab, ReactNode> = {
     dashboard: <DashboardMobile />,
     gateways: <GatewaysMobile />,
-    funis: <FunnelsMobile />,
+    chat: <FunnelsMobile />,
     ia: <IaraCopilot />,
-    configuracoes: <SettingsMobile />,
+    funil: <FunnelsMobile />,
   }
 
   return <MobileShell activeTab={activeTab} onTabChange={selectTab}>{screens[activeTab]}</MobileShell>
