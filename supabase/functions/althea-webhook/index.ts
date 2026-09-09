@@ -109,7 +109,17 @@ Deno.serve(
       }
 
       const event = await db.from('integration_events').insert({ user_id: userId, funnel_id: funnelId, integration_id: integration.id, event_type: eventType, external_id: eventId, event_key: eventKey, status: 'processing', payload, occurred_at: new Date(Number(timestamp)).toISOString(), claim_attempt: 0 }).select('id').single()
-      if (event.error) throw event.error
+      if (event.error) {
+        if (event.error.code === '23505') {
+          const duplicate = await db.from('integration_events').select('id,status').eq('event_key', eventKey).maybeSingle()
+          if (duplicate.error) throw duplicate.error
+          if (duplicate.data) {
+            await db.from('webhook_deliveries').update({ status: 'duplicate', response_code: 200, response_time_ms: Date.now() - started, delivered_at: new Date().toISOString() }).eq('id', deliveryId).eq('user_id', userId)
+            return Response.json({ ok: true, duplicate: true, event_id: duplicate.data.id, status: duplicate.data.status }, { headers: corsHeaders })
+          }
+        }
+        throw event.error
+      }
       eventIdDb = event.data.id
 
       let transaction: any = null
@@ -119,7 +129,7 @@ Deno.serve(
         transaction = result.data
         if (transaction) {
           const nextStatus = transactionStatus(status, transaction.status)
-          const transitioned = await db.rpc('transition_gateway_transaction_status', { p_transaction_id: transaction.id, p_user_id: userId, p_next_status: nextStatus, p_failure_code: payload.failure_code ? String(payload.failure_code) : null, p_external_id: externalId })
+          const transitioned = await db.rpc('transition_gateway_transaction_status', { p_transaction_id: transaction.id, p_user_id: userId, p_next_status: nextStatus, p_failure_code: payload.failure_code ? String(payload.failure_code) : null, p_external_id: externalId, p_expected_version: Number(transaction.version) })
           if (transitioned.error) throw transitioned.error
           transaction = transitioned.data
         }
