@@ -25,7 +25,7 @@ STABLE
 SECURITY INVOKER
 SET search_path = public
 AS $$
-WITH base AS (
+WITH raw AS (
   SELECT
     e.id AS event_id,
     e.received_at,
@@ -35,23 +35,19 @@ WITH base AS (
     e.buyer_email,
     nullif(coalesce(e.funnel_id, e.payload->>'funnel_id', e.payload->>'funnelId'),'') AS funnel_id,
     nullif(coalesce(e.product_id, e.payload->>'product_id', e.payload->>'productId'),'') AS product_id,
-    COALESCE(
-      e.payload->>'amount',
-      e.payload->>'value',
-      e.payload->>'total',
-      e.payload->'payment'->>'amount',
-      e.payload->'transaction'->>'amount'
-    )::numeric AS amount,
-    COALESCE(
-      e.payload->>'currency',
-      e.payload->'payment'->>'currency',
-      'BRL'
-    ) AS currency,
+    coalesce(
+      e.payload->>'amount', e.payload->>'value', e.payload->>'total',
+      e.payload->'payment'->>'amount', e.payload->'transaction'->>'amount'
+    ) AS amount_text,
+    coalesce(e.payload->>'currency', e.payload->'payment'->>'currency', 'BRL') AS currency,
     e.processed_at
   FROM public.crm_webhook_events e
   WHERE e.user_id = auth.uid()
     AND e.received_at >= now() - make_interval(days => greatest(1, least(coalesce(p_days,7),30)))
     AND lower(coalesce(e.status,'')) IN ('failed','declined','pending','abandoned','waiting','created')
+), base AS (
+  SELECT r.*, CASE WHEN r.amount_text ~ '^[+-]?[0-9]+([.,][0-9]+)?$' THEN replace(r.amount_text,',','.')::numeric ELSE NULL END AS amount
+  FROM raw r
 ), scored AS (
   SELECT
     b.*,
@@ -65,22 +61,12 @@ WITH base AS (
     + CASE WHEN b.received_at >= now() - interval '30 minutes' THEN 15
            WHEN b.received_at >= now() - interval '6 hours' THEN 10
            WHEN b.received_at >= now() - interval '24 hours' THEN 5
-           ELSE 0 END
-    AS priority
+           ELSE 0 END AS priority
   FROM base b
 )
 SELECT
-  s.event_id,
-  s.received_at,
-  s.event_status,
-  s.transaction_id,
-  s.buyer_name,
-  s.buyer_email,
-  s.funnel_id,
-  s.product_id,
-  s.amount,
-  s.currency,
-  least(100,s.priority)::integer,
+  s.event_id, s.received_at, s.event_status, s.transaction_id, s.buyer_name, s.buyer_email,
+  s.funnel_id, s.product_id, s.amount, s.currency, least(100,s.priority)::integer,
   CASE
     WHEN s.event_status IN ('failed','declined') THEN 'payment_failed'
     WHEN s.event_status IN ('pending','waiting') THEN 'payment_pending'
