@@ -1,12 +1,11 @@
 'use client'
 
 import { Building2, ChevronRight, CircleDollarSign, FileText, Globe2, RefreshCcw, ShieldCheck, Users, Webhook, Network } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import PerfilSettingsPage from '@/app/dashboard/settings/perfil/page'
 import EmpresaSettingsPage from '@/app/dashboard/settings/empresa/page'
 import IntegracoesSettingsPage from '@/app/dashboard/settings/integracoes/page'
-import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import LogoutButton from '@/components/ui/logout-button'
 
 type SubPage = 'menu' | 'perfil' | 'empresa' | 'integracoes'
@@ -31,13 +30,8 @@ const items: SettingItem[] = [
 ]
 
 export default function SettingsMobile() {
-  const db = useMemo(() => createSupabaseBrowserClient(), [])
   const router = useRouter()
   const [currentSubPage, setCurrentSubPage] = useState<SubPage>('menu')
-
-  useEffect(() => {
-    return undefined
-  }, [])
 
   function openItem(item: SettingItem) {
     if (item.target === 'perfil') return setCurrentSubPage('perfil')
@@ -82,20 +76,10 @@ export default function SettingsMobile() {
           {items.map((item) => {
             const Icon = item.icon
             return (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => openItem(item)}
-                className="flex w-full items-center justify-between gap-4 rounded-xl bg-[#0E1110] p-4 text-left transition-all duration-200 active:scale-[0.99]"
-              >
+              <button key={item.label} type="button" onClick={() => openItem(item)} className="flex w-full items-center justify-between gap-4 rounded-xl bg-[#0E1110] p-4 text-left transition-all duration-200 active:scale-[0.99]">
                 <span className="flex min-w-0 items-center gap-3.5">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#111312] text-zinc-400">
-                    <Icon size={18} strokeWidth={1.8} />
-                  </span>
-                  <span className="min-w-0">
-                    <strong className="block text-sm font-bold text-white">{item.label}</strong>
-                    <small className="mt-0.5 block text-[11px] leading-relaxed text-zinc-500">{item.description}</small>
-                  </span>
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#111312] text-zinc-400"><Icon size={18} strokeWidth={1.8} /></span>
+                  <span className="min-w-0"><strong className="block text-sm font-bold text-white">{item.label}</strong><small className="mt-0.5 block text-[11px] leading-relaxed text-zinc-500">{item.description}</small></span>
                 </span>
                 <ChevronRight size={18} className="shrink-0 text-zinc-600" />
               </button>
@@ -110,16 +94,8 @@ export default function SettingsMobile() {
 
   return (
     <section className="relative min-h-[500px] space-y-5 pb-32 font-['Space_Grotesk'] text-white" aria-label="Configurações mobile">
-      <div className="absolute right-0 top-0 z-50">
-        <LogoutButton />
-      </div>
-
-      {subPage && (
-        <button type="button" onClick={() => setCurrentSubPage('menu')} className="pr-24 text-xs font-bold text-zinc-500 transition hover:text-white">
-          ← Voltar
-        </button>
-      )}
-
+      <div className="absolute right-0 top-0 z-50"><LogoutButton /></div>
+      {subPage && <button type="button" onClick={() => setCurrentSubPage('menu')} className="pr-24 text-xs font-bold text-zinc-500 transition hover:text-white">← Voltar</button>}
       <div className={subPage ? 'pr-24' : ''}>{pageContent()}</div>
     </section>
   )
