@@ -27,8 +27,7 @@ export default function DashboardControl() {
   const previousRange = useMemo(() => makePreviousRange(range, rangeDays), [range, rangeDays])
 
   const load = useCallback(async (silent = false) => {
-    silent ? setRefreshing(true) : setLoading(true)
-    setError(null)
+    silent ? setRefreshing(true) : setLoading(true); setError(null)
     try {
       const { data: auth, error: authError } = await db.auth.getUser()
       if (authError) throw authError
@@ -39,12 +38,9 @@ export default function DashboardControl() {
       const since = addDays(range.start, -1)
       const { data, error: queryError } = await db.from('sales').select('id,amount,status,customer_id,data,gateway_id,external_id,transaction_id,occurred_at,created_at').gte('occurred_at', `${since}T00:00:00-03:00`).order('occurred_at', { ascending: false }).limit(5000)
       if (queryError) throw queryError
-      setSales((data ?? []) as AnalyticsSale[])
-      setLastUpdated(new Date())
-    } catch (cause) {
-      console.error('[ALTHEA-DASHBOARD]', cause)
-      setError('Não foi possível sincronizar as vendas reais agora.')
-    } finally { silent ? setRefreshing(false) : setLoading(false) }
+      setSales((data ?? []) as AnalyticsSale[]); setLastUpdated(new Date())
+    } catch (cause) { console.error('[ALTHEA-DASHBOARD]', cause); setError('Não foi possível sincronizar as vendas reais agora.') }
+    finally { silent ? setRefreshing(false) : setLoading(false) }
   }, [db, range.start])
 
   useEffect(() => { void load() }, [load])
@@ -70,7 +66,7 @@ export default function DashboardControl() {
       <div className="grid w-full grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4"><Metric label="Vendas" value={String(analytics.sales.length)} icon={ShoppingCart} hidden={hideValues} detail={`${analytics.approved.length} aprovadas`} /><Metric label="Taxa de aprovação" value={`${analytics.approvalRate.toFixed(1).replace('.', ',')}%`} icon={CheckCircle2} hidden={hideValues} detail={`${analytics.decidedCount} decididas`} /><Metric label="Ticket médio" value={money(analytics.averageTicket)} icon={Ticket} hidden={hideValues} detail="por venda aprovada" /><Metric label="Clientes" value={String(analytics.uniqueCustomers)} icon={Users} hidden={hideValues} detail="clientes identificados" /></div>
       <section className="overflow-hidden rounded-[16px] border border-white/[0.04] bg-[#0F1A16]"><div className="flex items-center justify-between gap-3 border-b border-white/[0.04] px-5 py-4 sm:px-6"><div><h2 className="text-sm font-semibold">Últimas transações</h2><p className="mt-1 text-[11px] text-[#737d78]">Ordenadas pelo momento da ocorrência.</p></div><span className="text-[10px] font-mono text-[#1DBB54]">{analytics.sales.length} no período</span></div>{loading?<div className="px-5 py-10 text-center text-xs text-[#737d78]">Sincronizando dados reais…</div>:latestSales.length?<div className="divide-y divide-white/[0.04]">{latestSales.map(sale=><div key={sale.id} className="flex items-center gap-3 px-5 py-4 sm:px-6"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{customerNameOf(sale)}</p><p className="mt-1 truncate text-[10px] font-mono text-[#68736e]">{dateTime(sale.occurred_at ?? sale.created_at)} · {sale.gateway_id ?? 'Gateway não informado'}</p></div><div className="shrink-0 text-right"><p className="text-sm font-semibold">{hideValues?'••••':money(amountOf(sale))}</p><span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[9px] font-semibold ${statusClass(sale.status)}`}>{statusLabel(sale.status)}</span></div></div>)}</div>:<div className="px-5 py-10 text-center"><Wallet className="mx-auto h-7 w-7 text-[#53605a]" /><p className="mt-3 text-sm font-medium">Nenhuma venda no período</p><p className="mt-1 text-xs text-[#737d78]">Quando uma venda ocorrer, ela aparecerá aqui automaticamente.</p></div>}</section>
     </main><aside className="space-y-4 lg:sticky lg:top-6"><section className="rounded-[16px] border border-white/[0.04] bg-[#0F1A16] p-5 sm:p-6"><div className="flex items-center gap-2 text-[#A6A6A6]"><Clock3 size={16} /><span className="text-xs font-semibold">Status operacional</span></div><div className="mt-5 grid grid-cols-2 gap-3"><SideStat label="Pendentes" value={analytics.pending.length} /><SideStat label="Falharam" value={analytics.failed.length} /><SideStat label="Canceladas" value={analytics.cancelled.length} /><SideStat label="Reembolsadas" value={analytics.refunded.length} /></div></section><section className="rounded-[16px] border border-white/[0.04] bg-[#0F1A16] p-5 sm:p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#A6A6A6]">Período</p><p className="mt-2 text-sm font-semibold">{periodLabel}</p></div><div className="grid h-10 w-10 place-items-center rounded-[12px] bg-[#1DBB54]/[0.08] text-[#1DBB54]"><Wallet size={17} /></div></div><div className="mt-5 space-y-3 border-t border-white/[0.04] pt-4 text-xs"><Row label="Aprovadas" value={String(analytics.approved.length)} /><Row label="Pendentes" value={String(analytics.pending.length)} /><Row label="Decididas" value={String(analytics.decidedCount)} /><Row label="Receita aprovada" value={hideValues?'••••••':money(analytics.approvedRevenue)} strong /></div></section></aside></div>
-    </div></section>
+  </div></section>
 }
 function Metric({ label, value, icon: Icon, hidden, detail }: { label: string; value: string; icon: typeof ShoppingCart; hidden: boolean; detail: string }) { return <article className="rounded-[16px] border border-white/[0.04] bg-[#0F1A16] p-4 sm:p-5"><div className="flex items-center justify-between gap-3"><span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#7d8882]">{label}</span><Icon size={15} className="text-[#1DBB54]" /></div><strong className="mt-4 block truncate text-[24px] font-semibold tracking-[-0.04em]">{hidden?'••••':value}</strong><p className="mt-1 truncate text-[10px] text-[#68736e]">{detail}</p></article> }
 function SideStat({ label, value }: { label: string; value: number }) { return <div className="rounded-[12px] border border-white/[0.04] bg-[#0D362D]/45 p-3"><span className="block text-[10px] text-[#78837d]">{label}</span><strong className="mt-1 block text-lg font-semibold">{value}</strong></div> }
