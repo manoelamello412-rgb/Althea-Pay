@@ -1,6 +1,6 @@
 'use client'
 
-import { Building2, ChevronRight, CircleDollarSign, FileText, Globe2, RefreshCcw, ShieldCheck, Users, Webhook, Network } from 'lucide-react'
+import { Building2, ChevronRight, CircleDollarSign, FileText, Globe2, RefreshCcw, ShieldCheck, Users, Webhook } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import PerfilSettingsPage from '@/app/dashboard/settings/perfil/page'
@@ -14,7 +14,7 @@ type SettingItem = {
   label: string
   description: string
   icon: typeof Users
-  target: 'perfil' | 'empresa' | 'integracoes' | 'recuperacao' | 'funil' | 'usuarios' | 'gateways' | 'seguranca' | 'desempenho' | 'vendas'
+  target: 'empresa' | 'desempenho' | 'vendas' | 'funil' | 'recuperacao' | 'usuarios' | 'integracoes' | 'seguranca'
 }
 
 const items: SettingItem[] = [
@@ -24,7 +24,6 @@ const items: SettingItem[] = [
   { label: 'Funil e Domínio', description: 'URLs, domínios e infraestrutura dos funis', icon: Globe2, target: 'funil' },
   { label: 'Recuperação', description: 'Réguas para carrinhos, PIX expirado e boleto', icon: Webhook, target: 'recuperacao' },
   { label: 'Usuários', description: 'Acessos, equipe e permissões da operação', icon: Users, target: 'usuarios' },
-  { label: 'Gateways', description: 'Provedores, prioridades e configurações de pagamento', icon: Network, target: 'gateways' },
   { label: 'Integrações', description: 'APIs, tokens e webhooks para sistemas externos', icon: FileText, target: 'integracoes' },
   { label: 'Segurança & Auditoria', description: 'Autenticação, proteção e trilhas de acesso', icon: ShieldCheck, target: 'seguranca' },
 ]
@@ -34,18 +33,16 @@ export default function SettingsMobile() {
   const [currentSubPage, setCurrentSubPage] = useState<SubPage>('menu')
 
   function openItem(item: SettingItem) {
-    if (item.target === 'perfil') return setCurrentSubPage('perfil')
     if (item.target === 'empresa') return setCurrentSubPage('empresa')
     if (item.target === 'integracoes') return setCurrentSubPage('integracoes')
 
-    const routes: Record<Exclude<SettingItem['target'], 'perfil' | 'empresa' | 'integracoes'>, string> = {
-      recuperacao: '/dashboard/settings/recuperacao',
-      funil: '/dashboard/settings/funil-dominio',
-      usuarios: '/dashboard/settings/usuarios',
-      gateways: '/dashboard/settings/gateways',
-      seguranca: '/dashboard/settings/seguranca',
+    const routes: Record<Exclude<SettingItem['target'], 'empresa' | 'integracoes'>, string> = {
       desempenho: '/dashboard/settings/desempenho',
       vendas: '/dashboard/settings/vendas',
+      funil: '/dashboard/settings/funil-dominio',
+      recuperacao: '/dashboard/settings/recuperacao',
+      usuarios: '/dashboard/settings/usuarios',
+      seguranca: '/dashboard/settings/seguranca',
     }
     router.push(routes[item.target])
   }
