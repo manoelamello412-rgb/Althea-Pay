@@ -1,6 +1,6 @@
-/* ALTHEA PAY — Canonical Design System
- * Single visual contract for shared shell primitives.
- * Page-specific styles may remain, but shared primitives must consume these tokens.
+/* ALTHEA PAY — CANONICAL DESIGN SYSTEM
+ * Single visual contract for the shared application shell and primitives.
+ * Page-specific CSS may exist only for genuinely page-specific behavior.
  */
 
 :root {
@@ -17,64 +17,75 @@
   --althea-card-radius: 16px;
   --althea-control-radius: 12px;
   --althea-content-bottom: 128px;
+  --althea-content-max: 1280px;
 }
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
 
 html,
-body {
-  background: var(--althea-bg);
-}
+body { min-height: 100%; background: var(--althea-bg); }
 
 body {
-  font-family: var(--font-space-grotesk, 'Space Grotesk'), ui-sans-serif, system-ui, sans-serif;
+  margin: 0;
   color: #F5F7F6;
+  background: var(--althea-bg);
+  font-family: var(--font-space-grotesk, 'Space Grotesk'), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
 button,
 a,
 input,
 select,
-textarea {
-  -webkit-tap-highlight-color: transparent;
-}
+textarea { -webkit-tap-highlight-color: transparent; }
 
-::selection {
-  background: var(--althea-brand);
-  color: #050806;
-}
+button,
+a { -webkit-user-select: none; user-select: none; }
 
-/* Shared primitives */
-.althea-ds-card {
+::selection { background: var(--althea-brand); color: #050806; }
+
+/* Canonical primitives */
+.althea-ds-card,
+.althea-card {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--althea-border);
   border-radius: var(--althea-card-radius);
   background: linear-gradient(145deg, var(--althea-surface), var(--althea-bg));
-  padding: 24px;
   box-shadow: 0 22px 65px rgba(0, 0, 0, 0.25);
 }
 
-.althea-ds-input {
+.althea-ds-card { padding: 24px; }
+
+.althea-ds-input,
+.althea-input {
   width: 100%;
   min-height: 44px;
   border: 1px solid var(--althea-border);
   border-radius: var(--althea-control-radius);
-  background: color-mix(in srgb, var(--althea-inner) 40%, transparent);
+  background: rgba(13, 54, 45, 0.40);
   color: #F5F7F6;
   padding: 0 16px;
   outline: none;
   transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
 }
 
-.althea-ds-input::placeholder {
-  color: color-mix(in srgb, var(--althea-muted) 40%, transparent);
-}
+.althea-ds-input::placeholder,
+.althea-input::placeholder { color: rgba(166, 166, 166, 0.40); }
 
-.althea-ds-input:focus {
-  border-color: color-mix(in srgb, var(--althea-brand) 40%, transparent);
+.althea-ds-input:focus,
+.althea-input:focus {
+  border-color: rgba(29, 187, 84, 0.40);
   box-shadow: 0 0 0 3px rgba(29, 187, 84, 0.08);
 }
 
-.althea-ds-button-primary {
+.althea-ds-button-primary,
+.althea-btn-primary,
+.primary {
   min-height: 44px;
   display: inline-flex;
   align-items: center;
@@ -91,28 +102,27 @@ textarea {
   box-shadow: 0 4px 20px rgba(29, 187, 84, 0.25);
 }
 
-.althea-ds-button-primary:hover {
-  filter: brightness(1.06);
-  box-shadow: var(--althea-glow);
-}
+.althea-ds-button-primary:hover,
+.althea-btn-primary:hover,
+.primary:hover { filter: brightness(1.06); box-shadow: var(--althea-glow); }
 
-.althea-ds-button-primary:active {
-  transform: scale(0.99);
-}
+.althea-ds-button-primary:active,
+.althea-btn-primary:active,
+.primary:active { transform: scale(0.99); }
 
-.althea-ds-button-primary:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-}
+.althea-ds-button-primary:disabled,
+.althea-btn-primary:disabled,
+.primary:disabled { cursor: not-allowed; opacity: 0.40; }
 
-.althea-ds-button-secondary {
+.althea-ds-button-secondary,
+.althea-btn-secondary {
   min-height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   border: 1px solid var(--althea-border);
-  border-radius: 10px;
+  border-radius: var(--althea-control-radius);
   background: var(--althea-inner);
   color: var(--althea-muted);
   padding: 0 12px;
@@ -121,50 +131,34 @@ textarea {
   transition: border-color 180ms ease, color 180ms ease, background 180ms ease;
 }
 
-.althea-ds-button-secondary:hover {
-  border-color: rgba(255, 255, 255, 0.08);
-  color: #FFF;
-}
+.althea-ds-button-secondary:hover,
+.althea-btn-secondary:hover { border-color: rgba(255,255,255,0.08); color: #FFF; }
 
-.althea-ds-mobile-safe {
-  padding-bottom: var(--althea-content-bottom);
-}
+.althea-ds-mobile-safe { padding-bottom: var(--althea-content-bottom); }
 
-/* Canonicalize legacy shared primitives without forcing page-specific layouts to change. */
-.althea-card {
-  border-radius: var(--althea-card-radius);
-}
-
-.primary {
-  border-radius: var(--althea-control-radius);
-  background: var(--althea-brand);
-  color: #050806;
-  box-shadow: 0 4px 20px rgba(29, 187, 84, 0.25);
-}
-
-.primary:hover {
-  box-shadow: var(--althea-glow);
-}
-
-/* Legacy green token is normalized at the shared visual boundary. */
+/* Shared legacy visual names are normalized here while page migration completes. */
 .app-brand-pay,
 .brand-lockup-pay,
-.brand-lockup-tag b {
-  color: var(--althea-brand);
-}
+.brand-lockup-tag b { color: var(--althea-brand); }
 
 @media (max-width: 767px) {
-  :root {
-    --althea-content-bottom: 128px;
-  }
-
-  .althea-ds-card {
-    padding: 16px;
-  }
+  :root { --althea-content-bottom: 128px; }
+  .althea-ds-card,
+  .althea-card { border-radius: 16px; }
+  .althea-ds-card { padding: 16px; }
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .althea-ds-mobile-safe {
     padding-bottom: calc(var(--althea-content-bottom) + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
