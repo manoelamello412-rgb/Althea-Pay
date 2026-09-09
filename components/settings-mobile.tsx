@@ -44,8 +44,8 @@ export default function SettingsMobile() {
       usuarios: '/dashboard/settings/usuarios',
       gateways: '/dashboard/settings/gateways',
       seguranca: '/dashboard/settings/seguranca',
-      desempenho: '/dashboard/desempenho',
-      vendas: '/dashboard/vendas',
+      desempenho: '/dashboard/settings/desempenho',
+      vendas: '/dashboard/settings/vendas',
     }
     router.push(routes[item.target])
   }
@@ -62,28 +62,17 @@ export default function SettingsMobile() {
           <p className="mt-1 text-xs font-medium text-zinc-500">Gerencie as diretrizes gerais da sua operação</p>
         </header>
 
-        <button
-          type="button"
-          onClick={() => setCurrentSubPage('perfil')}
-          aria-label="Meu Perfil"
-          className="mt-4 flex min-h-11 w-full items-center justify-between rounded-xl bg-[#0E1110] px-4 text-left text-sm font-bold text-white transition-all duration-200 active:scale-[0.99]"
-        >
-          <span>Meu Perfil</span>
-          <ChevronRight size={18} className="text-zinc-600" />
+        <button type="button" onClick={() => setCurrentSubPage('perfil')} aria-label="Meu Perfil" className="mt-4 flex min-h-11 w-full items-center justify-between rounded-xl bg-[#0E1110] px-4 text-left text-sm font-bold text-white transition-all duration-200 active:scale-[0.99]">
+          <span>Meu Perfil</span><ChevronRight size={18} className="text-zinc-600" />
         </button>
 
         <section className="mt-3 flex flex-col gap-1.5">
           {items.map((item) => {
             const Icon = item.icon
-            return (
-              <button key={item.label} type="button" onClick={() => openItem(item)} className="flex w-full items-center justify-between gap-4 rounded-xl bg-[#0E1110] p-4 text-left transition-all duration-200 active:scale-[0.99]">
-                <span className="flex min-w-0 items-center gap-3.5">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#111312] text-zinc-400"><Icon size={18} strokeWidth={1.8} /></span>
-                  <span className="min-w-0"><strong className="block text-sm font-bold text-white">{item.label}</strong><small className="mt-0.5 block text-[11px] leading-relaxed text-zinc-500">{item.description}</small></span>
-                </span>
-                <ChevronRight size={18} className="shrink-0 text-zinc-600" />
-              </button>
-            )
+            return <button key={item.label} type="button" onClick={() => openItem(item)} className="flex w-full items-center justify-between gap-4 rounded-xl bg-[#0E1110] p-4 text-left transition-all duration-200 active:scale-[0.99]">
+              <span className="flex min-w-0 items-center gap-3.5"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#111312] text-zinc-400"><Icon size={18} strokeWidth={1.8} /></span><span className="min-w-0"><strong className="block text-sm font-bold text-white">{item.label}</strong><small className="mt-0.5 block text-[11px] leading-relaxed text-zinc-500">{item.description}</small></span></span>
+              <ChevronRight size={18} className="shrink-0 text-zinc-600" />
+            </button>
           })}
         </section>
       </>
@@ -92,11 +81,9 @@ export default function SettingsMobile() {
 
   const subPage = currentSubPage !== 'menu'
 
-  return (
-    <section className="relative min-h-[500px] space-y-5 pb-32 font-['Space_Grotesk'] text-white" aria-label="Configurações mobile">
-      <div className="absolute right-0 top-0 z-50"><LogoutButton /></div>
-      {subPage && <button type="button" onClick={() => setCurrentSubPage('menu')} className="pr-24 text-xs font-bold text-zinc-500 transition hover:text-white">← Voltar</button>}
-      <div className={subPage ? 'pr-24' : ''}>{pageContent()}</div>
-    </section>
-  )
+  return <section className="relative min-h-[500px] space-y-5 pb-32 font-['Space_Grotesk'] text-white" aria-label="Configurações mobile">
+    <div className="absolute right-0 top-0 z-50"><LogoutButton /></div>
+    {subPage && <button type="button" onClick={() => setCurrentSubPage('menu')} className="pr-24 text-xs font-bold text-zinc-500 transition hover:text-white">← Voltar</button>}
+    <div className={subPage ? 'pr-24' : ''}>{pageContent()}</div>
+  </section>
 }
