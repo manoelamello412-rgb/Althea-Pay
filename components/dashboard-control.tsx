@@ -35,13 +35,13 @@ export default function DashboardControl() {
       const metadata = auth.user.user_metadata as Record<string, unknown> | undefined
       const name = metadata?.full_name ?? metadata?.name ?? metadata?.display_name
       setOperatorName(typeof name === 'string' && name.trim() ? name.trim() : auth.user.email?.split('@')[0] ?? 'Operador')
-      const since = addDays(range.start, -1)
+      const since = addDays(previousRange.start, -1)
       const { data, error: queryError } = await db.from('sales').select('id,amount,status,customer_id,data,gateway_id,external_id,transaction_id,occurred_at,created_at').gte('occurred_at', `${since}T00:00:00-03:00`).order('occurred_at', { ascending: false }).limit(5000)
       if (queryError) throw queryError
       setSales((data ?? []) as AnalyticsSale[]); setLastUpdated(new Date())
     } catch (cause) { console.error('[ALTHEA-DASHBOARD]', cause); setError('Não foi possível sincronizar as vendas reais agora.') }
     finally { silent ? setRefreshing(false) : setLoading(false) }
-  }, [db, range.start])
+  }, [db, previousRange.start])
 
   useEffect(() => { void load() }, [load])
   useEffect(() => { const handler = () => void load(true); window.addEventListener('althea-refresh', handler); return () => window.removeEventListener('althea-refresh', handler) }, [load])
