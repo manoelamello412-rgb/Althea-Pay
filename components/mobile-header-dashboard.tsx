@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { Settings, Search } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface HeaderProps {
   pageTitle?: string
@@ -11,25 +12,23 @@ interface HeaderProps {
 }
 
 export function MobileHeaderDashboard({ pageTitle, currentScreen }: HeaderProps) {
+  const router = useRouter()
   const title = (pageTitle?.trim() || currentScreen?.trim() || 'DASHBOARD').toUpperCase()
 
   return (
-    <header className="sticky top-0 z-[60] w-full border-b border-white/[0.05] bg-[#09090b]/92 px-4 backdrop-blur-xl">
+    <header className="sticky top-0 z-[60] w-full border-b border-white/[0.08] bg-[#070908]/95 px-4 backdrop-blur-xl">
       <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="relative flex h-6 w-6 shrink-0 items-center justify-center">
-            <Image src="/althea-mark.png" alt="Althea Pay Logo" width={24} height={24} priority className="object-contain drop-shadow-[0_0_7px_rgba(16,185,129,0.2)]" />
-          </div>
-          <div className="h-4 w-px shrink-0 bg-white/[0.08]" />
-          <h1 className="truncate text-[13px] font-semibold tracking-tight text-zinc-100">ALTHEA PAY <span className="text-zinc-600">//</span> {title}</h1>
-        </div>
+        <button type="button" onClick={() => router.push('/dashboard')} aria-label="Voltar ao Dashboard" className="flex min-w-0 items-center">
+          <Image src="/althea-logo-inner.PNG" alt="ALTHEA PAY" width={132} height={28} priority className="h-7 w-auto object-contain" />
+        </button>
 
-        <div className="flex shrink-0 items-center gap-0.5">
-          <button type="button" aria-label="Buscar" onClick={() => window.dispatchEvent(new CustomEvent('althea-open-search'))} className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.04] hover:text-white active:bg-white/[0.06]">
-            <Search className="h-[18px] w-[18px]" strokeWidth={2} />
+        <div className="ml-auto flex min-w-0 items-center justify-end gap-2">
+          <h1 className="truncate text-right text-[11px] font-semibold tracking-[0.12em] text-[#d1d8d4]">// {title}</h1>
+          <button type="button" aria-label="Buscar" onClick={() => window.dispatchEvent(new CustomEvent('althea-open-search'))} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/[0.06] text-[#a8b0ac] transition hover:border-[#1DB854]/40 hover:bg-[#0d1a13] hover:text-[#1DB854]">
+            <Search size={17} strokeWidth={1.9} />
           </button>
-          <button type="button" aria-label="Configurações" onClick={() => window.dispatchEvent(new CustomEvent('althea-open-settings'))} className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.04] hover:text-white active:bg-white/[0.06]">
-            <Settings className="h-[18px] w-[18px]" strokeWidth={2} />
+          <button type="button" aria-label="Configurações" onClick={() => router.push('/dashboard/settings')} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/[0.06] text-[#a8b0ac] transition hover:border-[#1DB854]/40 hover:bg-[#0d1a13] hover:text-[#1DB854]">
+            <Settings size={17} strokeWidth={1.8} />
           </button>
         </div>
       </div>
