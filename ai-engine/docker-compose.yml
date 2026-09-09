@@ -6,7 +6,7 @@ services:
       - "9000:9000"
     environment:
       ALTHEA_AI_ENGINE_KEY: ${ALTHEA_AI_ENGINE_KEY:?set ALTHEA_AI_ENGINE_KEY}
-      UPSTREAM_API_KEY: ${UPSTREAM_API_KEY:-internal}
+      UPSTREAM_API_KEY: ${UPSTREAM_API_KEY:?set UPSTREAM_API_KEY}
       DEFAULT_UPSTREAM_URL: http://worker-reasoning:8000/v1
       REASONING_UPSTREAM_URL: http://worker-reasoning:8000/v1
       FAST_UPSTREAM_URL: http://worker-fast:8000/v1
@@ -42,8 +42,9 @@ services:
       - "qwen3"
       - "--generation-config"
       - "vllm"
+      - "--enable-per-request-metrics"
       - "--api-key"
-      - "${UPSTREAM_API_KEY:-internal}"
+      - "${UPSTREAM_API_KEY}"
     environment:
       VLLM_WORKER_MULTIPROC_METHOD: spawn
       HF_HOME: /models-cache
@@ -78,8 +79,9 @@ services:
       - "qwen3"
       - "--generation-config"
       - "vllm"
+      - "--enable-per-request-metrics"
       - "--api-key"
-      - "${UPSTREAM_API_KEY:-internal}"
+      - "${UPSTREAM_API_KEY}"
     environment:
       VLLM_WORKER_MULTIPROC_METHOD: spawn
       HF_HOME: /models-cache
@@ -112,8 +114,9 @@ services:
       - "qwen3_coder"
       - "--generation-config"
       - "vllm"
+      - "--enable-per-request-metrics"
       - "--api-key"
-      - "${UPSTREAM_API_KEY:-internal}"
+      - "${UPSTREAM_API_KEY}"
     environment:
       VLLM_WORKER_MULTIPROC_METHOD: spawn
       HF_HOME: /models-cache
