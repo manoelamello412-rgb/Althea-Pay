@@ -59,28 +59,42 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
         </div>
       </aside>
 
-      <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#070908]/95 px-3 py-3 backdrop-blur-xl lg:ml-[250px] sm:px-4">
-        <div className="mx-auto flex min-h-10 w-full max-w-[1106px] items-center justify-between gap-3">
-          <button type="button" onClick={() => onTabChange('dashboard')} aria-label="Voltar ao Dashboard" className="flex min-w-0 items-center">
-            <img src="/althea-logo-inner.PNG" alt="ALTHEA PAY" className="h-7 w-auto max-w-[132px] object-contain" />
+      <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#020203]/98 px-4 backdrop-blur-xl lg:ml-[250px]">
+        <div className="mx-auto flex h-[108px] w-full max-w-[1106px] items-center gap-0">
+          <button type="button" onClick={() => onTabChange('dashboard')} aria-label="Voltar ao Dashboard" className="flex shrink-0 items-center">
+            <img src="/althea-logo-inner.PNG" alt="ALTHEA PAY" className="h-[56px] w-[92px] object-contain object-left" />
           </button>
 
-          <div className="ml-auto flex min-w-0 items-center justify-end gap-1.5">
-            <span className="max-w-[96px] truncate pr-1 text-right text-[10px] font-semibold tracking-[0.12em] text-[#d1d8d4] sm:max-w-none sm:text-[11px]">
-              // {titles[activeTab]}
-            </span>
-            <button type="button" aria-label="Pesquisar" onClick={() => setSearchOpen((value) => !value)} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border transition ${searchOpen ? 'border-[#1DB854]/50 bg-[#0d1a13] text-[#1DB854]' : 'border-white/[0.06] bg-transparent text-[#a8b0ac] hover:border-[#1DB854]/30 hover:text-white'}`}>
-              <Search size={17} />
+          <div className="mx-5 h-[48px] w-px shrink-0 bg-white/[0.14]" aria-hidden="true" />
+
+          <h1 className="min-w-0 truncate text-[27px] font-semibold tracking-[-0.025em] text-[#f4f5f4] sm:text-[30px]">
+            ALTHEA PAY <span className="text-[#6f7471]">//</span> {titles[activeTab]}
+          </h1>
+
+          <div className="ml-auto flex shrink-0 items-center gap-8 pl-5">
+            <button
+              type="button"
+              aria-label="Pesquisar"
+              onClick={() => setSearchOpen((value) => !value)}
+              className={`grid h-12 w-12 place-items-center rounded-full transition ${searchOpen ? 'text-[#1DB854]' : 'text-[#a8a8b5] hover:text-white'}`}
+            >
+              <Search size={38} strokeWidth={1.65} />
             </button>
-            <button type="button" aria-label="Configurações" title="Configurações" onClick={() => router.push('/dashboard/settings')} className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/[0.06] bg-transparent text-[#a8b0ac] transition hover:border-[#1DB854]/40 hover:bg-[#0d1a13] hover:text-[#1DB854]">
-              <Settings size={17} strokeWidth={1.8} />
+            <button
+              type="button"
+              aria-label="Configurações"
+              title="Configurações"
+              onClick={() => router.push('/dashboard/settings')}
+              className="grid h-12 w-12 place-items-center rounded-full text-[#a8a8b5] transition hover:text-white"
+            >
+              <Settings size={38} strokeWidth={1.65} />
             </button>
           </div>
         </div>
 
         <AnimatePresence initial={false}>
           {searchOpen && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 42 }} exit={{ opacity: 0, height: 0 }} className="mx-auto mt-3 flex max-w-[1106px] items-center gap-2 overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b0d0c] px-3">
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 42 }} exit={{ opacity: 0, height: 0 }} className="mx-auto mb-3 flex max-w-[1106px] items-center gap-2 overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b0d0c] px-3">
               <Search size={15} className="text-[#66716c]" />
               <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar..." className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-[#66716c]" />
               <button type="button" aria-label="Fechar pesquisa" onClick={() => { setQuery(''); setSearchOpen(false) }} className="text-[#737d79]"><X size={15} /></button>
