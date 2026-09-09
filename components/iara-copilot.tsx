@@ -1,14 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bot, MessageSquarePlus, Send, ShieldCheck } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Session = { id: string; title: string; updated_at: string }
 type Message = { id: string; sender: 'user' | 'iara'; content: string; created_at: string }
 
 export default function IaraCopilot() {
-  const db = useRef(createSupabaseBrowserClient()).current
+  const db = useMemo(() => createSupabaseBrowserClient(), [])
+  const router = useRouter()
   const bottom = useRef<HTMLDivElement>(null)
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -35,7 +37,7 @@ export default function IaraCopilot() {
     let cancelled = false
     const load = async () => {
       const { data: auth } = await db.auth.getUser()
-      if (!auth.user) { window.location.href = '/login'; return }
+      if (!auth.user) { router.replace('/login'); return }
       const { data, error: sessionError } = await db.from('chat_sessions').select('id,title,updated_at').eq('user_id', auth.user.id).order('updated_at', { ascending: false }).limit(50)
       if (sessionError) { setError('Não foi possível carregar o histórico.'); setLoading(false); return }
       if (cancelled) return
@@ -47,7 +49,7 @@ export default function IaraCopilot() {
     }
     void load()
     return () => { cancelled = true }
-  }, [createSession, db])
+  }, [createSession, db, router])
 
   useEffect(() => {
     if (!activeId) return
