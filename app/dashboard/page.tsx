@@ -6,7 +6,7 @@ import DashboardMobile from '@/components/dashboard-control'
 import FunnelsMobile from '@/components/funnels-mobile'
 import GatewaysMobile from '@/components/gateways-mobile'
 import SettingsMobile from '@/components/settings-mobile'
-import IaraSettingsPage from '@/app/dashboard/settings/iara/page'
+import IaraCopilot from '@/components/iara-copilot'
 
 const tabs: MobileShellTab[] = ['dashboard', 'gateways', 'funis', 'ia', 'configuracoes']
 
@@ -41,7 +41,7 @@ export default function MobileDashboardOrchestrator() {
     dashboard: <DashboardMobile />,
     gateways: <GatewaysMobile />,
     funis: <FunnelsMobile />,
-    ia: <IaraSettingsPage />,
+    ia: <IaraCopilot />,
     configuracoes: <SettingsMobile />,
   }
 
