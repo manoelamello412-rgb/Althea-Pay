@@ -26,10 +26,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm install --no-audit --no-fund --legacy-peer-deps
 
       - name: Static validation
         run: |
@@ -68,14 +68,14 @@ jobs:
             IF NOT v_version THEN RAISE EXCEPTION 'gateway_transactions.version is missing'; END IF;
 
             SELECT EXISTS (
-              SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+              SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                WHERE n.nspname='public' AND p.proname='transition_gateway_transaction_status'
                  AND pg_get_function_identity_arguments(p.oid)='p_transaction_id uuid, p_user_id uuid, p_next_status text, p_failure_code text, p_external_id text, p_expected_version bigint'
             ) INTO v_occ;
             IF NOT v_occ THEN RAISE EXCEPTION '6-argument OCC transition RPC is missing'; END IF;
 
             SELECT p.prosrc INTO v_fsm_source
-              FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+              FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
              WHERE n.nspname='public' AND p.proname='transition_gateway_transaction_status'
                AND pg_get_function_identity_arguments(p.oid)='p_transaction_id uuid, p_user_id uuid, p_next_status text, p_failure_code text, p_external_id text, p_expected_version bigint';
             v_fsm := COALESCE(v_fsm_source,'') ILIKE '%created%'
