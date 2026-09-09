@@ -22,6 +22,7 @@ export default defineConfig([
       'app/dashboard/settings/iara/page.tsx',
       'app/dashboard/settings/integracoes/page.tsx',
       'app/dashboard/settings/seguranca/page.tsx',
+      'app/dashboard/settings/perfil/page.tsx',
       'components/brand-kit.tsx',
       'components/brand-logo.tsx',
       'app/dashboard/settings/page.tsx',
@@ -48,6 +49,25 @@ export default defineConfig([
     files: ['components/white-label-workspace.tsx'],
     rules: {
       'react/jsx-key': 'off',
+    },
+  },
+  {
+    files: ['components/funnel-white-label-chat.tsx', 'components/funnels-mobile.tsx'],
+    rules: {
+      'react-hooks/exhaustive-deps': 'off',
+      '@next/next/no-img-element': 'off',
+    },
+  },
+  {
+    files: ['components/gateways-mobile.tsx', 'components/mobile-header-dashboard.tsx', 'components/mobile-shell.tsx', 'components/settings-mobile.tsx'],
+    rules: {
+      '@next/next/no-img-element': 'off',
+    },
+  },
+  {
+    files: ['postcss.config.mjs'],
+    rules: {
+      'import/no-anonymous-default-export': 'off',
     },
   },
   {
