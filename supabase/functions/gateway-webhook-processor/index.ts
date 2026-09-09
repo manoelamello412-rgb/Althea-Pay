@@ -50,7 +50,7 @@ async function processOne(event: Record<string, unknown>) {
   if (!Object.prototype.hasOwnProperty.call(aliases, rawStatus)) return { ok: false, retry: false, reason: "unsupported_provider_status", status };
 
   const { data: candidates, error: txError } = await db.from("gateway_transactions")
-    .select("id,user_id,funnel_id,product_id,gateway_id,external_id,amount,currency,status,customer,metadata,gateways:gateway_id(data)")
+    .select("id,user_id,funnel_id,product_id,gateway_id,external_id,amount,currency,status,version,customer,metadata,gateways:gateway_id(data)")
     .eq("external_id", externalId).limit(20);
   if (txError) throw txError;
   const matches = (candidates ?? []).filter((tx: Record<string, unknown>) => providerMatches(event.provider, tx.gateways, String(tx.gateway_id)));
@@ -70,6 +70,7 @@ async function processOne(event: Record<string, unknown>) {
   const transition = await db.rpc("transition_gateway_transaction_status", {
     p_transaction_id: String(tx.id), p_user_id: String(tx.user_id), p_next_status: status,
     p_failure_code: payload.failure_code ? String(payload.failure_code) : null, p_external_id: externalId,
+    p_expected_version: Number(tx.version),
   });
   if (transition.error) throw transition.error;
   const next = Array.isArray(transition.data) ? transition.data[0] : transition.data;
