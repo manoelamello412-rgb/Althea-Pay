@@ -57,9 +57,7 @@ export class WebhookVerifier {
     const timestamp = parseTimestamp(timestampRaw);
     const signatureBytes = hexToBytes(receivedSignature);
 
-    if (!timestamp || !signatureBytes) {
-      return { isValid: false, reason: 'malformed_signature', parsedBody: null };
-    }
+    if (!timestamp || !signatureBytes) return { isValid: false, reason: 'malformed_signature', parsedBody: null };
 
     const age = Math.abs(Date.now() - timestamp.milliseconds);
     if (age > toleranceSeconds * 1000) {
@@ -77,7 +75,7 @@ export class WebhookVerifier {
     const valid = await crypto.subtle.verify(
       'HMAC',
       key,
-      signatureBytes,
+      signatureBytes as unknown as BufferSource,
       encoder.encode(`${timestamp.original}.${rawBody}`),
     );
 
