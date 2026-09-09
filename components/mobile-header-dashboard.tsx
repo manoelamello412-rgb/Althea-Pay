@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, RefreshCw } from 'lucide-react'
+import { Eye, EyeOff, RefreshCw, Search } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import type { SupabaseClient } from '@supabase/supabase-js'
 
 interface HeaderProps {
   userName?: string
@@ -14,17 +14,15 @@ interface HeaderProps {
 }
 
 export function MobileHeaderDashboard({ userName, currentScreen = 'DASHBOARD', onRefresh, refreshing = false }: HeaderProps) {
-  const dbRef = useRef<SupabaseClient | null>(null)
   const [profileName, setProfileName] = useState('')
   const [hideValues, setHideValues] = useState(false)
   const [currentTime, setCurrentTime] = useState('')
 
   useEffect(() => {
     let active = true
-    try {
-      const db = createSupabaseBrowserClient()
-      dbRef.current = db
-      void (async () => {
+    const loadProfile = async () => {
+      try {
+        const db = createSupabaseBrowserClient()
         const { data: auth } = await db.auth.getUser()
         if (!active || !auth.user) return
         const metadata = auth.user.user_metadata as Record<string, unknown> | null
@@ -34,10 +32,11 @@ export function MobileHeaderDashboard({ userName, currentScreen = 'DASHBOARD', o
         const displayName = String(profile?.display_name ?? '').trim()
         const emailName = String(auth.user.email ?? '').split('@')[0].trim()
         setProfileName(displayName || metadataName || emailName || 'Usuário')
-      })()
-    } catch {
-      dbRef.current = null
+      } catch {
+        if (active) setProfileName('Usuário')
+      }
     }
+    void loadProfile()
     return () => { active = false }
   }, [])
 
@@ -52,25 +51,32 @@ export function MobileHeaderDashboard({ userName, currentScreen = 'DASHBOARD', o
   }, [])
 
   const greetingName = userName?.trim() || profileName || 'Usuário'
+  const title = currentScreen.trim() || 'DASHBOARD'
 
   return (
     <div className="w-full select-none bg-[#0B0B0D] text-white">
-      <header className="fixed left-0 right-0 top-0 z-[60] flex h-16 w-full items-center justify-between border-b border-[#0D362D] bg-[#0F1A16]/95 px-4 backdrop-blur-xl transform-gpu will-change-transform" style={{ transform: 'translate3d(0,0,0)', backfaceVisibility: 'hidden' }}>
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-[#0D362D] bg-[#0B0B0D] shadow-[0_8px_24px_rgba(29,139,84,.08)]">
-            <img src="/althea-logo.png" alt="ALTHEA PAY" className="h-full w-full object-contain p-1.5" />
+      <header className="fixed left-0 right-0 top-0 z-[60] h-14 w-full border-b border-white/[0.04] bg-[#09090b]/70 px-4 backdrop-blur-md transition-all duration-300 transform-gpu will-change-transform" style={{ transform: 'translate3d(0,0,0)', backfaceVisibility: 'hidden' }}>
+        <div className="mx-auto flex h-full w-full items-center justify-between">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <div className="relative flex h-6 w-6 shrink-0 items-center justify-center transition-transform active:scale-95">
+              <Image src="/althea-mark.png" alt="Althea Pay Logo" width={24} height={24} priority className="object-contain drop-shadow-[0_0_6px_rgba(16,185,129,0.2)]" />
+            </div>
+            <div className="h-4 w-px shrink-0 bg-white/[0.08]" />
+            <h1 className="truncate text-sm font-semibold tracking-tight text-zinc-100">{title}</h1>
           </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-bold tracking-[0.16em] text-slate-100">ALTHEA PAY</span>
-            <span className="text-[10px] font-bold tracking-[0.22em] text-[#1D8B54]">{currentScreen}</span>
+
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button type="button" aria-label="Buscar" className="flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-zinc-400 transition-all duration-200 hover:bg-white/[0.03] hover:text-zinc-100 active:bg-white/[0.06]">
+              <Search className="h-[18px] w-[18px]" strokeWidth={2} />
+            </button>
+            <motion.button whileTap={{ scale: 0.9 }} type="button" onClick={onRefresh} disabled={!onRefresh || refreshing} aria-label="Atualizar dashboard" className="group flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-zinc-400 transition-all duration-200 hover:bg-white/[0.03] hover:text-zinc-100 active:bg-white/[0.06] disabled:opacity-50">
+              <RefreshCw className={refreshing ? 'h-[17px] w-[17px] animate-spin' : 'h-[17px] w-[17px] transition-transform duration-500 group-active:rotate-180'} strokeWidth={2} />
+            </motion.button>
           </div>
         </div>
-        <motion.button whileTap={{ scale: 0.9 }} type="button" onClick={onRefresh} disabled={!onRefresh || refreshing} aria-label="Atualizar dashboard" className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#0D362D] bg-[#0B0B0D] text-slate-300 outline-none disabled:opacity-70 transform-gpu will-change-transform">
-          <RefreshCw className={refreshing ? 'animate-spin' : ''} size={16} />
-        </motion.button>
       </header>
 
-      <div className="h-16" />
+      <div className="h-14" />
       <div className="flex flex-col gap-5 px-4 pb-2 pt-6">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
