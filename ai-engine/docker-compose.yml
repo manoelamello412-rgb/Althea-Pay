@@ -1,0 +1,137 @@
+services:
+  gateway:
+    build: ./gateway
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      ALTHEA_AI_ENGINE_KEY: ${ALTHEA_AI_ENGINE_KEY:?set ALTHEA_AI_ENGINE_KEY}
+      UPSTREAM_API_KEY: ${UPSTREAM_API_KEY:-internal}
+      DEFAULT_UPSTREAM_URL: http://worker-reasoning:8000/v1
+      REASONING_UPSTREAM_URL: http://worker-reasoning:8000/v1
+      FAST_UPSTREAM_URL: http://worker-fast:8000/v1
+      CODING_UPSTREAM_URL: http://worker-coding:8000/v1
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
+      MAX_BODY_BYTES: ${MAX_BODY_BYTES:-1048576}
+    depends_on:
+      - worker-reasoning
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks: [althea-ai]
+
+  worker-reasoning:
+    image: vllm/vllm-openai:v0.28.0
+    restart: unless-stopped
+    command:
+      - "Qwen/Qwen3-235B-A22B"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      - "--tensor-parallel-size"
+      - "8"
+      - "--max-model-len"
+      - "131072"
+      - "--enable-auto-tool-choice"
+      - "--tool-call-parser"
+      - "qwen3"
+      - "--reasoning-parser"
+      - "qwen3"
+      - "--generation-config"
+      - "vllm"
+      - "--api-key"
+      - "${UPSTREAM_API_KEY:-internal}"
+    environment:
+      VLLM_WORKER_MULTIPROC_METHOD: spawn
+      HF_HOME: /models-cache
+    volumes:
+      - model-cache:/models-cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 8
+              capabilities: [gpu]
+    shm_size: "16gb"
+    networks: [althea-ai]
+
+  worker-fast:
+    image: vllm/vllm-openai:v0.28.0
+    restart: unless-stopped
+    profiles: [fast]
+    command:
+      - "Qwen/Qwen3-30B-A3B"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      - "--max-model-len"
+      - "32768"
+      - "--enable-auto-tool-choice"
+      - "--tool-call-parser"
+      - "qwen3"
+      - "--reasoning-parser"
+      - "qwen3"
+      - "--generation-config"
+      - "vllm"
+      - "--api-key"
+      - "${UPSTREAM_API_KEY:-internal}"
+    environment:
+      VLLM_WORKER_MULTIPROC_METHOD: spawn
+      HF_HOME: /models-cache
+    volumes:
+      - model-cache:/models-cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    shm_size: "8gb"
+    networks: [althea-ai]
+
+  worker-coding:
+    image: vllm/vllm-openai:v0.28.0
+    restart: unless-stopped
+    profiles: [coding]
+    command:
+      - "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      - "--max-model-len"
+      - "65536"
+      - "--enable-auto-tool-choice"
+      - "--tool-call-parser"
+      - "qwen3_coder"
+      - "--generation-config"
+      - "vllm"
+      - "--api-key"
+      - "${UPSTREAM_API_KEY:-internal}"
+    environment:
+      VLLM_WORKER_MULTIPROC_METHOD: spawn
+      HF_HOME: /models-cache
+    volumes:
+      - model-cache:/models-cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    shm_size: "8gb"
+    networks: [althea-ai]
+
+volumes:
+  model-cache:
+
+networks:
+  althea-ai:
+    driver: bridge
