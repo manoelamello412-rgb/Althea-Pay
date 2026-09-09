@@ -10,27 +10,6 @@ end; $$;
 revoke execute on function public.gateway_runtime_route_candidates(uuid,text[],numeric,text,text) from public,anon,authenticated;
 grant execute on function public.gateway_runtime_route_candidates(uuid,text[],numeric,text,text) to service_role;
 
-create or replace function public.enqueue_gateway_attempt_recovery()
-returns trigger language plpgsql security definer set search_path=public as $$
-begin
- if new.user_id is null or new.id is null then return new; end if;
- if lower(coalesce(new.failure_class,'')) in ('timeout','unknown','technical','unavailable')
-    and lower(coalesce(new.status,'')) in ('error','failed','pending') then
-   insert into public.gateway_recovery_queue
-     (user_id,attempt_id,transaction_id,gateway_id,provider,idempotency_key,failure_class,external_transaction_id,status,attempts,next_retry_at,last_error)
-   select new.user_id,new.id,new.transaction_id,new.gateway_id,coalesce(new.gateway_name,''),new.idempotency_key,
-          new.failure_class,new.external_transaction_id,'queued',0,now(),new.error_message
-   where not exists (select 1 from public.gateway_recovery_queue q where q.user_id=new.user_id and q.attempt_id=new.id and q.status in ('queued','processing'));
- end if;
- return new;
-end; $$;
-revoke execute on function public.enqueue_gateway_attempt_recovery() from public,anon,authenticated;
-grant execute on function public.enqueue_gateway_attempt_recovery() to service_role;
-drop trigger if exists trg_enqueue_gateway_attempt_recovery on public.gateway_payment_attempts;
-create trigger trg_enqueue_gateway_attempt_recovery
-after insert or update of status,failure_class,external_transaction_id,transaction_id on public.gateway_payment_attempts
-for each row execute function public.enqueue_gateway_attempt_recovery();
-
 create or replace function public.gateway_token_link_runtime_context(p_link_id uuid,p_user_id uuid)
 returns jsonb language plpgsql security definer set search_path=public as $$
 declare r record;
