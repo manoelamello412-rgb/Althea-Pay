@@ -75,12 +75,13 @@ export default function IaraCopilot() {
   const send = async () => {
     const text = input.trim()
     if (!text || !activeId || sending) return
+    const clientRequestId = crypto.randomUUID()
     setInput('')
     setSending(true)
     setError(null)
     try {
       const { data, error: invokeError } = await db.functions.invoke<IaraResponse>('iara-ai-core', {
-        body: { sessionId: activeId, message: text },
+        body: { sessionId: activeId, message: text, clientRequestId },
       })
       if (invokeError) throw new Error(invokeError.message || 'A Iara não conseguiu processar a mensagem.')
       if (data?.error) throw new Error(data.error)
