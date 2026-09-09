@@ -61,7 +61,7 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
           onClick={() => onTabChange('dashboard')}
           className="mb-8 flex items-center justify-center rounded-2xl border border-white/[0.06] bg-[#0a0d0b] p-4"
         >
-          <img src="/althea-logo-inner.png" alt="ALTHEA PAY" className="h-12 w-auto object-contain" />
+          <img src="/althea-logo-inner.PNG" alt="ALTHEA PAY" className="h-12 w-auto object-contain" />
         </button>
 
         <div className="space-y-1">
@@ -79,7 +79,7 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
             aria-label="Voltar ao Dashboard"
             className="flex min-w-0 items-center gap-3"
           >
-            <img src="/althea-logo-inner.png" alt="ALTHEA PAY" className="h-7 w-auto max-w-[132px] object-contain" />
+            <img src="/althea-logo-inner.PNG" alt="ALTHEA PAY" className="h-7 w-auto max-w-[132px] object-contain" />
           </button>
 
           <div className="min-w-0 flex-1 text-center text-[12px] font-semibold tracking-[0.08em] text-[#c8cfcb]">
