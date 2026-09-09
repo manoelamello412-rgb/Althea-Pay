@@ -21,7 +21,7 @@ const items: SettingItem[] = [
   { label: 'Recuperação', description: 'Réguas para checkout e recuperação de conversões', icon: Webhook, target: '/dashboard/settings/recuperacao' },
   { label: 'Usuários', description: 'Acessos, equipe e permissões da operação', icon: Users, target: '/dashboard/settings/usuarios' },
   { label: 'Integrações', description: 'APIs, tokens e webhooks para sistemas externos', icon: FileText, target: '/dashboard/settings/integracoes' },
-  { label: 'IARA', description: 'Configurações do copiloto e inteligência operacional', icon: KeyRound, target: '/dashboard/settings/iara' },
+  { label: 'IA', description: 'Configurações da inteligência operacional', icon: KeyRound, target: '/dashboard/settings/iara' },
 ]
 
 export default function SettingsMobile() {

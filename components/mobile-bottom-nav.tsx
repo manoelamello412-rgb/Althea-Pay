@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutGrid, Network, MessageCircle, Sparkles, GitBranch } from 'lucide-react'
+import { GitBranch, LayoutGrid, MessageCircle, Network, Sparkles } from 'lucide-react'
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: LayoutGrid },
@@ -39,16 +39,29 @@ export function MobileBottomNav() {
   }
 
   return (
-    <div className="althea-legacy-bottom-nav pointer-events-none fixed inset-x-0 bottom-0 z-[70] px-3 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 sm:px-4">
-      <nav aria-label="Navegação principal" className="pointer-events-auto mx-auto flex h-[72px] w-full max-w-[1106px] items-center justify-between gap-1 rounded-[38px] border border-white/[0.12] bg-[#090b0a]/96 px-1.5 shadow-[0_18px_55px_rgba(0,0,0,0.62)] backdrop-blur-2xl">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[70] px-3 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 sm:px-4">
+      <nav
+        aria-label="Navegação principal"
+        className="pointer-events-auto mx-auto flex h-16 w-full max-w-md items-center justify-between gap-1 rounded-full border border-white/[0.06] bg-[color-mix(in_srgb,var(--althea-inner)_40%,transparent)] px-2 shadow-[0_32px_64px_rgba(0,0,0,0.7)] backdrop-blur-xl"
+      >
         {navItems.map((item) => {
           const isActive = activeTab === item.id
           const Icon = item.icon
           return (
-            <button key={item.id} type="button" onClick={() => selectTab(item.id)} aria-current={isActive ? 'page' : undefined} aria-label={item.label} className={`group relative flex h-[66px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[32px] px-1.5 py-2 transition-all duration-200 ${isActive ? 'text-[#e9fff0]' : 'text-[#777f7b] hover:text-white'}`}>
-              <span aria-hidden="true" className={`absolute inset-0 rounded-[30px] border ${isActive ? 'border-[#1DB854]/25 bg-[#0b2418] shadow-[inset_0_0_24px_rgba(29,184,84,0.06)]' : 'border-transparent bg-transparent group-hover:bg-white/[0.02]'}`} />
-              <Icon aria-hidden="true" className="relative z-10" size={28} strokeWidth={isActive ? 2.05 : 1.8} />
-              <span className="relative z-10 text-[11px] font-medium leading-none">{item.label}</span>
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => selectTab(item.id)}
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={item.label}
+              className={`group relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full px-1 py-1 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)] ${isActive ? 'text-[var(--althea-brand)]' : 'text-[var(--althea-muted)] hover:text-white'}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`absolute inset-y-1.5 inset-x-0.5 rounded-full border transition-all duration-200 ${isActive ? 'border-[rgba(29,187,84,0.2)] bg-[rgba(29,187,84,0.08)] shadow-[inset_0_0_24px_rgba(29,187,84,0.06)]' : 'border-transparent group-hover:bg-white/[0.02]'}`}
+              />
+              <Icon aria-hidden="true" className="relative z-10 h-4 w-4" strokeWidth={isActive ? 2 : 1.8} />
+              <span className="relative z-10 truncate text-[10px] font-medium leading-none">{item.label}</span>
             </button>
           )
         })}
