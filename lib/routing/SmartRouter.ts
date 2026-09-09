@@ -51,8 +51,6 @@ export interface CircuitStore {
 }
 
 export interface SmartRouterOptions {
-  failureThreshold?: number
-  cooldownPeriodMs?: number
   maxRetriesPerProvider?: number
   baseBackoffMs?: number
   maxBackoffMs?: number
@@ -61,8 +59,6 @@ export interface SmartRouterOptions {
 }
 
 const DEFAULTS = {
-  failureThreshold: 3,
-  cooldownPeriodMs: 30_000,
   maxRetriesPerProvider: 1,
   baseBackoffMs: 150,
   maxBackoffMs: 1_500,
@@ -77,7 +73,7 @@ export class InMemoryCircuitStore implements CircuitStore {
   private readonly cooldownMs: number
   private readonly probeLeaseMs: number
 
-  constructor(threshold = DEFAULTS.failureThreshold, cooldownMs = DEFAULTS.cooldownPeriodMs, probeLeaseMs = 5_000) {
+  constructor(threshold = 3, cooldownMs = 30_000, probeLeaseMs = 5_000) {
     this.threshold = threshold
     this.cooldownMs = cooldownMs
     this.probeLeaseMs = probeLeaseMs
@@ -127,16 +123,14 @@ export class SmartRouter {
     options: SmartRouterOptions = {},
   ) {
     if (!priorityList.length) throw new Error('A lista de prioridade de gateways não pode estar vazia.')
+    const normalizedExecutors: Record<GatewayProvider, (payload: PaymentPayload, attempt: number, idempotencyKey: string) => Promise<GatewayExecutionResult>> = {}
+    for (const [key, executor] of Object.entries(executors)) normalizedExecutors[key.trim().toLowerCase()] = executor
     const unique = [...new Set(priorityList.map((provider) => provider.trim().toLowerCase()))]
-    if (unique.some((provider) => !provider || !executors[provider])) throw new Error('Todos os gateways priorizados precisam de um executor configurado.')
+    if (unique.some((provider) => !provider || !normalizedExecutors[provider])) throw new Error('Todos os gateways priorizados precisam de um executor configurado.')
     this.gatewaysPriorityList = unique
-    this.gatewayExecutors = executors
+    this.gatewayExecutors = normalizedExecutors
     this.circuitStore = circuitStore
-    this.options = {
-      ...DEFAULTS,
-      ...options,
-      sleep: options.sleep ?? sleep,
-    }
+    this.options = { ...DEFAULTS, ...options, sleep: options.sleep ?? sleep }
   }
 
   public async routeAndExecute(payload: PaymentPayload): Promise<RoutingResult> {
@@ -154,37 +148,26 @@ export class SmartRouter {
       }
 
       const maxAttempts = this.options.maxRetriesPerProvider + 1
+      const providerIdempotencyKey = `${payload.transactionId}:${provider}`
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         totalAttempts += 1
-        const idempotencyKey = `${payload.transactionId}:${provider}:${attempt}`
         const started = Date.now()
         try {
-          const result = await this.gatewayExecutors[provider](payload, attempt, idempotencyKey)
+          const result = await this.gatewayExecutors[provider](payload, attempt, providerIdempotencyKey)
           const latencyMs = result.latencyMs ?? Date.now() - started
           if (this.isSuccess(result)) {
             await this.circuitStore.recordSuccess(payload.tenantId, provider, decision.probeToken)
             attempts.push({ provider, attempt, outcome: 'approved', latencyMs })
-            return {
-              status: totalAttempts > 1 ? 'FALLBACK_TRIGGERED' : 'SUCCESS',
-              providerUsed: provider,
-              gatewayTransactionId: result.id,
-              attemptsCount: totalAttempts,
-              providerAttempts: attempts,
-            }
+            return { status: totalAttempts > 1 ? 'FALLBACK_TRIGGERED' : 'SUCCESS', providerUsed: provider, gatewayTransactionId: result.id, attemptsCount: totalAttempts, providerAttempts: attempts }
           }
 
           const failure = result.failureClass ?? this.classifyFailure(result.httpStatus, result.error)
-          const canRetry = this.isRetryable(failure) && attempt < maxAttempts
           lastFailure = failure
           lastError = result.error ?? `gateway_${failure}`
           attempts.push({ provider, attempt, outcome: 'failed', failureClass: failure, latencyMs, error: lastError })
-
-          if (!this.isRetryable(failure)) {
-            return { status: 'CRITICAL_FAILURE', providerUsed: provider, error: lastError, attemptsCount: totalAttempts, providerAttempts: attempts }
-          }
-
+          if (!this.isRetryable(failure)) return { status: 'CRITICAL_FAILURE', providerUsed: provider, error: lastError, attemptsCount: totalAttempts, providerAttempts: attempts }
           await this.circuitStore.recordFailure(payload.tenantId, provider, failure, decision.probeToken)
-          if (canRetry) await this.options.sleep(this.backoff(attempt))
+          if (attempt < maxAttempts) await this.options.sleep(this.backoff(attempt))
         } catch (error) {
           const failure = this.classifyFailure(undefined, error instanceof Error ? error.message : String(error))
           lastFailure = failure
@@ -197,13 +180,7 @@ export class SmartRouter {
       }
     }
 
-    return {
-      status: lastFailure === 'declined' || lastFailure === 'fraud' ? 'CRITICAL_FAILURE' : 'CIRCUIT_OPEN',
-      providerUsed: this.gatewaysPriorityList[0],
-      error: lastError,
-      attemptsCount: totalAttempts,
-      providerAttempts: attempts,
-    }
+    return { status: lastFailure === 'declined' || lastFailure === 'fraud' ? 'CRITICAL_FAILURE' : 'CIRCUIT_OPEN', providerUsed: this.gatewaysPriorityList[0], error: lastError, attemptsCount: totalAttempts, providerAttempts: attempts }
   }
 
   private validatePayload(payload: PaymentPayload): void {
