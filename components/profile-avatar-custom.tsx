@@ -1,7 +1,7 @@
 'use client'
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
-import { Camera, CheckCircle2, MessageSquare, Save, UserRound } from 'lucide-react'
+import { Camera, CheckCircle2, MessageSquare, Save } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -78,21 +78,6 @@ export function ProfileAvatarCustom({ initialName = '', initialEmail = '', initi
     })
     return () => { active = false }
   }, [initialAvatarUrl, initialEmail, initialName, supabase])
-
-  function handleLocalImageUpload(event: ChangeEvent<HTMLInputElement>): void {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    setError('')
-    try {
-      if (!['image/png', 'image/jpeg'].includes(file.type)) throw new Error('Selecione uma imagem PNG ou JPG.')
-      if (file.size > 8 * 1024 * 1024) throw new Error('A imagem deve ter no máximo 8 MB.')
-      setAvatarUrl(URL.createObjectURL(file))
-      setSyncWhatsapp(false)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Não foi possível carregar a imagem.')
-    }
-  }
 
   async function handleSyncWhatsappAvatar(): Promise<void> {
     setIsSyncing(true)
