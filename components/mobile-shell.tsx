@@ -1,6 +1,7 @@
 'use client'
+
 import { AnimatePresence, motion } from 'framer-motion'
-import { LayoutDashboard, MessageCircle, Network, RefreshCw, Search, Settings, Sparkles, X } from 'lucide-react'
+import { LayoutDashboard, MessageCircle, Network, Search, Settings, Sparkles, X } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 
 export type MobileShellTab = 'dashboard' | 'gateways' | 'funis' | 'ia' | 'configuracoes'
@@ -13,12 +14,12 @@ const tabs = [
   { id: 'configuracoes', label: 'Configuração', icon: Settings },
 ] as const
 
-const pageTitles: Record<MobileShellTab, string> = {
-  dashboard: 'Dashboard',
-  gateways: 'Gateway',
-  funis: 'Chat',
+const titles: Record<MobileShellTab, string> = {
+  dashboard: 'DASHBOARD',
+  gateways: 'GATEWAYS',
+  funis: 'CHAT',
   ia: 'IA',
-  configuracoes: 'Configuração',
+  configuracoes: 'CONFIGURAÇÃO',
 }
 
 type Props = { activeTab: MobileShellTab; onTabChange: (tab: MobileShellTab) => void; children: ReactNode }
@@ -28,77 +29,58 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
   const [query, setQuery] = useState('')
 
   useEffect(() => {
-    const id = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent('althea-global-search', { detail: { query: query.trim() } }))
     }, 180)
-    return () => window.clearTimeout(id)
+    return () => window.clearTimeout(timer)
   }, [query])
 
-  const closeSearch = () => {
-    setQuery('')
+  useEffect(() => {
     setSearchOpen(false)
-  }
+    setQuery('')
+  }, [activeTab])
 
   return (
-    <div className="althea-shell min-h-screen">
-      <aside className="althea-glass-sidebar">
-        <button className="althea-shell-brand" type="button" aria-label="Voltar ao Dashboard" onClick={() => onTabChange('dashboard')}>
-          <img src="/althea-logo-inner.png" alt="ALTHEA PAY" />
+    <div className="min-h-screen bg-[#020203] text-white antialiased">
+      <aside className="fixed inset-y-0 left-0 z-50 hidden w-[250px] border-r border-white/[0.07] bg-[#070908] px-4 py-6 lg:flex lg:flex-col">
+        <button type="button" onClick={() => onTabChange('dashboard')} className="mb-8 flex items-center justify-center rounded-2xl border border-white/[0.06] bg-[#0a0d0b] p-4">
+          <img src="/althea-logo.png" alt="ALTHEA PAY" className="h-12 w-auto object-contain" />
         </button>
-        <div className="althea-sidebar-nav">
+        <div className="space-y-1">
           {tabs.map(({ id, label, icon: Icon }) => <Nav key={id} id={id} label={label} icon={Icon} active={activeTab === id} onClick={onTabChange} />)}
         </div>
       </aside>
 
-      <header className="althea-mobile-global-header">
-        <div className="althea-mobile-global-topline">
-          <button className="althea-mobile-global-brand" type="button" aria-label="Voltar ao Dashboard" onClick={() => onTabChange('dashboard')}>
-            <img src="/althea-logo-inner.png" alt="ALTHEA PAY" />
+      <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#070908]/95 px-4 py-4 backdrop-blur-xl lg:ml-[250px]">
+        <div className="mx-auto flex w-full max-w-xl items-center justify-between gap-3 lg:max-w-none">
+          <button type="button" onClick={() => onTabChange('dashboard')} aria-label="Voltar ao Dashboard" className="flex min-w-0 items-center gap-3">
+            <img src="/althea-logo.png" alt="ALTHEA PAY" className="h-8 w-auto max-w-[148px] object-contain" />
           </button>
-          <strong className="althea-mobile-global-title">{pageTitles[activeTab]}</strong>
-          <div className="althea-mobile-global-actions">
-            <motion.button type="button" aria-label="Pesquisar" className="althea-mobile-global-icon" onClick={() => setSearchOpen((value) => !value)} whileTap={{ scale: .92 }}>
-              <Search size={18} />
-            </motion.button>
-            <motion.button type="button" aria-label="Atualizar" className="althea-mobile-global-icon" onClick={() => window.dispatchEvent(new CustomEvent('althea-refresh'))} whileTap={{ scale: .92 }}>
-              <RefreshCw size={17} />
-            </motion.button>
+          <div className="min-w-0 flex-1 text-center text-[14px] font-medium tracking-[0.08em] text-[#c8cfcb]">// {titles[activeTab]}</div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" aria-label="Pesquisar" onClick={() => setSearchOpen(v => !v)} className={`grid h-10 w-10 place-items-center rounded-xl border transition ${searchOpen ? 'border-[#1DB854]/50 bg-[#0d1a13] text-[#1DB854]' : 'border-white/[0.09] bg-[#0d0f0e] text-[#a8b0ac] hover:text-white'}`}><Search size={18}/></button>
           </div>
         </div>
-
         <AnimatePresence initial={false}>
-          {searchOpen && (
-            <motion.div className="althea-mobile-global-search-wrap" initial={{ opacity: 0, height: 0, y: -4 }} animate={{ opacity: 1, height: 40, y: 0 }} exit={{ opacity: 0, height: 0, y: -4 }} transition={{ type: 'spring', stiffness: 420, damping: 30 }}>
-              <Search size={15} aria-hidden="true" />
-              <input autoFocus type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar..." aria-label="Pesquisar na ALTHEA PAY" />
-              <button type="button" className="althea-mobile-global-search-close" onClick={closeSearch} aria-label="Fechar pesquisa"><X size={15} /></button>
-            </motion.div>
-          )}
+          {searchOpen && <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:42}} exit={{opacity:0,height:0}} className="mx-auto mt-3 flex max-w-xl items-center gap-2 overflow-hidden rounded-xl border border-white/[0.08] bg-[#0b0d0c] px-3 lg:max-w-none"><Search size={15} className="text-[#66716c]"/><input autoFocus value={query} onChange={e=>setQuery(e.target.value)} placeholder="Pesquisar..." className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-[#66716c]"/><button type="button" aria-label="Fechar pesquisa" onClick={()=>{setQuery('');setSearchOpen(false)}} className="text-[#737d79]"><X size={15}/></button></motion.div>}
         </AnimatePresence>
       </header>
 
-      <main className="althea-shell-main pb-32 md:pb-8">
-        <div className="althea-bento-stage">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={activeTab} className="althea-screen-transition" initial={{ opacity: 0, x: 18, scale: .985 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: -18, scale: .985 }} transition={{ type: 'spring', stiffness: 360, damping: 30, mass: .72 }}>
-              {children}
-            </motion.div>
-          </AnimatePresence>
-        </div>
+      <main className="lg:ml-[250px] pb-28 lg:pb-8">
+        <div className="mx-auto w-full max-w-xl">{children}</div>
       </main>
 
-      <nav className="althea-mobile-nav" aria-label="Navegação principal">
-        {tabs.map(({ id, label, icon: Icon }) => <Nav key={id} id={id} label={label} icon={Icon} active={activeTab === id} onClick={onTabChange} mobile />)}
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.10] bg-[#080a09]/96 px-3 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 backdrop-blur-2xl lg:left-[250px]" aria-label="Navegação principal">
+        <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
+          {tabs.map(({ id, label, icon: Icon }) => <Nav key={id} id={id} label={label} icon={Icon} active={activeTab === id} onClick={onTabChange} mobile />)}
+        </div>
       </nav>
     </div>
   )
 }
 
 function Nav({ id, label, icon: Icon, active, onClick, mobile = false }: { id: MobileShellTab; label: string; icon: typeof LayoutDashboard; active: boolean; onClick: (tab: MobileShellTab) => void; mobile?: boolean }) {
-  return (
-    <motion.button type="button" className={`althea-shell-nav-button${active ? ' active' : ''}${mobile ? ' mobile' : ''}`} aria-current={active ? 'page' : undefined} aria-label={label} onClick={() => onClick(id)} whileHover={{ x: mobile ? 0 : 3, scale: 1.035 }} whileTap={{ scale: .94 }} transition={{ type: 'spring', stiffness: 520, damping: 24, mass: .55 }}>
-      <Icon size={19} strokeWidth={1.8} aria-hidden="true" />
-      <span>{label}</span>
-    </motion.button>
-  )
+  return <motion.button type="button" aria-current={active?'page':undefined} aria-label={label} onClick={()=>onClick(id)} whileTap={{scale:.94}} className={`group relative flex items-center justify-center gap-2 rounded-xl transition ${mobile?'min-h-[58px] flex-col px-1 py-2':'w-full justify-start px-3 py-3'} ${active?'text-[#1DB854]':'text-[#7d8782] hover:text-white'}`}>
+    {active && <span className={`absolute ${mobile?'inset-x-3 bottom-0 h-[2px]':'inset-y-2 left-0 w-[2px]'} rounded-full bg-[#1DB854]`}/>}<Icon size={mobile?22:19} strokeWidth={active?2:1.7}/><span className={mobile?'text-[10px] font-medium':'text-xs'}>{label}</span>
+  </motion.button>
 }
