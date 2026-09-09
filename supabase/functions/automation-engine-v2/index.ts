@@ -14,8 +14,8 @@ async function stableKey(c: any, ruleId: string) {
   const hash = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
   return `${c.event_type}:${hash}:${ruleId}`;
 }
-async function runAction(rule: any, c: any) {
-  const cfg = rule.action_config || {}, type = cfg.type || cfg.action || "log";
+async function runSingleAction(cfg: any, rule: any, c: any) {
+  const type = cfg.type || cfg.action || "log";
   if (type === "log" || type === "alert") { const { error } = await db.from("logs").insert({ id: crypto.randomUUID(), user_id: c.user_id, user_name: "automation", action: `automation:${type}`, resource: c.event_type, details: JSON.stringify({ rule_id: rule.id, funnel_id: c.funnel_id, payload: c.payload }) }); if (error) throw error; return { type, logged: true }; }
   if (type === "send_crm_message") {
     const conversationId = c.conversation_id ?? c.payload?.conversation_id;
@@ -58,12 +58,25 @@ async function runAction(rule: any, c: any) {
     return { type, transaction: data };
   }
   if (type === "recover_checkout") { if (!c.checkout_id) throw Error("checkout_id_required"); const next = new Date(Date.now() + Number(cfg.delay_minutes || 0) * 60000).toISOString(); const { data, error } = await db.from("checkout_sessions").update({ abandoned_at: new Date().toISOString(), recovery_status: "pending", recovery_next_at: next, updated_at: new Date().toISOString() }).eq("id", c.checkout_id).eq("user_id", c.user_id).select("id,recovery_status,recovery_next_at").single(); if (error) throw error; return { type, checkout: data }; }
-  if (type === "update_sale") { if (!c.sale_id && !c.external_id) throw Error("sale_identifier_required"); let q = db.from("sales").update({ status: cfg.status || "updated", occurred_at: new Date().toISOString() }).eq("user_id", c.user_id); q = c.sale_id ? q.eq("id", c.sale_id) : q.eq("external_id", c.external_id); const { data, error } = await q.select("id,status").limit(1).single(); if (error) throw error; return { type, sale: data }; }
+  if (type === "update_sale") { if (!c.sale_id && !c.external_id) throw Error("sale_identifier_required"); let q = db.from("sales").update({ status: cfg.status || "updated", occurred_at: new Date().toISOString() }).eq("user_id", c.user_id); q = c.sale_id ? q.eq("id", c.sale_id) : q.eq("external_id", c.external_id); const { data, error } = await q.select("id,status").limit(1).single(); if (error) throw error; return { type, sale: data };
+  }
   throw Error(`unsupported_action:${type}`);
+}
+async function runAction(rule: any, c: any) {
+  const root = rule.action_config || {};
+  const actions = Array.isArray(root.actions) ? root.actions : [root];
+  if (!actions.length) throw Error("actions_required");
+  const stopOnError = root.stop_on_error !== false;
+  const outputs: unknown[] = [];
+  for (const cfg of actions) {
+    try { outputs.push(await runSingleAction(cfg, rule, c)); }
+    catch (e) { if (stopOnError) throw e; outputs.push({ type: cfg.type || cfg.action || "unknown", error: e instanceof Error ? e.message : String(e) }); }
+  }
+  return actions.length === 1 && !Array.isArray(root.actions) ? outputs[0] : { type: "multi_action", stop_on_error: stopOnError, actions: outputs };
 }
 Deno.serve(async req => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   const secret = Deno.env.get("ALTHEA_INTERNAL_SECRET") || "";
   if (!secret || req.headers.get("x-internal-secret") !== secret) return json({ error: "unauthorized" }, 401);
-  try { const b = await req.json(); const c = { user_id: b.user_id, funnel_id: b.funnel_id ?? null, event_id: b.event_id ?? null, event_type: b.event_type, conversation_id: b.conversation_id ?? b.payload?.conversation_id ?? null, transaction_id: b.transaction_id ?? b.payload?.transaction_id, checkout_id: b.checkout_id ?? b.payload?.checkout_id, sale_id: b.sale_id ?? b.payload?.sale_id, external_id: b.external_id ?? b.payload?.external_id, payload: b.payload ?? {} }; if (!c.user_id || !c.event_type) return json({ error: "user_id_and_event_type_required" }, 400); const { data: rules, error } = await db.from("automation_rules").select("*").eq("user_id", c.user_id).eq("status", "active"); if (error) throw error; const results = []; for (const rule of rules || []) { if (!match(rule.trigger_config || {}, c)) continue; const key = await stableKey(c, rule.id); const { data: ex, error: ie } = await db.from("automation_executions").insert({ user_id: c.user_id, rule_id: rule.id, event_id: c.event_id, execution_key: key, status: "running", action_type: (rule.action_config || {}).type || (rule.action_config || {}).action || "log", input: c, started_at: new Date().toISOString() }).select("id").single(); if (ie?.code === "23505") { results.push({ rule_id: rule.id, status: "skipped", reason: "duplicate" }); continue; } if (ie) throw ie; try { const output = await runAction(rule, c); await db.from("automation_executions").update({ status: "completed", output, completed_at: new Date().toISOString() }).eq("id", ex.id); results.push({ rule_id: rule.id, status: "completed", output }); } catch (e) { const m = e instanceof Error ? e.message : String(e); await db.from("automation_executions").update({ status: "failed", error_message: m, completed_at: new Date().toISOString() }).eq("id", ex.id); results.push({ rule_id: rule.id, status: "failed", error: m }); } } return json({ ok: true, matched: results.length, results }); } catch (e) { return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500); }
+  try { const b = await req.json(); const c = { user_id: b.user_id, funnel_id: b.funnel_id ?? null, event_id: b.event_id ?? null, event_type: b.event_type, conversation_id: b.conversation_id ?? b.payload?.conversation_id ?? null, transaction_id: b.transaction_id ?? b.payload?.transaction_id, checkout_id: b.checkout_id ?? b.payload?.checkout_id, sale_id: b.sale_id ?? b.payload?.sale_id, external_id: b.external_id ?? b.payload?.external_id, payload: b.payload ?? {} }; if (!c.user_id || !c.event_type) return json({ error: "user_id_and_event_type_required" }, 400); const { data: rules, error } = await db.from("automation_rules").select("*").eq("user_id", c.user_id).eq("status", "active"); if (error) throw error; const results = []; for (const rule of rules || []) { if (!match(rule.trigger_config || {}, c)) continue; const key = await stableKey(c, rule.id); const { data: ex, error: ie } = await db.from("automation_executions").insert({ user_id: c.user_id, rule_id: rule.id, event_id: c.event_id, execution_key: key, status: "running", action_type: Array.isArray(rule.action_config?.actions) ? "multi_action" : ((rule.action_config || {}).type || (rule.action_config || {}).action || "log"), input: c, started_at: new Date().toISOString() }).select("id").single(); if (ie?.code === "23505") { results.push({ rule_id: rule.id, status: "skipped", reason: "duplicate" }); continue; } if (ie) throw ie; try { const output = await runAction(rule, c); await db.from("automation_executions").update({ status: "completed", output, completed_at: new Date().toISOString() }).eq("id", ex.id); results.push({ rule_id: rule.id, status: "completed", output }); } catch (e) { const m = e instanceof Error ? e.message : String(e); await db.from("automation_executions").update({ status: "failed", error_message: m, completed_at: new Date().toISOString() }).eq("id", ex.id); results.push({ rule_id: rule.id, status: "failed", error: m }); } } return json({ ok: true, matched: results.length, results }); } catch (e) { return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500); }
 });
