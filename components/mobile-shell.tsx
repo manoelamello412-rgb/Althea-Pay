@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { GitBranch, LayoutDashboard, MessageCircle, Network, Search, Settings, Sparkles, X } from 'lucide-react'
+import { Building2, FileKey2, GitBranch, Globe2, LayoutDashboard, MessageCircle, Network, Search, Settings, ShieldCheck, Sparkles, UserRound, Users, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -13,6 +13,20 @@ const tabs = [
   { id: 'chat', label: 'Chat', icon: MessageCircle },
   { id: 'ia', label: 'IA', icon: Sparkles },
   { id: 'funil', label: 'Funil', icon: GitBranch },
+] as const
+
+const settingsItems = [
+  { label: 'Meu Perfil', href: '/dashboard/settings/perfil', icon: UserRound },
+  { label: 'Minha Empresa', href: '/dashboard/settings/empresa', icon: Building2 },
+  { label: 'Segurança', href: '/dashboard/settings/seguranca', icon: ShieldCheck },
+  { label: 'Desempenho', href: '/dashboard/settings/desempenho', icon: Sparkles },
+  { label: 'Vendas', href: '/dashboard/settings/vendas', icon: Network },
+  { label: 'Funil e Domínio', href: '/dashboard/settings/funil-dominio', icon: Globe2 },
+  { label: 'Recuperação', href: '/dashboard/settings/recuperacao', icon: MessageCircle },
+  { label: 'Usuários', href: '/dashboard/settings/usuarios', icon: Users },
+  { label: 'Integrações', href: '/dashboard/settings/integracoes', icon: FileKey2 },
+  { label: 'IARA', href: '/dashboard/settings/iara', icon: Sparkles },
+  { label: 'Gateways', href: '/dashboard/settings/gateways', icon: Network },
 ] as const
 
 const titles: Record<MobileShellTab, string> = {
@@ -32,6 +46,7 @@ type Props = {
 export default function MobileShell({ activeTab, onTabChange, children }: Props) {
   const router = useRouter()
   const [searchOpen, setSearchOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [query, setQuery] = useState('')
 
   useEffect(() => {
@@ -43,6 +58,7 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
 
   useEffect(() => {
     setSearchOpen(false)
+    setSettingsOpen(false)
     setQuery('')
   }, [activeTab])
 
@@ -75,9 +91,29 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
             <button type="button" aria-label="Pesquisar" onClick={() => setSearchOpen((value) => !value)} className={`grid h-12 w-12 place-items-center rounded-full transition ${searchOpen ? 'text-[#1DB854]' : 'text-[#a8a8b5] hover:text-white'}`}>
               <Search size={38} strokeWidth={1.65} />
             </button>
-            <button type="button" aria-label="Configurações" title="Configurações" onClick={() => router.push('/dashboard/settings')} className="grid h-12 w-12 place-items-center rounded-full text-[#a8a8b5] transition hover:text-white">
-              <Settings size={38} strokeWidth={1.65} />
-            </button>
+            <div className="relative">
+              <button type="button" aria-label="Configurações" title="Configurações" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((value) => !value)} className={`grid h-12 w-12 place-items-center rounded-full transition ${settingsOpen ? 'text-[#1DB854]' : 'text-[#a8a8b5] hover:text-white'}`}>
+                <Settings size={38} strokeWidth={1.65} />
+              </button>
+              <AnimatePresence>
+                {settingsOpen && (
+                  <motion.div initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }} className="absolute right-0 top-14 z-[70] w-[300px] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0b0f0d]/98 p-2 shadow-[0_24px_70px_rgba(0,0,0,0.65)] backdrop-blur-2xl">
+                    <button type="button" onClick={() => { setSettingsOpen(false); router.push('/dashboard/settings') }} className="mb-1 flex w-full items-center gap-3 rounded-xl border border-[#1DB854]/20 bg-[#0b2418] px-3 py-3 text-left">
+                      <Settings size={17} className="text-[#1DB854]" />
+                      <span><strong className="block text-sm text-white">Central de Configuração</strong><small className="text-[10px] text-[#8d9992]">Abrir visão geral das configurações</small></span>
+                    </button>
+                    <div className="max-h-[min(520px,calc(100vh-170px))] overflow-y-auto pr-1">
+                      {settingsItems.map(({ label, href, icon: Icon }) => (
+                        <button key={href} type="button" onClick={() => { setSettingsOpen(false); router.push(href) }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-[#a8b0ac] transition hover:bg-white/[0.04] hover:text-white">
+                          <Icon size={16} strokeWidth={1.8} />
+                          <span>{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
