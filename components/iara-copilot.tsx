@@ -7,6 +7,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Session = { id: string; title: string; updated_at: string }
 type Message = { id: string; sender: 'user' | 'iara'; content: string; created_at: string }
+type IaraResponse = { id?: string; sender?: string; content?: string; created_at?: string; error?: string }
 
 export default function IaraCopilot() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
@@ -78,9 +79,13 @@ export default function IaraCopilot() {
     setSending(true)
     setError(null)
     try {
-      const response = await fetch('/api/iara/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: activeId, message: text }) })
-      const result = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(result.error || 'A Iara não conseguiu processar a mensagem.')
+      const { data, error: invokeError } = await db.functions.invoke<IaraResponse>('iara-ai-core', {
+        body: { sessionId: activeId, message: text },
+      })
+      if (invokeError) throw new Error(invokeError.message || 'A Iara não conseguiu processar a mensagem.')
+      if (data?.error) throw new Error(data.error)
+      if (!data?.id || data.sender !== 'iara' || !data.content) throw new Error('A Iara não retornou uma resposta válida.')
+      setMessages((current) => current.some((item) => item.id === data.id) ? current : [...current, { id: data.id, sender: 'iara', content: data.content, created_at: data.created_at ?? new Date().toISOString() }])
       setSessions((current) => current.map((session) => session.id === activeId ? { ...session, title: session.title === 'Nova Conversa' ? text.replace(/\s+/g, ' ').slice(0, 48) : session.title, updated_at: new Date().toISOString() } : session).sort((a, b) => b.updated_at.localeCompare(a.updated_at)))
       scroll()
     } catch (cause) {
