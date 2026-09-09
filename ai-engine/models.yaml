@@ -1,0 +1,31 @@
+version: 1
+primary:
+  alias: althea-reasoning
+  model: Qwen/Qwen3-235B-A22B
+  capabilities:
+    - reasoning
+    - multilingual
+    - tool-calling
+    - long-context
+  worker: worker-reasoning
+  context_tokens: 131072
+  tensor_parallel: 8
+fast:
+  alias: althea-fast
+  model: Qwen/Qwen3-30B-A3B
+  capabilities:
+    - reasoning
+    - multilingual
+    - tool-calling
+  worker: worker-fast
+  context_tokens: 32768
+  tensor_parallel: 1
+coding:
+  alias: althea-coding
+  model: Qwen/Qwen3-Coder-30B-A3B-Instruct
+  capabilities:
+    - coding
+    - tool-calling
+  worker: worker-coding
+  context_tokens: 65536
+  tensor_parallel: 1
