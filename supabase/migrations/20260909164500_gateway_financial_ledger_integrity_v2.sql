@@ -1,0 +1,12 @@
+create or replace function public.validate_gateway_financial_journal() returns trigger language plpgsql security definer set search_path=public as $$ declare v_debit numeric:=0; v_credit numeric:=0; v_count int:=0; begin if new.status <> 'posted' then return new; end if; select count(*), coalesce(sum(amount) filter(where direction='debit'),0), coalesce(sum(amount) filter(where direction='credit'),0) into v_count,v_debit,v_credit from public.gateway_financial_entries where journal_id=new.id and user_id=new.user_id; if v_count < 2 or v_debit <> v_credit then raise exception 'gateway financial journal must be balanced'; end if; return new; end $$;
+drop trigger if exists trg_validate_gateway_financial_journal on public.gateway_financial_journals;
+create constraint trigger trg_validate_gateway_financial_journal after insert or update of status on public.gateway_financial_journals deferrable initially deferred for each row execute function public.validate_gateway_financial_journal();
+create or replace function public.prevent_gateway_financial_mutation() returns trigger language plpgsql security definer set search_path=public as $$ begin raise exception 'gateway financial ledger is immutable'; end $$;
+drop trigger if exists trg_gateway_financial_entries_immutable on public.gateway_financial_entries;
+create trigger trg_gateway_financial_entries_immutable before update or delete on public.gateway_financial_entries for each row execute function public.prevent_gateway_financial_mutation();
+drop trigger if exists trg_gateway_financial_journals_immutable on public.gateway_financial_journals;
+create trigger trg_gateway_financial_journals_immutable before update or delete on public.gateway_financial_journals for each row execute function public.prevent_gateway_financial_mutation();
+create index if not exists idx_gateway_financial_journals_user_tx on public.gateway_financial_journals(user_id,transaction_id);
+create index if not exists idx_gateway_financial_entries_journal on public.gateway_financial_entries(journal_id,user_id);
+revoke all on public.gateway_financial_journals from anon,authenticated;
+revoke all on public.gateway_financial_entries from anon,authenticated;
