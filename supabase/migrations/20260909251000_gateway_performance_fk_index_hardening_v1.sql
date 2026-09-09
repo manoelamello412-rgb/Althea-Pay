@@ -1,0 +1,9 @@
+create index if not exists idx_gateway_payment_attempts_transaction_tenant_fk on public.gateway_payment_attempts(transaction_id,user_id);
+create index if not exists idx_gateway_payment_token_links_gateway_fk on public.gateway_payment_token_links(gateway_id);
+create index if not exists idx_gateway_payment_token_links_instrument_fk on public.gateway_payment_token_links(instrument_id);
+create index if not exists idx_reconciliation_items_transaction_tenant_fk on public.reconciliation_items(transaction_id,user_id);
+
+drop index if exists gateway_financial_entries_journal_user_idx;
+drop index if exists gateway_operation_logs_gateway_time_idx;
+drop index if exists idx_reconciliation_items_tenant_external;
+drop index if exists settlements_gateway_external_unique;
