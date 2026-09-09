@@ -4,10 +4,19 @@ import { useState } from 'react'
 import { Copy, KeyRound, Link2, CheckCircle2 } from 'lucide-react'
 import './page.css'
 
+type ProvisionResponse = {
+  funnel: { id: string; nome: string }
+  ingestion: { token?: string; event_endpoint: string }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Erro ao preparar o funil.'
+}
+
 export default function NewFunnelPage() {
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<ProvisionResponse | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -21,11 +30,14 @@ export default function NewFunnelPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, url: url || null, connection_type: 'script' }),
       })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Não foi possível preparar o funil.')
-      setResult(data)
-    } catch (e: any) {
-      setError(e?.message || 'Erro ao preparar o funil.')
+      const data: unknown = await response.json()
+      if (!response.ok) {
+        const message = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string' ? data.error : 'Não foi possível preparar o funil.'
+        throw new Error(message)
+      }
+      setResult(data as ProvisionResponse)
+    } catch (error) {
+      setError(errorMessage(error))
     } finally {
       setLoading(false)
     }
