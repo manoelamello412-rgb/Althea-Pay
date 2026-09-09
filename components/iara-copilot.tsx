@@ -79,7 +79,7 @@ export default function IaraCopilot() {
       const response = await fetch('/api/iara/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: activeId, message: text }) })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result.error || 'A Iara não conseguiu processar a mensagem.')
-      setSessions((current) => current.map((session) => session.id === activeId ? { ...session, updated_at: new Date().toISOString() } : session).sort((a, b) => b.updated_at.localeCompare(a.updated_at)))
+      setSessions((current) => current.map((session) => session.id === activeId ? { ...session, title: session.title === 'Nova Conversa' ? text.replace(/\s+/g, ' ').slice(0, 48) : session.title, updated_at: new Date().toISOString() } : session).sort((a, b) => b.updated_at.localeCompare(a.updated_at)))
       scroll()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Falha ao enviar mensagem.')
@@ -100,7 +100,7 @@ export default function IaraCopilot() {
       <aside className="hidden min-h-0 overflow-y-auto bg-[#0b0b0f] p-2 md:block"><div className="px-3 py-3 text-[10px] font-bold uppercase tracking-[.15em] text-zinc-600">Histórico</div>{sessions.map((session) => <button key={session.id} type="button" onClick={() => { setActiveId(session.id); setError(null) }} className={`mb-1 flex min-h-11 w-full items-center rounded-xl px-3 text-left text-xs ${activeId === session.id ? 'bg-[#121217] text-white' : 'text-zinc-500 hover:bg-[#121217] hover:text-zinc-200'}`}>{session.title}</button>)}</aside>
       <div className="flex min-h-0 min-w-0 flex-col">
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-8"><div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-          {messages.length === 0 && <div className="flex min-h-[45vh] flex-col items-center justify-center text-center"><span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#00f5d4]/10 text-[#00f5d4]"><Bot size={28}/></span><h2 className="mt-4 text-lg font-bold text-white">Conversa pronta</h2><p className="mt-1 max-w-sm text-xs leading-relaxed text-zinc-600">Faça uma pergunta para a Iara.</p></div>}
+          {messages.length === 0 && <div className="flex min-h-[45vh] flex-col items-center justify-center text-center"><span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#00f5d4]/10 text-[#00f5d4]"><Bot size={28}/></span><h2 className="mt-4 text-lg font-bold text-white">Conversa pronta</h2><p className="mt-1 max-w-sm text-xs leading-relaxed text-zinc-600">Pergunte sobre sua operação, vendas, gateways, funis ou recuperação.</p></div>}
           {messages.map((message) => <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'user' ? 'justify-end' : ''}`}><span className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[9px] font-black ${message.sender === 'user' ? 'bg-[#121217] text-zinc-400' : 'bg-[#00f5d4] text-black'}`}>{message.sender === 'user' ? 'EU' : 'IA'}</span><div className={`max-w-[90%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-xs leading-relaxed ${message.sender === 'user' ? 'order-first bg-[#121217] text-zinc-200' : 'bg-[#0b0b0f] text-zinc-300'}`}>{message.content}</div></div>)}
           {sending && <div className="flex items-center gap-2 text-[10px] text-zinc-600"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#00f5d4]"/> Iara está processando…</div>}<div ref={bottom}/>
         </div></div>
