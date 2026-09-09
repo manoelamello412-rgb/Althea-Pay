@@ -58,6 +58,7 @@ jobs:
             v_version boolean;
             v_occ boolean;
             v_fsm boolean;
+            v_fsm_source text;
           BEGIN
             SELECT c.relrowsecurity
               INTO v_rls
@@ -94,20 +95,24 @@ jobs:
               RAISE EXCEPTION '6-argument OCC transition RPC is missing';
             END IF;
 
-            SELECT EXISTS (
-              SELECT 1
-                FROM pg_constraint con
-                JOIN pg_class rel ON rel.oid = con.conrelid
-                JOIN pg_namespace n ON n.oid = rel.relnamespace
-               WHERE n.nspname = 'public'
-                 AND rel.relname = 'gateway_transactions'
-                 AND con.contype = 'c'
-                 AND pg_get_constraintdef(con.oid) ILIKE '%status%'
-                 AND pg_get_constraintdef(con.oid) ILIKE '%approved%'
-            ) INTO v_fsm;
+            SELECT p.prosrc
+              INTO v_fsm_source
+              FROM pg_proc p
+              JOIN pg_namespace n ON n.oid = p.pronamespace
+             WHERE n.nspname = 'public'
+               AND p.proname = 'transition_gateway_transaction_status'
+               AND pg_get_function_identity_arguments(p.oid) = 'p_transaction_id uuid, p_user_id uuid, p_next_status text, p_failure_code text, p_external_id text, p_expected_version bigint';
+
+            v_fsm := COALESCE(v_fsm_source, '') ILIKE '%created%'
+                  AND COALESCE(v_fsm_source, '') ILIKE '%pending%'
+                  AND COALESCE(v_fsm_source, '') ILIKE '%approved%'
+                  AND COALESCE(v_fsm_source, '') ILIKE '%failed%'
+                  AND COALESCE(v_fsm_source, '') ILIKE '%refunded%'
+                  AND COALESCE(v_fsm_source, '') ILIKE '%chargeback%'
+                  AND COALESCE(v_fsm_source, '') ILIKE '%invalid_status%';
 
             IF NOT v_fsm THEN
-              RAISE EXCEPTION 'gateway_transactions FSM status invariant is missing';
+              RAISE EXCEPTION 'canonical gateway transaction FSM is missing or incomplete';
             END IF;
           END $$;
           SQL
