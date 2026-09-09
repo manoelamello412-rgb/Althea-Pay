@@ -19,4 +19,11 @@ describe('automation transaction RPC contract', () => {
     expect(source).toContain('ALTHEA_INTERNAL_SECRET')
     expect(source).toContain('x-internal-secret')
   })
+
+  it('supports ordered multi-action plans with explicit failure policy', async () => {
+    const source = await readFile(path, 'utf8')
+    expect(source).toContain('Array.isArray(root.actions)')
+    expect(source).toContain('root.stop_on_error !== false')
+    expect(source).toContain('type: "multi_action"')
+  })
 })
