@@ -27,6 +27,10 @@ The recovery layer currently supports:
 6. Direct handoff from recovery queue to the Chat CRM.
 7. Recovery execution API with authenticated tenant ownership checks.
 
+## Customer 360
+
+Customer 360 is backed by a tenant-scoped PostgreSQL RPC and correlates real conversations, sales, checkout sessions, gateway payment attempts and webhook events using available customer email, customer ID and transaction identifiers. The message window is explicitly capped before JSON aggregation to prevent unbounded historical message aggregation.
+
 ## Quality bar
 
 The CRM is not considered complete when it merely renders a dashboard. It must preserve the invariant:
@@ -36,10 +40,13 @@ The CRM is not considered complete when it merely renders a dashboard. It must p
 ## Current implementation surface
 
 - `app/dashboard/crm/page.tsx`
+- `app/dashboard/crm/customer-360/page.tsx`
+- `app/api/crm/customer-360/route.ts`
 - `app/dashboard/crm/recovery/page.tsx`
 - `app/api/crm/recovery/route.ts`
 - `app/api/crm/recovery/opportunities/route.ts`
 - `app/api/crm/analytics/route.ts`
+- `supabase` RPCs for Customer 360, atomic operator mutations, recovery execution, analytics and recovery opportunities
 - `supabase/migrations/20260909194702_crm_atomic_operator_mutations.sql`
 - `supabase/migrations/20260909195128_crm_recovery_atomic_analytics_v2.sql`
-- `supabase` RPCs for atomic operator mutations, recovery execution, analytics and recovery opportunities
+- `supabase` migration `crm_customer_360_message_window_cap_v2`
