@@ -21,62 +21,53 @@ async function runSingleAction(cfg: any, rule: any, c: any) {
     const conversationId = c.conversation_id ?? c.payload?.conversation_id;
     if (!conversationId) throw Error("conversation_id_required");
     const channel = String(cfg.channel || "funnel_chat");
-    if (!["funnel_chat"].includes(channel)) throw Error("channel_not_configured");
+    if (!["funnel_chat","whatsapp","instagram","messenger","email","sms"].includes(channel)) throw Error("channel_not_configured");
     const body = String(cfg.body ?? cfg.message ?? "").trim();
     if (!body) throw Error("message_body_required");
-    const { data, error } = await db.from("crm_messages").insert({ conversation_id: conversationId, user_id: c.user_id, direction: "outbound", channel, body, metadata: { automation_rule_id: rule.id, automated: true } }).select("id,conversation_id,direction,channel,body,created_at").single();
+    const idempotency = `automation:${rule.id}:${c.event_id || c.external_id || c.transaction_id || c.checkout_id || c.sale_id || c.conversation_id}:${channel}:${await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)).then(b=>Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""))}`;
+    if (channel === "funnel_chat") {
+      const { data, error } = await db.from("crm_messages").insert({ conversation_id: conversationId, user_id: c.user_id, direction: "outbound", channel, body, metadata: { automation_rule_id: rule.id, automated: true } }).select("id,conversation_id,direction,channel,body,created_at").single();
+      if (error) throw error;
+      return { type, message: data, queued: false };
+    }
+    const channelAccountId = String(cfg.channel_account_id || cfg.account_id || "").trim();
+    if (!channelAccountId) throw Error("channel_account_id_required");
+    const { data: account, error: ae } = await db.from("crm_channel_accounts").select("id").eq("id", channelAccountId).eq("user_id", c.user_id).eq("channel", channel).eq("status", "active").maybeSingle();
+    if (ae) throw ae; if (!account) throw Error("CHANNEL_ACCOUNT_NOT_FOUND_OR_INACTIVE");
+    const { data, error } = await db.from("crm_channel_message_outbox").upsert({ user_id:c.user_id, conversation_id:conversationId, channel_account_id:channelAccountId, channel, direction:"outbound", body, status:"queued", max_attempts:Number(cfg.max_attempts || 5), next_attempt_at:new Date().toISOString(), idempotency_key:idempotency, metadata:{automation_rule_id:rule.id,automated:true} }, { onConflict:"user_id,idempotency_key", ignoreDuplicates:true }).select("id,status,channel,conversation_id,created_at").maybeSingle();
     if (error) throw error;
-    return { type, message: data };
+    return { type, queued: true, outbox: data };
   }
   if (type === "set_conversation_status") {
-    const conversationId = c.conversation_id ?? c.payload?.conversation_id;
-    if (!conversationId) throw Error("conversation_id_required");
-    const status = String(cfg.status || "open");
-    if (!["open", "pending", "closed"].includes(status)) throw Error("invalid_conversation_status");
-    const { data, error } = await db.from("crm_conversations").update({ status, updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", c.user_id).select("id,status,updated_at").single();
-    if (error) throw error;
-    return { type, conversation: data };
+    const conversationId = c.conversation_id ?? c.payload?.conversation_id; if (!conversationId) throw Error("conversation_id_required"); const status = String(cfg.status || "open"); if (!["open","pending","closed"].includes(status)) throw Error("invalid_conversation_status");
+    const { data, error } = await db.from("crm_conversations").update({ status, updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", c.user_id).select("id,status,updated_at").single(); if (error) throw error; return { type, conversation: data };
   }
   if (type === "handoff_conversation") {
-    const conversationId = c.conversation_id ?? c.payload?.conversation_id;
-    if (!conversationId) throw Error("conversation_id_required");
-    const assignedTo = String(cfg.assigned_to || cfg.agent_id || "").trim();
-    if (!assignedTo) throw Error("assigned_to_required");
-    const { data: agent, error: ae } = await db.from("crm_agents").select("id").eq("id", assignedTo).eq("user_id", c.user_id).maybeSingle();
-    if (ae) throw ae;
-    if (!agent) throw Error("AGENT_NOT_FOUND");
-    const { data, error } = await db.from("crm_conversations").update({ assigned_to: assignedTo, updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", c.user_id).select("id,assigned_to,updated_at").single();
-    if (error) throw error;
-    return { type, conversation: data };
+    const conversationId = c.conversation_id ?? c.payload?.conversation_id; if (!conversationId) throw Error("conversation_id_required"); const assignedTo = String(cfg.assigned_to || cfg.agent_id || "").trim(); if (!assignedTo) throw Error("assigned_to_required");
+    const { data: agent, error: ae } = await db.from("crm_agents").select("id").eq("id", assignedTo).eq("user_id", c.user_id).maybeSingle(); if (ae) throw ae; if (!agent) throw Error("AGENT_NOT_FOUND");
+    const { data, error } = await db.from("crm_conversations").update({ assigned_to: assignedTo, updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", c.user_id).select("id,assigned_to,updated_at").single(); if (error) throw error; return { type, conversation: data };
   }
   if (type === "update_transaction") {
-    if (!c.transaction_id) throw Error("transaction_id_required");
-    let data: any = null;
+    if (!c.transaction_id) throw Error("transaction_id_required"); let data: any = null;
     if (cfg.status) { const { data: transition, error } = await db.rpc("transition_gateway_transaction_status", { p_transaction_id: c.transaction_id, p_user_id: c.user_id, p_next_status: String(cfg.status), p_failure_code: cfg.error_message ? String(cfg.error_message) : null, p_external_id: null }); if (error) throw error; data = transition; }
     if (cfg.error_message) { const { data: updated, error } = await db.from("gateway_transactions").update({ error_message: String(cfg.error_message) }).eq("id", c.transaction_id).eq("user_id", c.user_id).select("id,status,error_message").single(); if (error) throw error; data = updated; }
     if (!data) { const { data: current, error } = await db.from("gateway_transactions").select("id,status,error_message").eq("id", c.transaction_id).eq("user_id", c.user_id).single(); if (error) throw error; data = current; }
     return { type, transaction: data };
   }
   if (type === "recover_checkout") { if (!c.checkout_id) throw Error("checkout_id_required"); const next = new Date(Date.now() + Number(cfg.delay_minutes || 0) * 60000).toISOString(); const { data, error } = await db.from("checkout_sessions").update({ abandoned_at: new Date().toISOString(), recovery_status: "pending", recovery_next_at: next, updated_at: new Date().toISOString() }).eq("id", c.checkout_id).eq("user_id", c.user_id).select("id,recovery_status,recovery_next_at").single(); if (error) throw error; return { type, checkout: data }; }
-  if (type === "update_sale") { if (!c.sale_id && !c.external_id) throw Error("sale_identifier_required"); let q = db.from("sales").update({ status: cfg.status || "updated", occurred_at: new Date().toISOString() }).eq("user_id", c.user_id); q = c.sale_id ? q.eq("id", c.sale_id) : q.eq("external_id", c.external_id); const { data, error } = await q.select("id,status").limit(1).single(); if (error) throw error; return { type, sale: data };
-  }
+  if (type === "update_sale") { if (!c.sale_id && !c.external_id) throw Error("sale_identifier_required"); let q = db.from("sales").update({ status: cfg.status || "updated", occurred_at: new Date().toISOString() }).eq("user_id", c.user_id); q = c.sale_id ? q.eq("id", c.sale_id) : q.eq("external_id", c.external_id); const { data, error } = await q.select("id,status").limit(1).single(); if (error) throw error; return { type, sale: data }; }
   throw Error(`unsupported_action:${type}`);
 }
-async function runAction(rule: any, c: any) {
-  const root = rule.action_config || {};
-  const actions = Array.isArray(root.actions) ? root.actions : [root];
-  if (!actions.length) throw Error("actions_required");
-  const stopOnError = root.stop_on_error !== false;
-  const outputs: unknown[] = [];
-  for (const cfg of actions) {
-    try { outputs.push(await runSingleAction(cfg, rule, c)); }
-    catch (e) { if (stopOnError) throw e; outputs.push({ type: cfg.type || cfg.action || "unknown", error: e instanceof Error ? e.message : String(e) }); }
-  }
-  return actions.length === 1 && !Array.isArray(root.actions) ? outputs[0] : { type: "multi_action", stop_on_error: stopOnError, actions: outputs };
-}
+async function runAction(rule: any, c: any) { const root = rule.action_config || {}; const actions = Array.isArray(root.actions) ? root.actions : [root]; if (!actions.length) throw Error("actions_required"); const stopOnError = root.stop_on_error !== false; const outputs: unknown[] = []; for (const cfg of actions) { try { outputs.push(await runSingleAction(cfg, rule, c)); } catch (e) { if (stopOnError) throw e; outputs.push({ type: cfg.type || cfg.action || "unknown", error: e instanceof Error ? e.message : String(e) }); } } return actions.length === 1 && !Array.isArray(root.actions) ? outputs[0] : { type:"multi_action", stop_on_error:stopOnError, actions:outputs }; }
+
 Deno.serve(async req => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-  const secret = Deno.env.get("ALTHEA_INTERNAL_SECRET") || "";
-  if (!secret || req.headers.get("x-internal-secret") !== secret) return json({ error: "unauthorized" }, 401);
-  try { const b = await req.json(); const c = { user_id: b.user_id, funnel_id: b.funnel_id ?? null, event_id: b.event_id ?? null, event_type: b.event_type, conversation_id: b.conversation_id ?? b.payload?.conversation_id ?? null, transaction_id: b.transaction_id ?? b.payload?.transaction_id, checkout_id: b.checkout_id ?? b.payload?.checkout_id, sale_id: b.sale_id ?? b.payload?.sale_id, external_id: b.external_id ?? b.payload?.external_id, payload: b.payload ?? {} }; if (!c.user_id || !c.event_type) return json({ error: "user_id_and_event_type_required" }, 400); const { data: rules, error } = await db.from("automation_rules").select("*").eq("user_id", c.user_id).eq("status", "active"); if (error) throw error; const results = []; for (const rule of rules || []) { if (!match(rule.trigger_config || {}, c)) continue; const key = await stableKey(c, rule.id); const { data: ex, error: ie } = await db.from("automation_executions").insert({ user_id: c.user_id, rule_id: rule.id, event_id: c.event_id, execution_key: key, status: "running", action_type: Array.isArray(rule.action_config?.actions) ? "multi_action" : ((rule.action_config || {}).type || (rule.action_config || {}).action || "log"), input: c, started_at: new Date().toISOString() }).select("id").single(); if (ie?.code === "23505") { results.push({ rule_id: rule.id, status: "skipped", reason: "duplicate" }); continue; } if (ie) throw ie; try { const output = await runAction(rule, c); await db.from("automation_executions").update({ status: "completed", output, completed_at: new Date().toISOString() }).eq("id", ex.id); results.push({ rule_id: rule.id, status: "completed", output }); } catch (e) { const m = e instanceof Error ? e.message : String(e); await db.from("automation_executions").update({ status: "failed", error_message: m, completed_at: new Date().toISOString() }).eq("id", ex.id); results.push({ rule_id: rule.id, status: "failed", error: m }); } } return json({ ok: true, matched: results.length, results }); } catch (e) { return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500); }
+  const secret = Deno.env.get("ALTHEA_INTERNAL_SECRET") || ""; if (!secret || req.headers.get("x-internal-secret") !== secret) return json({ error: "unauthorized" }, 401);
+  try {
+    const b = await req.json(); const c = { user_id:b.user_id, funnel_id:b.funnel_id ?? null, event_id:b.event_id ?? null, event_type:b.event_type, conversation_id:b.conversation_id ?? b.payload?.conversation_id ?? null, transaction_id:b.transaction_id ?? b.payload?.transaction_id, checkout_id:b.checkout_id ?? b.payload?.checkout_id, sale_id:b.sale_id ?? b.payload?.sale_id, external_id:b.external_id ?? b.payload?.external_id, payload:b.payload ?? {} };
+    if (!c.user_id || !c.event_type) return json({ error:"user_id_and_event_type_required" },400);
+    const { data:rules,error } = await db.from("automation_rules").select("*").eq("user_id",c.user_id).eq("status","active"); if (error) throw error; const results:any[]=[];
+    for (const rule of rules || []) { if (!match(rule.trigger_config || {},c)) continue; const key=await stableKey(c,rule.id); const { data:ex,error:ie }=await db.from("automation_executions").insert({user_id:c.user_id,rule_id:rule.id,event_id:c.event_id,execution_key:key,status:"running",action_type:Array.isArray(rule.action_config?.actions)?"multi_action":((rule.action_config||{}).type||(rule.action_config||{}).action||"log"),input:c,started_at:new Date().toISOString()}).select("id").single(); if (ie?.code==="23505"){results.push({rule_id:rule.id,status:"skipped",reason:"duplicate"});continue;} if(ie)throw ie; try{const output=await runAction(rule,c);await db.from("automation_executions").update({status:"completed",output,completed_at:new Date().toISOString(),attempt_count:1}).eq("id",ex.id);results.push({rule_id:rule.id,status:"completed",output});}catch(e){const m=e instanceof Error?e.message:String(e);await db.from("automation_executions").update({status:"failed",error_message:m,completed_at:new Date().toISOString(),attempt_count:1,next_retry_at:new Date(Date.now()+30000).toISOString()}).eq("id",ex.id);results.push({rule_id:rule.id,status:"failed",error:m});} }
+    return json({ok:true,matched:results.length,results});
+  } catch(e){return json({ok:false,error:e instanceof Error?e.message:String(e)},500);}
 });
