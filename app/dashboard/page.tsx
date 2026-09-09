@@ -1,27 +1,31 @@
 'use client'
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
 import DashboardMobile from '@/components/dashboard-control'
-import GatewaysMobile from '@/components/gateways-mobile'
-import FunnelsMobile from '@/components/funnels-mobile'
-import IaraCopilot from '@/components/iara-copilot'
-import SettingsMobile from '@/components/settings-mobile'
 
-const tabs: MobileShellTab[] = ['dashboard', 'gateways', 'chat', 'ia', 'funil']
+const routes: Record<MobileShellTab, string> = {
+  dashboard: '/dashboard',
+  gateways: '/dashboard/gateways',
+  chat: '/dashboard/crm',
+  ia: '/dashboard/ia',
+  funil: '/dashboard/funil',
+}
 
 export default function MobileDashboardOrchestrator() {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<MobileShellTab>('dashboard')
 
   const selectTab = useCallback((tab: MobileShellTab) => {
     setActiveTab(tab)
-    window.dispatchEvent(new CustomEvent('althea-mobile-page', { detail: tab }))
-  }, [])
+    if (routes[tab] !== '/dashboard') router.push(routes[tab])
+  }, [router])
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const value = (event as CustomEvent<string>).detail
-      if (tabs.includes(value as MobileShellTab)) setActiveTab(value as MobileShellTab)
+      const value = (event as CustomEvent<string>).detail as MobileShellTab
+      if (value in routes) setActiveTab(value)
     }
     window.addEventListener('althea-mobile-page', handler)
     return () => window.removeEventListener('althea-mobile-page', handler)
@@ -37,13 +41,5 @@ export default function MobileDashboardOrchestrator() {
     root.style.setProperty('--althea-silver', '#A6A6A6')
   }, [])
 
-  const screens: Record<MobileShellTab, ReactNode> = {
-    dashboard: <DashboardMobile />,
-    gateways: <GatewaysMobile />,
-    chat: <FunnelsMobile />,
-    ia: <IaraCopilot />,
-    funil: <FunnelsMobile />,
-  }
-
-  return <MobileShell activeTab={activeTab} onTabChange={selectTab}>{screens[activeTab]}</MobileShell>
+  return <MobileShell activeTab={activeTab} onTabChange={selectTab}><DashboardMobile /></MobileShell>
 }
