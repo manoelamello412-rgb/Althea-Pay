@@ -28,7 +28,6 @@ export default defineConfig([
       'app/dashboard/settings/page.tsx',
       'components/config-tab-performance.tsx',
       'components/dashboard-mobile-modern.tsx',
-      'components/dashboard-session-actions.tsx',
       'components/sales-mobile.tsx',
       'components/white-label-workspace.tsx',
     ],
@@ -37,12 +36,6 @@ export default defineConfig([
       'react/no-unescaped-entities': 'off',
       'react-hooks/purity': 'off',
       '@next/next/no-img-element': 'off',
-    },
-  },
-  {
-    files: ['components/dashboard-session-actions.tsx'],
-    rules: {
-      'react-hooks/refs': 'off',
     },
   },
   {
