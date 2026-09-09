@@ -5,7 +5,7 @@ security definer
 set search_path=public,pg_temp
 as $$
 begin
-  if new.status in ('chargeback','charged_back','lost','accepted','won')
+  if new.status in ('chargeback','charged_back','lost')
      and (tg_op='INSERT' or old.status is distinct from new.status) then
     perform public.post_gateway_financial_journal(
       new.user_id,
