@@ -30,30 +30,14 @@ const items: SettingItem[] = [
   { label: 'Segurança & Auditoria', description: 'Autenticação, proteção e trilhas de acesso', icon: ShieldCheck, target: 'seguranca' },
 ]
 
-function initials(value: string) {
-  const parts = value.trim().split(/\s+/).filter(Boolean).slice(0, 2)
-  return parts.map((part) => part[0]?.toUpperCase()).join('') || 'U'
-}
-
 export default function SettingsMobile() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
   const router = useRouter()
   const [currentSubPage, setCurrentSubPage] = useState<SubPage>('menu')
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [avatarUrl, setAvatarUrl] = useState('')
 
   useEffect(() => {
-    let mounted = true
-    void db.auth.getUser().then(({ data }) => {
-      if (!mounted || !data.user) return
-      const metadata = data.user.user_metadata ?? {}
-      setName(String(metadata.full_name ?? metadata.name ?? metadata.display_name ?? ''))
-      setEmail(data.user.email ?? '')
-      setAvatarUrl(String(metadata.avatar_url ?? metadata.picture ?? ''))
-    })
-    return () => { mounted = false }
-  }, [db])
+    return undefined
+  }, [])
 
   function openItem(item: SettingItem) {
     if (item.target === 'perfil') return setCurrentSubPage('perfil')
@@ -87,17 +71,11 @@ export default function SettingsMobile() {
         <button
           type="button"
           onClick={() => setCurrentSubPage('perfil')}
-          className="mt-4 flex w-full items-center gap-4 rounded-xl bg-[#0E1110] p-4 text-left transition-all duration-200 active:scale-[0.99]"
+          aria-label="Meu Perfil"
+          className="mt-4 flex min-h-11 w-full items-center justify-between rounded-xl bg-[#0E1110] px-4 text-left text-sm font-bold text-white transition-all duration-200 active:scale-[0.99]"
         >
-          <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-[#131C18] text-sm font-bold text-[#1DB854]">
-            {avatarUrl ? <img src={avatarUrl} alt="Avatar do usuário" className="h-full w-full object-cover" onError={() => setAvatarUrl('')} /> : initials(name)}
-          </span>
-          <span className="min-w-0 flex-1">
-            <strong className="block text-sm font-bold text-white">Meu Perfil</strong>
-            <span className="mt-0.5 block truncate text-xs text-zinc-400">{name || 'Conta autenticada'}</span>
-            <span className="mt-0.5 block truncate font-mono text-[10px] text-zinc-600">{email || 'E-mail de acesso'}</span>
-          </span>
-          <ChevronRight size={18} className="shrink-0 text-zinc-600" />
+          <span>Meu Perfil</span>
+          <ChevronRight size={18} className="text-zinc-600" />
         </button>
 
         <section className="mt-3 flex flex-col gap-1.5">
