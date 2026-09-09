@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
 import { LayoutGrid, CreditCard, GitFork, Network, Settings } from 'lucide-react'
 
 const navItems = [
@@ -42,64 +41,56 @@ export default function MobileBottomNav() {
   }
 
   return (
-    <footer
-      className="fixed z-50 select-none"
-      style={{
-        left: '30px',
-        right: '30px',
-        bottom: '28px',
-        height: '190px',
-        padding: '26px 20px 22px',
-        borderRadius: '38px',
-        background: 'rgba(15, 26, 22, 0.97)',
-        border: '2px solid rgba(63, 77, 70, 0.72)',
-        boxShadow: '0 18px 50px rgba(0,0,0,.30)',
-        backdropFilter: 'blur(18px)',
-      }}
-    >
-      <div className="grid h-full grid-cols-5 items-center gap-2">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-4 pb-5 pt-2 sm:px-6 sm:pb-6">
+      <nav
+        aria-label="Navegação principal"
+        className="pointer-events-auto mx-auto flex h-16 w-full max-w-md items-center justify-between rounded-full border border-white/[0.06] bg-[#121214]/60 px-2 shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl supports-[backdrop-filter]:bg-[#121214]/55"
+      >
         {navItems.map((item) => {
           const isActive = activeTab === item.id
           const Icon = item.icon
 
           return (
-            <motion.button
+            <button
               key={item.id}
               type="button"
               onClick={() => selectTab(item.id)}
               aria-current={isActive ? 'page' : undefined}
-              className="relative flex h-full min-w-0 flex-col items-center justify-center rounded-[30px] outline-none"
-              whileTap={{ scale: 0.97 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+              aria-label={item.label}
+              className="group relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full px-1 outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
             >
-              {isActive && (
-                <motion.div
-                  layoutId="activeTabPill"
-                  className="absolute inset-[0_0_0_0] -z-10 rounded-[30px]"
-                  style={{
-                    background: '#0B0B0D',
-                    border: '1px solid rgba(13, 54, 45, 0.95)',
-                  }}
-                  transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-                />
-              )}
+              <span
+                aria-hidden="true"
+                className={`absolute inset-y-1.5 inset-x-1 rounded-full border transition-all duration-300 ease-out ${
+                  isActive
+                    ? 'border-emerald-500/20 bg-emerald-500/[0.08] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]'
+                    : 'border-transparent bg-transparent group-hover:bg-white/[0.02]'
+                }`}
+              />
 
               <Icon
-                className="h-11 w-11 shrink-0 transition-all duration-200"
-                strokeWidth={isActive ? 2.6 : 2.2}
-                style={{ color: isActive ? '#1DB854' : '#8A9A92' }}
+                aria-hidden="true"
+                className={`relative z-10 h-[18px] w-[18px] shrink-0 transition-all duration-200 ${
+                  isActive
+                    ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.4)]'
+                    : 'text-zinc-500 group-hover:text-zinc-300'
+                }`}
+                strokeWidth={isActive ? 2.5 : 2.2}
               />
 
               <span
-                className="mt-3 whitespace-nowrap text-[18px] font-medium tracking-[-0.01em] transition-colors duration-200"
-                style={{ color: isActive ? '#1DB854' : '#8A9A92' }}
+                className={`relative z-10 max-w-full truncate text-[10px] font-medium leading-none tracking-tight transition-colors duration-200 ${
+                  isActive
+                    ? 'font-semibold text-emerald-400'
+                    : 'text-zinc-500 group-hover:text-zinc-300'
+                }`}
               >
                 {item.label}
               </span>
-            </motion.button>
+            </button>
           )
         })}
-      </div>
-    </footer>
+      </nav>
+    </div>
   )
 }
