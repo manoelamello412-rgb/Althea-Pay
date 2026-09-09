@@ -1,0 +1,38 @@
+name: ALTHEA CRM workers
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  workers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch omnichannel outbox
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          ALTHEA_INTERNAL_SECRET: ${{ secrets.ALTHEA_INTERNAL_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_URL"
+          test -n "$ALTHEA_INTERNAL_SECRET"
+          curl --fail-with-body --retry 2 --max-time 60 \
+            -X POST "$SUPABASE_URL/functions/v1/crm-channel-outbox-dispatcher" \
+            -H "content-type: application/json" \
+            -H "x-internal-secret: $ALTHEA_INTERNAL_SECRET" \
+            --data '{"limit":100}'
+      - name: Retry failed CRM automations
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          ALTHEA_INTERNAL_SECRET: ${{ secrets.ALTHEA_INTERNAL_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_URL"
+          test -n "$ALTHEA_INTERNAL_SECRET"
+          curl --fail-with-body --retry 2 --max-time 60 \
+            -X POST "$SUPABASE_URL/functions/v1/automation-retry-worker" \
+            -H "content-type: application/json" \
+            -H "x-internal-secret: $ALTHEA_INTERNAL_SECRET" \
+            --data '{"limit":100}'
