@@ -20,7 +20,6 @@ Deno.serve(async (req) => {
   const rid = requestId(req);
   const cors = corsHeaders(req.headers.get('origin'));
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-
   if (!supabaseUrl || !publishableKey) return json({ error: 'server_not_configured', request_id: rid }, 500, cors);
   const auth = req.headers.get('Authorization');
   if (!auth?.startsWith('Bearer ')) return json({ error: 'unauthorized', request_id: rid }, 401, cors);
@@ -44,13 +43,12 @@ Deno.serve(async (req) => {
       if (error) return json({ error: 'database_error', request_id: rid }, 500, cors);
       return json({ data, request_id: rid }, 200, cors);
     }
-
     if (req.method === 'POST') {
       const body = await req.json().catch(() => ({}));
       const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 80) : 'Althea API Key';
       const scopes = Array.isArray(body.scopes) ? body.scopes.filter((s: unknown) => typeof s === 'string').slice(0, 50) : ['funnels:read', 'products:read', 'sales:read', 'transactions:read', 'events:write'];
-      const expiresAt = body.expires_at ? new Date(body.expires_at).toISOString() : null;
       if (body.expires_at && Number.isNaN(new Date(body.expires_at).getTime())) return json({ error: 'invalid_expiration', request_id: rid }, 400, cors);
+      const expiresAt = body.expires_at ? new Date(body.expires_at).toISOString() : null;
       const rawKey = `althea_live_${randomHex(32)}`;
       const prefix = rawKey.slice(0, 18);
       const hash = await sha256(rawKey);
@@ -82,19 +80,16 @@ Deno.serve(async (req) => {
   }
 
   if (req.method === 'GET' && path === 'dashboard') {
-    const { data: memberships, error: membershipError } = await supabase.from('organization_members').select('organization_id,role').eq('user_id', user.id);
-    if (membershipError) return json({ error: 'database_error', request_id: rid }, 500, cors);
-    const organizationIds = (memberships ?? []).map((m) => m.organization_id);
-    if (!organizationIds.length) return json({ funnels: 0, products: 0, customers: 0, leads: 0, sales: 0, chats: 0, request_id: rid }, 200, cors);
-    const [funnels, products, customers, leads, sales, chats] = await Promise.all([
-      supabase.from('funnels').select('id', { count: 'exact', head: true }).in('organization_id', organizationIds),
-      supabase.from('products').select('id', { count: 'exact', head: true }).in('organization_id', organizationIds),
-      supabase.from('customers').select('id', { count: 'exact', head: true }).in('organization_id', organizationIds),
-      supabase.from('leads').select('id', { count: 'exact', head: true }).in('organization_id', organizationIds),
-      supabase.from('sales').select('id', { count: 'exact', head: true }).in('organization_id', organizationIds).eq('status', 'approved'),
-      supabase.from('chat_conversations').select('id', { count: 'exact', head: true }).in('organization_id', organizationIds).neq('status', 'closed'),
+    const [funnels, products, sales, chats, gateways] = await Promise.all([
+      supabase.from('funnels').select('id', { count: 'exact', head: true }).eq('user_id', user.id).is('deleted_at', null),
+      supabase.from('products').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('sales').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'approved'),
+      supabase.from('crm_conversations').select('id', { count: 'exact', head: true }).eq('user_id', user.id).neq('status', 'closed'),
+      supabase.from('gateways').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
     ]);
-    return json({ funnels: funnels.count ?? 0, products: products.count ?? 0, customers: customers.count ?? 0, leads: leads.count ?? 0, approved_sales: sales.count ?? 0, open_chats: chats.count ?? 0, request_id: rid }, 200, cors);
+    const failure = [funnels, products, sales, chats, gateways].find((result) => result.error);
+    if (failure?.error) return json({ error: 'database_error', request_id: rid }, 500, cors);
+    return json({ funnels: funnels.count ?? 0, products: products.count ?? 0, approved_sales: sales.count ?? 0, open_chats: chats.count ?? 0, gateways: gateways.count ?? 0, request_id: rid }, 200, cors);
   }
 
   return json({ error: 'not_found', request_id: rid }, 404, cors);
