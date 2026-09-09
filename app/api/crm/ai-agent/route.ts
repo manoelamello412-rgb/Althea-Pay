@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { generateRevenueAgentDraft } from '@/lib/crm/ai/provider'
 
 export const dynamic='force-dynamic'
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i
@@ -16,17 +17,16 @@ async function buildAgent(supabase:Awaited<ReturnType<typeof createSupabaseServe
   if(!next&&!score)return null
   const n=(next??{}) as Json
   const s=(score??{}) as Json
-  return {
+  const base={
     conversation_id:id,
     recommendation:String(n.recommendation??n.action??'monitor'),
     probability:Number(n.probability??s.conversion_probability??0),
     recovery_probability:Number(s.recovery_probability??0),
     rationale:String(n.reason??'Recomendação derivada exclusivamente dos sinais reais disponíveis no Customer 360.'),
     evidence:{next_best_action:n,predictive_scores:s},
-    mode:'grounded_behavioral_v1',
-    human_approval_required:true,
-    generated_at:new Date().toISOString(),
   }
+  const draft=await generateRevenueAgentDraft({conversationId:id,recommendation:base.recommendation,probability:base.probability,recoveryProbability:base.recovery_probability,rationale:base.rationale,evidence:base.evidence})
+  return {...base,ai_draft:draft.draft,ai_provider:draft.provider,ai_mode:draft.mode,ai_available:draft.available,ai_confidence:draft.confidence,mode:draft.available?'grounded_llm_draft_v1':'grounded_behavioral_v1',human_approval_required:true,generated_at:new Date().toISOString()}
 }
 
 export async function GET(request:Request){
@@ -57,13 +57,8 @@ export async function POST(request:Request){
     const agent=await buildAgent(supabase,id)
     if(!agent)return NextResponse.json({error:'NOT_FOUND'},{status:404})
     const {data:row,error}=await supabase.from('crm_ai_actions').insert({
-      user_id:user.id,
-      conversation_id:id,
-      action_type:agent.recommendation,
-      score:agent.probability,
-      rationale:agent.rationale,
-      status:decision,
-      payload:{mode:agent.mode,evidence:agent.evidence,source:'crm_ai_agent'},
+      user_id:user.id,conversation_id:id,action_type:agent.recommendation,score:agent.probability,rationale:agent.rationale,status:decision,
+      payload:{mode:agent.mode,evidence:agent.evidence,source:'crm_ai_agent',ai_draft:agent.ai_draft,ai_provider:agent.ai_provider,ai_available:agent.ai_available,ai_confidence:agent.ai_confidence},
     }).select('id,action_type,score,rationale,status,payload,created_at,executed_at').single()
     if(error)return NextResponse.json({error:'AI_ACTION_WRITE_FAILED',detail:error.message},{status:500})
     return NextResponse.json({action:row,agent},{status:201,headers:{'Cache-Control':'no-store'}})
