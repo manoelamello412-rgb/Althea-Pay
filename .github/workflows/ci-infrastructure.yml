@@ -27,7 +27,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
@@ -60,60 +59,33 @@ jobs:
             v_fsm boolean;
             v_fsm_source text;
           BEGIN
-            SELECT c.relrowsecurity
-              INTO v_rls
-              FROM pg_class c
-              JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = 'public'
-               AND c.relname = 'gateway_transactions';
+            SELECT c.relrowsecurity INTO v_rls
+              FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'public' AND c.relname = 'gateway_transactions';
+            IF NOT COALESCE(v_rls, false) THEN RAISE EXCEPTION 'gateway_transactions must have RLS enabled'; END IF;
 
-            IF NOT COALESCE(v_rls, false) THEN
-              RAISE EXCEPTION 'gateway_transactions must have RLS enabled';
-            END IF;
+            SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='gateway_transactions' AND column_name='version') INTO v_version;
+            IF NOT v_version THEN RAISE EXCEPTION 'gateway_transactions.version is missing'; END IF;
 
             SELECT EXISTS (
-              SELECT 1 FROM information_schema.columns
-               WHERE table_schema = 'public'
-                 AND table_name = 'gateway_transactions'
-                 AND column_name = 'version'
-            ) INTO v_version;
-
-            IF NOT v_version THEN
-              RAISE EXCEPTION 'gateway_transactions.version is missing';
-            END IF;
-
-            SELECT EXISTS (
-              SELECT 1
-                FROM pg_proc p
-                JOIN pg_namespace n ON n.oid = p.pronamespace
-               WHERE n.nspname = 'public'
-                 AND p.proname = 'transition_gateway_transaction_status'
-                 AND pg_get_function_identity_arguments(p.oid) = 'p_transaction_id uuid, p_user_id uuid, p_next_status text, p_failure_code text, p_external_id text, p_expected_version bigint'
+              SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+               WHERE n.nspname='public' AND p.proname='transition_gateway_transaction_status'
+                 AND pg_get_function_identity_arguments(p.oid)='p_transaction_id uuid, p_user_id uuid, p_next_status text, p_failure_code text, p_external_id text, p_expected_version bigint'
             ) INTO v_occ;
+            IF NOT v_occ THEN RAISE EXCEPTION '6-argument OCC transition RPC is missing'; END IF;
 
-            IF NOT v_occ THEN
-              RAISE EXCEPTION '6-argument OCC transition RPC is missing';
-            END IF;
-
-            SELECT p.prosrc
-              INTO v_fsm_source
-              FROM pg_proc p
-              JOIN pg_namespace n ON n.oid = p.pronamespace
-             WHERE n.nspname = 'public'
-               AND p.proname = 'transition_gateway_transaction_status'
-               AND pg_get_function_identity_arguments(p.oid) = 'p_transaction_id uuid, p_user_id uuid, p_next_status text, p_failure_code text, p_external_id text, p_expected_version bigint';
-
-            v_fsm := COALESCE(v_fsm_source, '') ILIKE '%created%'
-                  AND COALESCE(v_fsm_source, '') ILIKE '%pending%'
-                  AND COALESCE(v_fsm_source, '') ILIKE '%approved%'
-                  AND COALESCE(v_fsm_source, '') ILIKE '%failed%'
-                  AND COALESCE(v_fsm_source, '') ILIKE '%refunded%'
-                  AND COALESCE(v_fsm_source, '') ILIKE '%chargeback%'
-                  AND COALESCE(v_fsm_source, '') ILIKE '%invalid_status%';
-
-            IF NOT v_fsm THEN
-              RAISE EXCEPTION 'canonical gateway transaction FSM is missing or incomplete';
-            END IF;
+            SELECT p.prosrc INTO v_fsm_source
+              FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+             WHERE n.nspname='public' AND p.proname='transition_gateway_transaction_status'
+               AND pg_get_function_identity_arguments(p.oid)='p_transaction_id uuid, p_user_id uuid, p_next_status text, p_failure_code text, p_external_id text, p_expected_version bigint';
+            v_fsm := COALESCE(v_fsm_source,'') ILIKE '%created%'
+                  AND COALESCE(v_fsm_source,'') ILIKE '%pending%'
+                  AND COALESCE(v_fsm_source,'') ILIKE '%approved%'
+                  AND COALESCE(v_fsm_source,'') ILIKE '%failed%'
+                  AND COALESCE(v_fsm_source,'') ILIKE '%refunded%'
+                  AND COALESCE(v_fsm_source,'') ILIKE '%chargeback%'
+                  AND COALESCE(v_fsm_source,'') ILIKE '%invalid_status%';
+            IF NOT v_fsm THEN RAISE EXCEPTION 'canonical gateway transaction FSM is missing or incomplete'; END IF;
           END $$;
           SQL
 
@@ -127,4 +99,5 @@ jobs:
 
       - name: Stop ephemeral Supabase
         if: always()
-        run: supabase stop --no-backup
+        run: |
+          if command -v supabase >/dev/null 2>&1; then supabase stop --no-backup || true; fi
