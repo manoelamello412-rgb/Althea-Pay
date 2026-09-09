@@ -6,16 +6,12 @@ import {
   AlertTriangle,
   ArrowRight,
   Bot,
-  CheckCircle2,
-  Clock3,
   FileText,
   Network,
   RefreshCw,
   Send,
-  ShieldCheck,
   Sparkles,
   TrendingUp,
-  Zap,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -382,7 +378,7 @@ export default function IaraCopilot() {
           </div>
 
           <div className="mt-2.5 flex items-center justify-between rounded-xl border border-white/[0.03] bg-[#101311] p-3">
-            <div><span className="block text-[9px] font-mono uppercase tracking-wider text-zinc-600">Aprovação Geral</span><strong className="mt-0.5 block text-xl font-mono text-zinc-100">{metrics.approval ? formatPercent(metrics.approval) : '—'}</strong></div>
+            <div><span className="block text-[9px] font-mono uppercase tracking-wider text-zinc-600">Aprovação Geral</span><strong className="mt-0.5 block text-xl font-bold font-mono text-zinc-100">{metrics.approval ? formatPercent(metrics.approval) : '—'}</strong></div>
             <div className="text-right"><TrendingUp className="ml-auto h-4 w-4 text-[#1DB854]"/><span className="mt-1 block text-[9px] text-zinc-600">24 horas</span></div>
           </div>
         </div>
