@@ -1,5 +1,5 @@
-import type {Metadata} from 'next'
-import type {ReactNode} from 'react'
+import type { Metadata } from 'next'
+import type { ReactNode } from 'react'
 import './tailwind.css'
 import './globals.css'
 import './motion.css'
@@ -24,6 +24,7 @@ import './funnels-mobile.css'
 import './settings-mobile.css'
 import './mobile-shell-global.css'
 import './althea-design-system-v2.css'
+import './althea-canonical.css'
 
 export const metadata: Metadata = {
   title: 'ALTHEA PAY — Control Center',
@@ -35,7 +36,7 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({children}: {children: ReactNode}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
       <body>{children}</body>
