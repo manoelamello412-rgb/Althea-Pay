@@ -7,7 +7,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Session = { id: string; title: string; updated_at: string }
 type Message = { id: string; sender: 'user' | 'iara'; content: string; created_at: string }
-type IaraResponse = { id?: string; sender?: string; content?: string; created_at?: string; error?: string }
+type IaraResponse = { id: string; sender: string; content: string; created_at: string; error?: string; code?: string }
 
 export default function IaraCopilot() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
@@ -86,7 +86,7 @@ export default function IaraCopilot() {
       if (invokeError) throw new Error(invokeError.message || 'A Iara não conseguiu processar a mensagem.')
       if (data?.error) throw new Error(data.error)
       if (!data?.id || data.sender !== 'iara' || !data.content) throw new Error('A Iara não retornou uma resposta válida.')
-      setMessages((current) => current.some((item) => item.id === data.id) ? current : [...current, { id: data.id, sender: 'iara', content: data.content, created_at: data.created_at ?? new Date().toISOString() }])
+      setMessages((current) => current.some((item) => item.id === data.id) ? current : [...current, { id: data.id, sender: 'iara', content: data.content, created_at: data.created_at }])
       setSessions((current) => current.map((session) => session.id === activeId ? { ...session, title: session.title === 'Nova Conversa' ? text.replace(/\s+/g, ' ').slice(0, 48) : session.title, updated_at: new Date().toISOString() } : session).sort((a, b) => b.updated_at.localeCompare(a.updated_at)))
       scroll()
     } catch (cause) {
