@@ -45,6 +45,9 @@ verify_jwt = false
 [functions.webhook-integrations]
 verify_jwt = true
 
+[functions.iara-ai-core]
+verify_jwt = true
+
 [functions.automation-engine]
 # retired: 410 stub, see automation-engine-v2
 verify_jwt = false
