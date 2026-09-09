@@ -1,19 +1,20 @@
 'use client'
 
-import { Building2, ChevronRight, CircleDollarSign, FileText, Globe2, LogOut, RefreshCcw, ShieldCheck, Upload, UserRound, Users, Webhook, Network } from 'lucide-react'
+import { Building2, ChevronRight, CircleDollarSign, FileText, Globe2, RefreshCcw, ShieldCheck, Users, Webhook, Network } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import PerfilSettingsPage from '@/app/dashboard/settings/perfil/page'
 import EmpresaSettingsPage from '@/app/dashboard/settings/empresa/page'
 import IntegracoesSettingsPage from '@/app/dashboard/settings/integracoes/page'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import LogoutButton from '@/components/ui/logout-button'
 
 type SubPage = 'menu' | 'perfil' | 'empresa' | 'integracoes'
 
 type SettingItem = {
   label: string
   description: string
-  icon: typeof UserRound
+  icon: typeof Users
   target: 'perfil' | 'empresa' | 'integracoes' | 'recuperacao' | 'funil' | 'usuarios' | 'gateways' | 'seguranca' | 'desempenho' | 'vendas'
 }
 
@@ -41,7 +42,6 @@ export default function SettingsMobile() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
-  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -55,18 +55,7 @@ export default function SettingsMobile() {
     return () => { mounted = false }
   }, [db])
 
-  async function logout() {
-    setNotice('Encerrando sessão…')
-    const { error } = await db.auth.signOut()
-    if (error) {
-      setNotice(error.message)
-      return
-    }
-    router.replace('/login')
-  }
-
   function openItem(item: SettingItem) {
-    setNotice('')
     if (item.target === 'perfil') return setCurrentSubPage('perfil')
     if (item.target === 'empresa') return setCurrentSubPage('empresa')
     if (item.target === 'integracoes') return setCurrentSubPage('integracoes')
@@ -135,8 +124,6 @@ export default function SettingsMobile() {
             )
           })}
         </section>
-
-        {notice && <div className="mt-2 bg-transparent py-2 text-[10px] text-zinc-500" role="status">{notice}</div>}
       </>
     )
   }
@@ -145,14 +132,9 @@ export default function SettingsMobile() {
 
   return (
     <section className="relative min-h-[500px] space-y-5 pb-32 font-['Space_Grotesk'] text-white" aria-label="Configurações mobile">
-      <button
-        type="button"
-        onClick={() => void logout()}
-        className="absolute right-0 top-0 z-50 flex items-center gap-1 bg-transparent px-4 py-2 text-xs font-bold text-red-400 transition-all duration-200 active:scale-95 hover:text-red-300"
-      >
-        <LogOut size={15} strokeWidth={2.5} />
-        <span>Sair</span>
-      </button>
+      <div className="absolute right-0 top-0 z-50">
+        <LogoutButton />
+      </div>
 
       {subPage && (
         <button type="button" onClick={() => setCurrentSubPage('menu')} className="pr-24 text-xs font-bold text-zinc-500 transition hover:text-white">
