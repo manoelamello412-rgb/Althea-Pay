@@ -1,6 +1,6 @@
 'use client'
 
-import { Building2, ChevronRight, CircleDollarSign, FileText, Globe2, RefreshCcw, ShieldCheck, Users, Webhook } from 'lucide-react'
+import { Building2, ChevronRight, CircleDollarSign, FileText, Globe2, RefreshCcw, Users, Webhook } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import PerfilSettingsPage from '@/app/dashboard/settings/perfil/page'
@@ -14,18 +14,17 @@ type SettingItem = {
   label: string
   description: string
   icon: typeof Users
-  target: 'empresa' | 'desempenho' | 'vendas' | 'funil' | 'recuperacao' | 'usuarios' | 'integracoes' | 'seguranca'
+  target: 'empresa' | 'desempenho' | 'vendas' | 'funil' | 'recuperacao' | 'usuarios' | 'integracoes'
 }
 
 const items: SettingItem[] = [
   { label: 'Minha Empresa', description: 'Dados jurídicos, fiscais e cadastrais da operação', icon: Building2, target: 'empresa' },
   { label: 'Desempenho', description: 'Telemetria, disponibilidade e tempo de resposta', icon: RefreshCcw, target: 'desempenho' },
   { label: 'Vendas', description: 'Auditoria transacional e acompanhamento da operação', icon: CircleDollarSign, target: 'vendas' },
-  { label: 'Funil e Domínio', description: 'URLs, domínios e infraestrutura dos funis', icon: Globe2, target: 'funil' },
+  { label: 'Funil', description: 'URLs, domínios e infraestrutura dos funis', icon: Globe2, target: 'funil' },
   { label: 'Recuperação', description: 'Réguas para carrinhos, PIX expirado e boleto', icon: Webhook, target: 'recuperacao' },
   { label: 'Usuários', description: 'Acessos, equipe e permissões da operação', icon: Users, target: 'usuarios' },
   { label: 'Integrações', description: 'APIs, tokens e webhooks para sistemas externos', icon: FileText, target: 'integracoes' },
-  { label: 'Segurança & Auditoria', description: 'Autenticação, proteção e trilhas de acesso', icon: ShieldCheck, target: 'seguranca' },
 ]
 
 export default function SettingsMobile() {
@@ -42,7 +41,6 @@ export default function SettingsMobile() {
       funil: '/dashboard/settings/funil-dominio',
       recuperacao: '/dashboard/settings/recuperacao',
       usuarios: '/dashboard/settings/usuarios',
-      seguranca: '/dashboard/settings/seguranca',
     }
     router.push(routes[item.target])
   }
@@ -55,7 +53,7 @@ export default function SettingsMobile() {
     return (
       <>
         <header className="pr-20">
-          <h1 className="text-2xl font-black tracking-tight text-white">Configurações</h1>
+          <h1 className="text-2xl font-black tracking-tight text-white">Configuração</h1>
           <p className="mt-1 text-xs font-medium text-zinc-500">Gerencie as diretrizes gerais da sua operação</p>
         </header>
 
@@ -78,7 +76,7 @@ export default function SettingsMobile() {
 
   const subPage = currentSubPage !== 'menu'
 
-  return <section className="relative min-h-[500px] space-y-5 pb-32 font-['Space_Grotesk'] text-white" aria-label="Configurações mobile">
+  return <section className="relative min-h-[500px] space-y-5 pb-32 font-['Space_Grotesk'] text-white" aria-label="Configuração mobile">
     <div className="absolute right-0 top-0 z-50"><LogoutButton /></div>
     {subPage && <button type="button" onClick={() => setCurrentSubPage('menu')} className="pr-24 text-xs font-bold text-zinc-500 transition hover:text-white">← Voltar</button>}
     <div className={subPage ? 'pr-24' : ''}>{pageContent()}</div>
