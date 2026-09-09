@@ -1,12 +1,33 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
-export const dynamic = 'force-dynamic'
+export const dynamic='force-dynamic'
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i
 
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+type Json=Record<string,unknown>
 
-type Score=Record<string,unknown>
-type Action=Record<string,unknown>
+async function buildAgent(supabase:Awaited<ReturnType<typeof createSupabaseServerClient>>,id:string){
+  const [{data:next,error:nextError},{data:score,error:scoreError}]=await Promise.all([
+    supabase.rpc('crm_next_best_action',{p_conversation_id:id}),
+    supabase.rpc('crm_predictive_scores',{p_conversation_id:id}),
+  ])
+  if(nextError)throw new Error(nextError.message)
+  if(scoreError)throw new Error(scoreError.message)
+  if(!next&&!score)return null
+  const n=(next??{}) as Json
+  const s=(score??{}) as Json
+  return {
+    conversation_id:id,
+    recommendation:String(n.recommendation??n.action??'monitor'),
+    probability:Number(n.probability??s.conversion_probability??0),
+    recovery_probability:Number(s.recovery_probability??0),
+    rationale:String(n.reason??'Recomendação derivada exclusivamente dos sinais reais disponíveis no Customer 360.'),
+    evidence:{next_best_action:n,predictive_scores:s},
+    mode:'grounded_behavioral_v1',
+    human_approval_required:true,
+    generated_at:new Date().toISOString(),
+  }
+}
 
 export async function GET(request:Request){
   const supabase=await createSupabaseServerClient()
@@ -14,33 +35,37 @@ export async function GET(request:Request){
   if(authError||!user)return NextResponse.json({error:'UNAUTHORIZED'},{status:401})
   const id=new URL(request.url).searchParams.get('conversation')?.trim()??''
   if(!UUID.test(id))return NextResponse.json({error:'INVALID_CONVERSATION'},{status:400})
+  try{
+    const agent=await buildAgent(supabase,id)
+    if(!agent)return NextResponse.json({error:'NOT_FOUND'},{status:404})
+    const {data:actions,error}=await supabase.from('crm_ai_actions').select('id,action_type,score,rationale,status,payload,created_at,executed_at').eq('conversation_id',id).eq('user_id',user.id).order('created_at',{ascending:false}).limit(20)
+    if(error)return NextResponse.json({error:'AI_ACTION_LEDGER_FAILED'},{status:500})
+    return NextResponse.json({...agent,actions:actions??[]},{headers:{'Cache-Control':'no-store'}})
+  }catch(error){return NextResponse.json({error:'AI_AGENT_FAILED',detail:error instanceof Error?error.message:'unknown'},{status:500})}
+}
 
-  const [{data:next,error:nextError},{data:score,error:scoreError}]=await Promise.all([
-    supabase.rpc('crm_next_best_action',{p_conversation_id:id}),
-    supabase.rpc('crm_predictive_scores',{p_conversation_id:id}),
-  ])
-  if(nextError)return NextResponse.json({error:nextError.message},{status:500})
-  if(scoreError)return NextResponse.json({error:scoreError.message},{status:500})
-  if(!next&&!score)return NextResponse.json({error:'NOT_FOUND'},{status:404})
-
-  const n=(next??{}) as Action
-  const s=(score??{}) as Score
-  const recommendation=String(n.recommendation??n.action??'monitor')
-  const probability=Number(n.probability??s.conversion_probability??0)
-  const recovery=Number(s.recovery_probability??0)
-  const rationale=String(n.reason??'Recomendação derivada exclusivamente dos sinais reais disponíveis no Customer 360.')
-  const mode='grounded_behavioral_v1'
-
-  const payload={
-    conversation_id:id,
-    recommendation,
-    probability,
-    recovery_probability:recovery,
-    rationale,
-    evidence:{next_best_action:n,predictive_scores:s},
-    mode,
-    human_approval_required:true,
-    generated_at:new Date().toISOString(),
-  }
-  return NextResponse.json(payload,{headers:{'Cache-Control':'no-store'}})
+export async function POST(request:Request){
+  const supabase=await createSupabaseServerClient()
+  const {data:{user},error:authError}=await supabase.auth.getUser()
+  if(authError||!user)return NextResponse.json({error:'UNAUTHORIZED'},{status:401})
+  const body=await request.json().catch(()=>null) as Json|null
+  const id=typeof body?.conversation_id==='string'?body.conversation_id.trim():''
+  const decision=typeof body?.decision==='string'?body.decision:'suggested'
+  if(!UUID.test(id))return NextResponse.json({error:'INVALID_CONVERSATION'},{status:400})
+  if(!['suggested','accepted','dismissed'].includes(decision))return NextResponse.json({error:'INVALID_DECISION'},{status:400})
+  try{
+    const agent=await buildAgent(supabase,id)
+    if(!agent)return NextResponse.json({error:'NOT_FOUND'},{status:404})
+    const {data:row,error}=await supabase.from('crm_ai_actions').insert({
+      user_id:user.id,
+      conversation_id:id,
+      action_type:agent.recommendation,
+      score:agent.probability,
+      rationale:agent.rationale,
+      status:decision,
+      payload:{mode:agent.mode,evidence:agent.evidence,source:'crm_ai_agent'},
+    }).select('id,action_type,score,rationale,status,payload,created_at,executed_at').single()
+    if(error)return NextResponse.json({error:'AI_ACTION_WRITE_FAILED',detail:error.message},{status:500})
+    return NextResponse.json({action:row,agent},{status:201,headers:{'Cache-Control':'no-store'}})
+  }catch(error){return NextResponse.json({error:'AI_AGENT_FAILED',detail:error instanceof Error?error.message:'unknown'},{status:500})}
 }
