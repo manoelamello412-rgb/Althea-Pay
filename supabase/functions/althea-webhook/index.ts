@@ -1,4 +1,5 @@
 import { withSupabase } from 'npm:@supabase/server'
+import { WebhookVerifier } from '../../../lib/security/WebhookVerifier.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -6,25 +7,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const encoder = new TextEncoder()
 const SUCCESS = ['approved', 'paid', 'completed', 'success']
 const REVERSAL = ['refunded', 'refund', 'chargeback']
-
-function hex(value: ArrayBuffer): string {
-  return [...new Uint8Array(value)].map((x) => x.toString(16).padStart(2, '0')).join('')
-}
-
-async function hmac(secret: string, value: string): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  return hex(await crypto.subtle.sign('HMAC', key, encoder.encode(value)))
-}
-
-function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let result = 0
-  for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return result === 0
-}
 
 function norm(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
@@ -63,8 +47,6 @@ Deno.serve(
     let tenantUserId: string | null = null
 
     try {
-      if (!/^\d+$/.test(timestamp)) return Response.json({ ok: false, error: 'invalid_timestamp' }, { status: 400, headers: corsHeaders })
-      if (Math.abs(Date.now() - Number(timestamp)) > 300000) return Response.json({ ok: false, error: 'stale_webhook' }, { status: 401, headers: corsHeaders })
       if (!eventId) return Response.json({ ok: false, error: 'event_id_required' }, { status: 400, headers: corsHeaders })
       if (!key || key.length > 300) return Response.json({ ok: false, error: 'webhook_endpoint_required' }, { status: 400, headers: corsHeaders })
 
@@ -76,12 +58,20 @@ Deno.serve(
 
       const secret = String(integration.secret ?? '')
       if (!secret) return Response.json({ ok: false, error: 'webhook_secret_not_configured' }, { status: 503, headers: corsHeaders })
-      const expected = await hmac(secret, `${timestamp}.${raw}`)
-      if (!safeEqual(signature, expected)) return Response.json({ ok: false, error: 'invalid_signature' }, { status: 401, headers: corsHeaders })
 
-      const parsed: unknown = JSON.parse(raw)
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return Response.json({ ok: false, error: 'invalid_payload' }, { status: 400, headers: corsHeaders })
-      const payload = parsed as Record<string, unknown>
+      const verification = await WebhookVerifier.verifyPayload({
+        rawBody: raw,
+        signatureHeader: signature,
+        timestampHeader: timestamp,
+        secret,
+        toleranceSeconds: 300,
+      })
+      if (!verification.isValid || !verification.parsedBody) {
+        const status = verification.reason === 'timestamp_outside_tolerance' ? 401 : 401
+        return Response.json({ ok: false, error: verification.reason ?? 'invalid_signature' }, { status, headers: corsHeaders })
+      }
+
+      const payload = verification.parsedBody
       const eventType = String(payload.event_type ?? payload.type ?? '').trim()
       const payloadUserId = payload.user_id ? String(payload.user_id) : null
       const payloadFunnelId = payload.funnel_id ? String(payload.funnel_id) : null
@@ -108,7 +98,7 @@ Deno.serve(
         return Response.json({ ok: true, duplicate: true, event_id: existing.data.id, status: existing.data.status }, { headers: corsHeaders })
       }
 
-      const event = await db.from('integration_events').insert({ user_id: userId, funnel_id: funnelId, integration_id: integration.id, event_type: eventType, external_id: eventId, event_key: eventKey, status: 'processing', payload, occurred_at: new Date(Number(timestamp)).toISOString(), claim_attempt: 0 }).select('id').single()
+      const event = await db.from('integration_events').insert({ user_id: userId, funnel_id: funnelId, integration_id: integration.id, event_type: eventType, external_id: eventId, event_key: eventKey, status: 'processing', payload, occurred_at: new Date(Number(timestamp.length <= 10 ? Number(timestamp) * 1000 : timestamp)).toISOString(), claim_attempt: 0 }).select('id').single()
       if (event.error) {
         if (event.error.code === '23505') {
           const duplicate = await db.from('integration_events').select('id,status').eq('event_key', eventKey).maybeSingle()
@@ -156,7 +146,7 @@ Deno.serve(
       if (purchase && transaction) {
         const saleExternalId = externalId || transaction.external_id || eventId
         const attribution = checkout?.attribution && typeof checkout.attribution === 'object' ? checkout.attribution : {}
-        const sale: any = { funnel_id: funnelId, product_id: checkout?.product_id ?? transaction.product_id ?? null, checkout_id: checkoutId, transaction_id: transaction.id, amount: transaction.amount ?? checkout?.amount ?? payload.amount ?? 0, currency: transaction.currency ?? checkout?.currency ?? payload.currency ?? 'BRL', status: 'approved', attribution, source: attribution.source ?? null, medium: attribution.medium ?? null, campaign: attribution.campaign ?? null, content: attribution.content ?? null, term: attribution.term ?? null, click_id: attribution.click_id ?? null, external_id: saleExternalId, gateway_id: transaction.gateway_id ?? null, occurred_at: new Date(Number(timestamp)).toISOString(), data: payload, user_id: userId }
+        const sale: any = { funnel_id: funnelId, product_id: checkout?.product_id ?? transaction.product_id ?? null, checkout_id: checkoutId, transaction_id: transaction.id, amount: transaction.amount ?? checkout?.amount ?? payload.amount ?? 0, currency: transaction.currency ?? checkout?.currency ?? payload.currency ?? 'BRL', status: 'approved', attribution, source: attribution.source ?? null, medium: attribution.medium ?? null, campaign: attribution.campaign ?? null, content: attribution.content ?? null, term: attribution.term ?? null, click_id: attribution.click_id ?? null, external_id: saleExternalId, gateway_id: transaction.gateway_id ?? null, occurred_at: new Date(Number(timestamp.length <= 10 ? Number(timestamp) * 1000 : timestamp)).toISOString(), data: payload, user_id: userId }
         const existingSale = await db.from('sales').select('id').eq('user_id', userId).eq('transaction_id', transaction.id).maybeSingle()
         if (existingSale.error) throw existingSale.error
         if (existingSale.data) {
