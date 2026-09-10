@@ -31,7 +31,7 @@ async function verify(req:Request,body:Record<string,unknown>,userId:string,acti
     const input=rec(body.input)?body.input:body;
     const fingerprint=await hash(JSON.stringify(stable({tenant_id:p.tenantId,user_id:p.userId,tool_key:p.toolKey,tool_version:p.toolVersion,gateway_id:p.gatewayId,action:p.action,idempotency_key:p.idempotencyKey,input})));
     if(fingerprint!==p.requestFingerprint)return{ok:false as const,status:403,code:"TICKET_COMMAND_MISMATCH"};
-    return{ok:true as const,jti:p.jti,executionId:p.executionId,tenantId:p.tenantId,userId:p.userId,toolKey:p.toolKey,toolVersion:p.toolVersion,gatewayId:p.gatewayId,idempotencyKey:p.idempotencyKey,issuer:String(p.iss??""),audience:String(p.aud??""),kid:String(h.kid),issuedAt:p.iat,expiresAt:p.exp,requestFingerprint:p.requestFingerprint};
+    return{ok:true as const,jti:p.jti,executionId:p.executionId,tenantId:p.tenantId,userId:p.userId,toolKey:p.toolKey,toolVersion:p.toolVersion,gatewayId:p.gatewayId,action:p.action,idempotencyKey:p.idempotencyKey,issuer:String(p.iss??""),audience:String(p.aud??""),kid:String(h.kid),issuedAt:p.iat,expiresAt:p.exp,requestFingerprint:p.requestFingerprint};
   }catch{return{ok:false as const,status:403,code:"TICKET_INVALID"}}
 }
 
@@ -55,7 +55,7 @@ Deno.serve(async req=>{
   const action=op==="refund"?"refund":"purchase";
   if(op==="capture"||op==="void")return json({ok:false,code:"EXECUTION_UNAVAILABLE",retryable:false},503);
   const v=await verify(req,body,user.id,action);if(!v.ok)return json({ok:false,code:v.code,retryable:false},v.status);
-  const consumed=await consumeJti({...v,action});
+  const consumed=await consumeJti(v);
   if(!consumed.ok)return json({ok:false,code:consumed.code,executionId:v.executionId,retryable:false},consumed.code==="TICKET_REPLAYED"?409:503);
   return json({ok:false,code:"EXECUTION_UNAVAILABLE",executionId:v.executionId,retryable:false},503);
 });
