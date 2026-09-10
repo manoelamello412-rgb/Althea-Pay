@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Check, CheckCheck, ChevronRight, CircleAlert, Clock3, Inbox, MessageCircle, RefreshCw, Search, Send, UserRound, X, Zap } from 'lucide-react'
+import { ArrowLeft, Check, CheckCheck, ChevronRight, CircleAlert, Clock3, Copy, ExternalLink, Inbox, LoaderCircle, MessageCircle, RefreshCw, Search, Send, UserRound, X, Zap } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Json = Record<string, unknown>
@@ -31,6 +31,7 @@ type Conversation = {
 type Message = { id: string; conversation_id: string; user_id: string; direction: 'inbound' | 'outbound' | 'system'; channel: string; body: string; metadata: Json; created_at: string; client_message_id?: string | null }
 type Event = { id: string; transaction_id: string | null; status: string; error_reason: string | null; buyer_email: string | null; buyer_name: string | null; payload: Json; received_at: string }
 type Funnel = { id: string; nome: string }
+type PaymentLink = { [key: string]: unknown }
 
 const statusMeta: Record<CheckoutStatus, { label: string; className: string }> = {
   respondendo_quiz: { label: 'Respondendo Quiz', className: 'border-violet-400/20 bg-violet-400/10 text-violet-200' },
@@ -68,6 +69,11 @@ const dateTime = (value: string | null | undefined) => {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
 const humanKey = (key: string) => key.replaceAll('_', ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, char => char.toUpperCase())
+const money = (value: unknown, currency: unknown) => {
+  const amount = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(amount)) return '—'
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: text(currency) || 'BRL' }).format(amount)
+}
 
 export default function CRMChatMobilePage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
@@ -85,6 +91,10 @@ export default function CRMChatMobilePage() {
   const [live, setLive] = useState(false)
   const [error, setError] = useState('')
   const [showProfile, setShowProfile] = useState(false)
+  const [recoveryLoading, setRecoveryLoading] = useState<'prepare' | 'pix' | 'card' | 'payment_link' | 'send' | null>(null)
+  const [recovery, setRecovery] = useState<Json | null>(null)
+  const [paymentLink, setPaymentLink] = useState<PaymentLink | null>(null)
+  const [copied, setCopied] = useState<'url' | 'pix' | null>(null)
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -131,7 +141,6 @@ export default function CRMChatMobilePage() {
     const q = query.trim().toLowerCase()
     return conversations.filter(conversation => {
       const matchesStatus = filter === 'all' || conversation.checkout_status === filter
-      const event = eventFor(conversation)
       const last = latest.get(conversation.id)
       const haystack = `${conversation.buyer_name ?? ''} ${conversation.buyer_email ?? ''} ${conversation.customer_whatsapp ?? ''} ${last?.body ?? ''} ${funnelMap.get(conversation.funnel_id ?? '') ?? ''}`.toLowerCase()
       return matchesStatus && (!q || haystack.includes(q))
@@ -157,6 +166,14 @@ export default function CRMChatMobilePage() {
     if (!selected || selected.unread_count <= 0 || !uid) return
     void supabase.from('crm_conversations').update({ unread_count: 0 }).eq('id', selected.id).eq('user_id', uid)
   }, [selected, supabase, uid])
+
+  useEffect(() => {
+    if (!selectedId) {
+      setRecovery(null)
+      setPaymentLink(null)
+      setCopied(null)
+    }
+  }, [selectedId])
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -184,7 +201,76 @@ export default function CRMChatMobilePage() {
     setConversations(current => current.map(conversation => conversation.id === selected.id ? { ...conversation, status } : conversation))
   }
 
+  async function commercialAction(kind: 'prepare' | 'pix' | 'card' | 'payment_link') {
+    if (!selected || selected.checkout_status === 'pago' || recoveryLoading) return
+    setRecoveryLoading(kind)
+    setError('')
+    try {
+      const action = kind === 'prepare' ? 'prepare' : 'payment_link'
+      const linkType = kind === 'pix' ? 'pix' : kind === 'card' ? 'card' : 'payment_link'
+      const response = await fetch('/api/crm/checkout-recovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: selected.id,
+          action,
+          linkType,
+          idempotencyKey: `crm-recovery:${selected.id}:${linkType}`,
+        }),
+      })
+      const payload = await response.json().catch(() => ({})) as Json
+      if (!response.ok) throw new Error(text(payload.error) || 'Não foi possível recuperar o checkout.')
+      if (payload.recovery) setRecovery(safeObject(payload.recovery))
+      if (payload.paymentLink) setPaymentLink(safeObject(payload.paymentLink))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Falha na operação comercial.')
+    } finally {
+      setRecoveryLoading(null)
+    }
+  }
+
+  async function copyValue(value: string, type: 'url' | 'pix') {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(type)
+      window.setTimeout(() => setCopied(current => current === type ? null : current), 1800)
+    } catch {
+      setError('Não foi possível copiar para a área de transferência.')
+    }
+  }
+
+  async function sendPaymentLink() {
+    if (!selected || !paymentLink || recoveryLoading) return
+    const url = pick(paymentLink, ['payment_url', 'paymentUrl', 'url', 'checkout_url', 'checkoutUrl'])
+    const pix = pick(paymentLink, ['pix_copy_paste', 'pixCopyPaste', 'pix', 'copy_paste'])
+    const body = url ? `Segue o link para finalizar seu pagamento: ${url}` : pix ? `Segue o PIX para finalizar seu pagamento:\n${pix}` : ''
+    if (!body) {
+      setError('O gateway não retornou um link ou PIX utilizável.')
+      return
+    }
+    setRecoveryLoading('send')
+    setError('')
+    try {
+      const result = await supabase.rpc('crm_operator_send_message', { p_conversation_id: selected.id, p_body: body, p_client_message_id: `${crypto.randomUUID()}-${Date.now()}` })
+      if (result.error || !result.data) throw result.error ?? new Error('Pagamento não enviado pelo chat.')
+      const row = result.data as unknown as Message
+      setMessages(current => current.some(message => message.id === row.id) ? current : [...current, row])
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Falha ao enviar o pagamento no chat.')
+    } finally {
+      setRecoveryLoading(null)
+    }
+  }
+
   const status = selected?.checkout_status ? statusMeta[selected.checkout_status] : null
+  const paymentUrl = paymentLink ? pick(paymentLink, ['payment_url', 'paymentUrl', 'url', 'checkout_url', 'checkoutUrl']) : null
+  const pixCopyPaste = paymentLink ? pick(paymentLink, ['pix_copy_paste', 'pixCopyPaste', 'pix', 'copy_paste']) : null
+  const qrCode = paymentLink ? pick(paymentLink, ['qr_code_base64', 'qrCodeBase64', 'qr_code', 'qrCode']) : null
+  const paymentStatus = paymentLink ? pick(paymentLink, ['status', 'payment_status']) : null
+  const paymentExpires = paymentLink ? pick(paymentLink, ['expires_at', 'expiresAt']) : null
+  const recoveryAmount = recovery ? recovery.amount ?? recovery.value : null
+  const recoveryCurrency = recovery ? recovery.currency : 'BRL'
+  const commercialBlocked = selected?.checkout_status === 'pago'
 
   if (selected) {
     return (
@@ -208,6 +294,40 @@ export default function CRMChatMobilePage() {
           </div>
 
           {selected.gateway_error_log && <div className="mb-3 flex gap-2 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-100"><CircleAlert size={16} className="mt-0.5 shrink-0" /><div><b>Última recusa do gateway</b><p className="mt-1 text-rose-200/80">{selected.gateway_error_log}</p></div></div>}
+
+          <section className="mb-4 rounded-[24px] border border-white/[.08] bg-[#0B0F0D] p-3 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[.2em] text-[#1DB854]"><Zap size={12} /> Recuperação comercial</div>
+                <div className="mt-1 text-sm font-black">Recuperar o checkout deste lead</div>
+                <div className="mt-1 text-[10px] text-slate-600">A origem financeira é o checkout real. O CRM não usa valor informado pelo navegador.</div>
+              </div>
+              {recoveryAmount && <span className="shrink-0 rounded-full border border-white/10 bg-white/[.03] px-2.5 py-1.5 text-[10px] font-black text-slate-200">{money(recoveryAmount, recoveryCurrency)}</span>}
+            </div>
+
+            {commercialBlocked ? <div className="mt-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-xs text-emerald-200">Checkout já pago. As ações comerciais permanecem bloqueadas para evitar cobrança duplicada.</div> : <>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button onClick={() => void commercialAction('prepare')} disabled={recoveryLoading !== null} className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.03] px-3 py-3 text-[10px] font-black uppercase tracking-wider text-slate-300 disabled:opacity-40"><RefreshCw size={14} className={recoveryLoading === 'prepare' ? 'animate-spin' : ''} /> Recuperar</button>
+                <button onClick={() => void commercialAction('pix')} disabled={recoveryLoading !== null} className="flex items-center justify-center gap-2 rounded-xl border border-[#1DB854]/30 bg-[#12351F] px-3 py-3 text-[10px] font-black uppercase tracking-wider text-white disabled:opacity-40"><Zap size={14} /> {recoveryLoading === 'pix' ? 'Gerando…' : 'Gerar PIX'}</button>
+                <button onClick={() => void commercialAction('card')} disabled={recoveryLoading !== null} className="flex items-center justify-center gap-2 rounded-xl border border-violet-400/20 bg-violet-400/10 px-3 py-3 text-[10px] font-black uppercase tracking-wider text-violet-200 disabled:opacity-40"><ExternalLink size={14} /> {recoveryLoading === 'card' ? 'Gerando…' : 'Gerar cartão'}</button>
+                <button onClick={() => void commercialAction('payment_link')} disabled={recoveryLoading !== null} className="flex items-center justify-center gap-2 rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 py-3 text-[10px] font-black uppercase tracking-wider text-sky-200 disabled:opacity-40"><ExternalLink size={14} /> {recoveryLoading === 'payment_link' ? 'Gerando…' : 'Gerar link'}</button>
+              </div>
+            </>}
+
+            {recovery && <div className="mt-3 rounded-2xl border border-white/[.07] bg-white/[.02] p-3">
+              <div className="flex items-center justify-between gap-2"><div className="text-[9px] font-black uppercase tracking-wider text-slate-600">Checkout reconciliado</div><div className="text-[10px] text-slate-400">{money(recoveryAmount, recoveryCurrency)}</div></div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]
+"><div><span className="text-slate-600">Checkout</span><div className="mt-0.5 break-all text-slate-300">{text(recovery.checkout_id) || '—'}</div></div><div><span className="text-slate-600">Funil</span><div className="mt-0.5 break-all text-slate-300">{text(recovery.funnel_id) || '—'}</div></div></div>
+            </div>}
+
+            {paymentLink && <div className="mt-3 rounded-2xl border border-[#1DB854]/20 bg-[#0D1811] p-3">
+              <div className="flex items-center justify-between gap-2"><div className="text-[9px] font-black uppercase tracking-[.18em] text-[#1DB854]">Pagamento preparado</div><span className="rounded-full border border-white/10 px-2 py-1 text-[9px] uppercase text-slate-500">{paymentStatus || 'ready'}</span></div>
+              {paymentUrl && <div className="mt-3"><div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-600">Link de pagamento</div><div className="flex gap-2"><div className="min-w-0 flex-1 truncate rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xs text-slate-300">{paymentUrl}</div><button onClick={() => void copyValue(paymentUrl, 'url')} aria-label="Copiar link de pagamento" className="rounded-xl border border-white/10 px-3 text-slate-300"><Copy size={14} /></button></div><div className="mt-1 text-[9px] text-slate-600">{copied === 'url' ? 'Copiado.' : paymentExpires ? `Expira em ${dateTime(paymentExpires)}` : 'Validade informada pelo gateway.'}</div></div>}
+              {pixCopyPaste && <div className="mt-3"><div className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-600">PIX copia e cola</div><div className="flex gap-2"><div className="max-h-20 min-w-0 flex-1 overflow-y-auto break-all rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-[10px] leading-4 text-slate-300">{pixCopyPaste}</div><button onClick={() => void copyValue(pixCopyPaste, 'pix')} aria-label="Copiar PIX" className="rounded-xl border border-white/10 px-3 text-slate-300"><Copy size={14} /></button></div><div className="mt-1 text-[9px] text-slate-600">{copied === 'pix' ? 'Copiado.' : 'Código retornado pelo gateway.'}</div></div>}
+              {qrCode && qrCode.startsWith('data:image/') && <img src={qrCode} alt="QR Code PIX" className="mx-auto mt-3 h-44 w-44 rounded-2xl bg-white p-2" />}
+              {(paymentUrl || pixCopyPaste) && <button onClick={() => void sendPaymentLink()} disabled={recoveryLoading !== null} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#1DB854] px-3 py-3 text-[10px] font-black uppercase tracking-wider text-black disabled:opacity-40"><Send size={14} /> {recoveryLoading === 'send' ? 'Enviando…' : 'Enviar pelo chat'}</button>}
+            </div>}
+          </section>
 
           <section className="space-y-3 pb-5">
             {selectedMessages.length === 0 ? <div className="rounded-2xl border border-white/10 bg-white/[.02] p-8 text-center text-sm text-slate-500">Nenhuma mensagem ainda.</div> : selectedMessages.map(message => {
