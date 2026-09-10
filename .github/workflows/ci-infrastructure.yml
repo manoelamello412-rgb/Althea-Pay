@@ -136,7 +136,7 @@ jobs:
               FROM information_schema.routine_privileges
              WHERE routine_schema='public'
                AND grantee IN ('authenticated','anon')
-               AND routine_name IN ('crm_execute_ai_action','prepare_gateway_payment_link');
+               AND routine_name IN ('crm_execute_ai_action','prepare_gateway_payment_link','enqueue_gateway_payment_link_execution');
             IF v_financial_grants <> 0 THEN RAISE EXCEPTION 'financial RPC execute privilege leaked to authenticated/anon'; END IF;
           END $$;
           SQL
