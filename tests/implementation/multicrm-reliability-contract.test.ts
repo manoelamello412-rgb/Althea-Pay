@@ -67,12 +67,14 @@ describe('Multi-CRM reliability contracts',()=>{
  })
  it('runs retry, scheduled claims and canonical rate limiting through the same worker',()=>{
   const worker=read('supabase/functions/automation-retry-worker/index.ts')
+  const alignment=read('supabase/migrations/20260910023100_crm_automation_execution_updated_at_alignment_v1.sql')
   expect(worker).toContain('crm_claim_automation_retries')
   expect(worker).toContain('crm_claim_scheduled_automation_executions')
   expect(worker).toContain('crm_check_automation_rate_limit')
   expect(worker).toContain('retry_execution_id:row.id')
   expect(worker).toContain('crm_mark_automation_dead_letter')
   expect(worker).not.toContain('scheduled_execution_id:row.id')
+  expect(alignment).toContain('updated_at timestamptz')
  })
  it('keeps automation governance on the physical execution graph',()=>{
   const attempts=read('supabase/migrations/20260910006000_crm_automation_attempt_audit_v5.sql')
