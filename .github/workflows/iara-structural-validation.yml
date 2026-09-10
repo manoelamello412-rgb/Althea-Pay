@@ -46,17 +46,39 @@ jobs:
             echo 'Legacy shadow registry import detected.' >&2
             exit 1
           fi
+      - name: Kernel ordering invariant
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('services/iara-agent/execution-kernel.ts').read_text()
+          guard = p.index('this.guardrail.beforeExecute')
+          feb = p.index('issueFEBTicket')
+          assert guard < feb, 'Guardrail must execute before FEB issuance.'
+          PY
+      - name: FEB issuer authorization evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f supabase/functions/iara-financial-command/index.ts
+          grep -q 'organization_members' supabase/functions/iara-financial-command/index.ts
+          grep -q 'confirmation_id' supabase/functions/iara-financial-command/index.ts
+          grep -q 'evaluation_id' supabase/functions/iara-financial-command/index.ts
+          grep -q 'INDEPENDENT_EVALUATOR_NOT_PASS' supabase/functions/iara-financial-command/index.ts
+          grep -q 'RS256' supabase/functions/iara-financial-command/index.ts
+          grep -q 'requestFingerprint' supabase/functions/iara-financial-command/index.ts
       - name: Financial boundary integrity
         shell: bash
         run: |
           set -euo pipefail
-          if test -f supabase/functions/checkout-engine-v2/index.ts; then
-            if grep -n 'functions/v1/gateway-orchestrator' supabase/functions/checkout-engine-v2/index.ts >/dev/null 2>&1; then
-              grep -n 'x-althea-feb-ticket-signature' supabase/functions/checkout-engine-v2/index.ts >/dev/null 2>&1 || {
-                echo 'checkout-engine-v2 calls gateway-orchestrator without FEB ticket propagation.' >&2
-                exit 1
-              }
-            fi
+          test -f supabase/functions/checkout-engine-v2/index.ts
+          grep -q 'functions/v1/iara-financial-command' supabase/functions/checkout-engine-v2/index.ts
+          grep -qi 'x-althea-feb-ticket-signature' supabase/functions/checkout-engine-v2/index.ts
+          grep -q 'confirmation_id' supabase/functions/checkout-engine-v2/index.ts
+          grep -q 'evaluation_id' supabase/functions/checkout-engine-v2/index.ts
+          if grep -n 'functions/v1/gateway-orchestrator' supabase/functions/checkout-engine-v2/index.ts >/dev/null 2>&1; then
+            grep -qi 'x-althea-feb-ticket-signature' supabase/functions/checkout-engine-v2/index.ts
           fi
       - name: Fail-closed financial writers
         shell: bash
@@ -65,5 +87,10 @@ jobs:
           for f in supabase/functions/gateway-provider-adapter/index.ts supabase/functions/gateway-provider-adapter-v2/index.ts supabase/functions/gateway-payment-link/index.ts supabase/functions/gateway-refund/index.ts supabase/functions/gateway-refund-v2/index.ts supabase/functions/checkout-engine/index.ts; do
             if test -f "$f"; then grep -Eq '410|EXECUTION_UNAVAILABLE|RETIRED' "$f"; fi
           done
+      - name: No PSP activation in IARA closure phase
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -R -n --exclude-dir=node_modules --exclude-dir=.git --exclude='*.md' 'stripe\.com\|api\.adyen\.com\|mercadopago\.com' supabase/functions/iara-* supabase/functions/checkout-engine-v2 2>/dev/null
       - name: Unit tests
         run: npm test -- --run
