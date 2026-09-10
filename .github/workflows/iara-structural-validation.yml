@@ -1,4 +1,5 @@
 # IARA closure validation remains branch-only; no Vercel deployment is requested.
+# Final source validation checkpoint after checkout boundary convergence.
 name: "IARA: Structural Validation"
 
 on:
@@ -43,10 +44,7 @@ jobs:
           grep -q 'from "./tool-registry"' services/iara-agent/execution-kernel.ts
           grep -q 'IaraFEBTicket' services/iara-agent/feb-ticket.ts
           grep -q 'requestFingerprint' services/iara-agent/feb-ticket.ts
-          if grep -R -n --exclude-dir=node_modules --exclude-dir=.git 'from ["'"'"']\./registry["'"'"']' services app supabase/functions 2>/dev/null; then
-            echo 'Legacy shadow registry import detected.' >&2
-            exit 1
-          fi
+          if grep -R -n --exclude-dir=node_modules --exclude-dir=.git 'from ["'"'"']\./registry["'"'"']' services app supabase/functions 2>/dev/null; then exit 1; fi
       - name: Kernel ordering invariant
         shell: bash
         run: |
