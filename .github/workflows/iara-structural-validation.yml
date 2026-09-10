@@ -1,3 +1,4 @@
+# IARA closure validation remains branch-only; no Vercel deployment is requested.
 name: "IARA: Structural Validation"
 
 on:
