@@ -56,8 +56,6 @@ export async function POST(request: NextRequest) {
   if (action === 'payment_link') {
     if (!['pix', 'card', 'payment_link'].includes(linkType)) return json(400, { error: 'invalid_link_type' })
 
-    // The recovery RPC is the authoritative source for checkout/funnel/value.
-    // Do not trust browser metadata for financial amounts.
     const { data: recoveryData, error: recoveryError } = await supabase.rpc('crm_operator_prepare_checkout_recovery', {
       p_conversation_id: conversationId,
     })
@@ -78,12 +76,10 @@ export async function POST(request: NextRequest) {
 
     if (!funnelId || !amount) return json(422, { error: 'missing_checkout_context' })
 
-    // Reusing the same key must resolve to the same gateway preparation.
-    // A generated fallback is stable for the conversation + link type.
     const suppliedKey = requestedIdempotency.replace(/[^a-zA-Z0-9:_-]/g, '').slice(0, 180)
     const idempotencyKey = suppliedKey || `crm-recovery:${conversationId}:${linkType}`
 
-    const { data, error } = await supabase.rpc('prepare_gateway_payment_link', {
+    const { data: preparedData, error: prepareError } = await supabase.rpc('prepare_gateway_payment_link', {
       p_user_id: user.id,
       p_funnel_id: funnelId,
       p_amount: amount,
@@ -92,9 +88,39 @@ export async function POST(request: NextRequest) {
       p_idempotency_key: idempotencyKey,
     })
 
-    if (error) return json(409, { error: error.message })
-    return json(200, {
-      paymentLink: objectOf(data),
+    if (prepareError) return json(409, { error: prepareError.message })
+
+    const prepared = objectOf(preparedData)
+    const linkId = text(prepared.link_id)
+    const gatewayId = text(prepared.gateway_id)
+
+    if (!linkId || !uuid.test(linkId) || !gatewayId) {
+      return json(502, { error: 'invalid_gateway_preparation' })
+    }
+
+    // Preparation and execution are deliberately separated. The command is
+    // durable and idempotent; a trusted service worker performs provider I/O.
+    const { data: commandData, error: commandError } = await supabase.rpc('enqueue_gateway_payment_link_execution', {
+      p_user_id: user.id,
+      p_payment_link_id: linkId,
+      p_gateway_id: gatewayId,
+      p_idempotency_key: idempotencyKey,
+      p_request_payload: {
+        source: 'crm_checkout_recovery',
+        conversation_id: conversationId,
+        checkout_id: text(recovery.checkout_id) ?? text(checkout.id),
+        funnel_id: funnelId,
+        link_type: linkType,
+        amount,
+        currency,
+      },
+    })
+
+    if (commandError) return json(409, { error: commandError.message })
+
+    return json(202, {
+      paymentLink: prepared,
+      execution: objectOf(commandData),
       recovery: {
         checkoutId: text(recovery.checkout_id) ?? text(checkout.id),
         funnelId,
