@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Pool } from 'pg'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const databaseUrl = process.env.DATABASE_URL_TEST
@@ -119,12 +119,12 @@ run('Chat CRM - canonical runtime concurrency, resilience and dispatcher contrac
     it('keeps retryable and terminal HTTP policies in the canonical dispatcher', () => {
       const path = resolve(process.cwd(), 'supabase/functions/crm-channel-outbox-dispatcher/index.ts')
       const source = readFileSync(path, 'utf8')
-      expect(source).toContain('statusCode===429')
-      expect(source).toContain('statusCode>=500')
+      expect(source).toContain('statusCode === 429')
+      expect(source).toContain('statusCode >= 500')
       expect(source).toContain('missing_provider_external_id')
       expect(source).toContain('provider_http_${statusCode}')
-      expect(source).toContain('status:terminal?"dead_letter":"queued"')
-      expect(source).toContain('retry_scheduled')
+      expect(source).toContain("status: 'dead_letter'")
+      expect(source).toContain("status: 'queued'")
     })
 
     it('does not persist provider response bodies as dispatcher errors', () => {
