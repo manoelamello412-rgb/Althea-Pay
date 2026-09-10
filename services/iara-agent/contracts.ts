@@ -7,6 +7,8 @@ export interface IaraToolContext {
   sessionId: string
   executionId: string
   requestId: string
+  /** Signed Financial Execution Boundary ticket. Never expose the private signing key here. */
+  febTicket?: string
 }
 
 export interface IaraToolDefinition<TInput extends object = object, TOutput = unknown> {
