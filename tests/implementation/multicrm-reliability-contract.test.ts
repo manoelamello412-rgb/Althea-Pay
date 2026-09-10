@@ -65,10 +65,11 @@ describe('Multi-CRM reliability contracts',()=>{
   expect(retryAware).toContain("new.attempt_count>old.attempt_count")
   expect(retryAware).toContain('where execution_id=new.id and attempt_no=n')
  })
- it('runs retry and scheduled automation claims through the same canonical worker and executor',()=>{
+ it('runs retry, scheduled claims and canonical rate limiting through the same worker',()=>{
   const worker=read('supabase/functions/automation-retry-worker/index.ts')
   expect(worker).toContain('crm_claim_automation_retries')
   expect(worker).toContain('crm_claim_scheduled_automation_executions')
+  expect(worker).toContain('crm_check_automation_rate_limit')
   expect(worker).toContain('retry_execution_id:row.id')
   expect(worker).toContain('crm_mark_automation_dead_letter')
   expect(worker).not.toContain('scheduled_execution_id:row.id')
