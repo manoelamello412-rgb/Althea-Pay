@@ -1,37 +1,55 @@
 openapi: 3.1.0
 info:
   title: Althea Pay API
-  version: 1.0.0
-  description: Unified control-plane API for funnels, products, sales and gateway transactions. Althea Pay does not hold customer funds.
+  version: 2.0.0
+  description: Canonical public API contract for the Althea Pay control plane, event ingestion, routed payments and authenticated Iara intelligence.
 servers:
+  - url: https://altheapay.com.br
+    description: Production application origin
   - url: https://hkraryqoziravulvqkid.supabase.co/functions/v1/althea-public-api
+    description: Production public API edge
 security:
   - AltheaApiKey: []
+tags:
+  - name: Events
+  - name: Payments
+  - name: Iara
+  - name: Iara Webhooks
 paths:
   /v1/funnels:
     get:
+      tags: [Events]
       summary: List funnels
-      responses: {'200': {description: OK}}
+      responses:
+        '200': {description: OK}
+        '401': {$ref: '#/components/responses/Unauthorized'}
   /v1/products:
     get:
+      tags: [Events]
       summary: List products
-      responses: {'200': {description: OK}}
+      responses:
+        '200': {description: OK}
+        '401': {$ref: '#/components/responses/Unauthorized'}
   /v1/sales:
     get:
+      tags: [Payments]
       summary: List sales
-      responses: {'200': {description: OK}}
+      responses:
+        '200': {description: OK}
+        '401': {$ref: '#/components/responses/Unauthorized'}
   /v1/transactions:
     get:
+      tags: [Payments]
       summary: List gateway transactions
-      responses: {'200': {description: OK}}
+      responses:
+        '200': {description: OK}
+        '401': {$ref: '#/components/responses/Unauthorized'}
   /v1/events:
     post:
+      tags: [Events]
       summary: Ingest a funnel event
       parameters:
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema: {type: string, minLength: 8}
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -39,49 +57,233 @@ paths:
             schema: {$ref: '#/components/schemas/Event'}
       responses:
         '201': {description: Event accepted}
-        '403': {description: Missing events:write scope}
-        '429': {description: Rate limit exceeded}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '429': {$ref: '#/components/responses/RateLimited'}
   /v1/charge:
     post:
+      tags: [Payments]
       summary: Create a routed payment command
       parameters:
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema: {type: string, minLength: 8}
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema: {$ref: '#/components/schemas/Charge'}
       responses:
-        '200': {description: Transaction created or replayed}
-        '400': {description: Validation error}
-        '402': {description: Payment declined}
-        '409': {description: No active route}
+        '200': {description: Transaction created or idempotent replay}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '402': {description: Payment declined, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+  /v1/iara/inference:
+    post:
+      tags: [Iara]
+      summary: Submit an authenticated request to Iara
+      description: Authorization is evaluated server-side before tool execution. The model cannot grant itself access.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IaraInferenceRequest'}
+      responses:
+        '200':
+          description: Deterministic Iara response
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IaraResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /v1/gateways/mirror:
+    post:
+      tags: [Iara Webhooks]
+      summary: Ingest and normalize an external gateway event
+      description: Provider signatures must be validated before acceptance. The endpoint persists event identity and enqueues background processing; webhook receipt alone never means financial success.
+      security: []
+      parameters:
+        - name: stripe-signature
+          in: header
+          required: false
+          schema: {type: string}
+        - name: x-kiwify-signature
+          in: header
+          required: false
+          schema: {type: string}
+        - name: x-webhook-event-id
+          in: header
+          required: false
+          schema: {type: string, minLength: 1, maxLength: 255}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GatewayWebhookEvent'}
+      responses:
+        '202':
+          description: Event authenticated, normalized and accepted for asynchronous processing
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WebhookAccepted'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '500': {$ref: '#/components/responses/InternalError'}
 components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, minLength: 8, maxLength: 255}
   securitySchemes:
     AltheaApiKey:
       type: apiKey
       in: header
       name: x-althea-api-key
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Invalid JSON or contract validation failure
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}
+    Unauthorized:
+      description: Missing, expired or invalid authentication/signature
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}
+    Forbidden:
+      description: Authenticated principal lacks the required permission
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}
+    Conflict:
+      description: Idempotency conflict, invalid state transition or unavailable route
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}
+    RateLimited:
+      description: Rate limit or queue admission limit exceeded
+      headers:
+        Retry-After: {schema: {type: integer, minimum: 1}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}
+    InternalError:
+      description: Unexpected server-side failure
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}
   schemas:
     Charge:
       type: object
+      additionalProperties: false
       required: [funnel_id, amount, currency]
       properties:
-        funnel_id: {type: string}
-        product_id: {type: string}
-        amount: {type: number, exclusiveMinimum: 0}
-        currency: {type: string, minLength: 3, maxLength: 3, example: BRL}
-        customer: {type: object, additionalProperties: true}
+        funnel_id: {type: string, minLength: 1, maxLength: 255}
+        product_id: {type: string, minLength: 1, maxLength: 255}
+        amount: {type: integer, minimum: 1, description: Amount in the smallest currency unit}
+        currency: {type: string, pattern: '^[A-Z]{3}$', example: BRL}
+        customer: {$ref: '#/components/schemas/CustomerContext'}
         metadata: {type: object, additionalProperties: true}
     Event:
       type: object
+      additionalProperties: false
       required: [event_type, funnel_id]
       properties:
-        event_type: {type: string}
-        funnel_id: {type: string}
-        external_id: {type: string}
-        session_key: {type: string}
+        event_type:
+          type: string
+          enum: [PENDING, SUCCESSFUL_PURCHASE, ABANDONED_CHECKOUT, PAYMENT_FAILED, CHECKOUT_STARTED, CHECKOUT_COMPLETED]
+        funnel_id: {type: string, minLength: 1, maxLength: 255}
+        product_id: {type: string, minLength: 1, maxLength: 255}
+        external_id: {type: string, minLength: 1, maxLength: 255}
+        session_key: {type: string, minLength: 1, maxLength: 255}
         payload: {type: object, additionalProperties: true}
+    GatewayWebhookEvent:
+      type: object
+      additionalProperties: true
+      required: [event_id, tenant_id, event_type, occurred_at]
+      properties:
+        event_id: {type: string, minLength: 1, maxLength: 255}
+        tenant_id: {type: string, format: uuid}
+        event_type:
+          type: string
+          enum: [PENDING, SUCCESSFUL_PURCHASE, ABANDONED_CHECKOUT, PAYMENT_FAILED, CHECKOUT_STARTED, CHECKOUT_COMPLETED]
+        occurred_at: {type: string, format: date-time}
+        product_id: {type: string, minLength: 1, maxLength: 255}
+        funnel_id: {type: string, minLength: 1, maxLength: 255}
+        buyer: {$ref: '#/components/schemas/CustomerContext'}
+        metrics: {$ref: '#/components/schemas/BehaviorMetrics'}
+        payload: {type: object, additionalProperties: true}
+    CustomerContext:
+      type: object
+      additionalProperties: false
+      properties:
+        external_id: {type: string, maxLength: 255}
+        name: {type: string, maxLength: 200}
+        phone: {type: string, maxLength: 40}
+        email: {type: string, format: email, maxLength: 320}
+    BehaviorMetrics:
+      type: object
+      additionalProperties: false
+      properties:
+        hesitation_ms: {type: integer, minimum: 0, maximum: 86400000}
+        tab_switches: {type: integer, minimum: 0, maximum: 10000}
+        exit_intent: {type: boolean}
+        checkout_duration_ms: {type: integer, minimum: 0, maximum: 86400000}
+        gateway_latency_ms: {type: integer, minimum: 0, maximum: 86400000}
+    IaraInferenceRequest:
+      type: object
+      additionalProperties: false
+      required: [tenantId, userPrompt]
+      properties:
+        tenantId: {type: string, format: uuid}
+        userPrompt: {type: string, minLength: 1, maxLength: 20000}
+        sessionId: {type: string, format: uuid}
+        clientRequestId: {type: string, minLength: 8, maxLength: 255}
+    IaraResponse:
+      type: object
+      additionalProperties: false
+      required: [executionId, status, response]
+      properties:
+        executionId: {type: string, format: uuid}
+        status: {type: string, enum: [COMPLETED, REQUIRES_CONFIRMATION, DENIED, FAILED]}
+        response: {type: string}
+        detectedIntent: {type: string, maxLength: 255}
+        confidenceScore: {type: number, minimum: 0, maximum: 1}
+        requiresConfirmation: {type: boolean}
+    WebhookAccepted:
+      type: object
+      additionalProperties: false
+      required: [eventId, status]
+      properties:
+        eventId: {type: string}
+        status: {type: string, enum: [ACCEPTED, DUPLICATE]}
+        jobId: {type: string, format: uuid}
+    NormalizedEvent:
+      type: object
+      additionalProperties: false
+      required: [eventId, eventType, timestamp]
+      properties:
+        eventId: {type: string}
+        tenantId: {type: string, format: uuid}
+        productId: {type: string}
+        funnelId: {type: string}
+        eventType:
+          type: string
+          enum: [PENDING, SUCCESSFUL_PURCHASE, ABANDONED_CHECKOUT, PAYMENT_FAILED, CHECKOUT_STARTED, CHECKOUT_COMPLETED]
+        timestamp: {type: string, format: date-time}
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error, message]
+      properties:
+        error: {type: string, maxLength: 100}
+        message: {type: string, maxLength: 1000}
+        requestId: {type: string, maxLength: 255}
