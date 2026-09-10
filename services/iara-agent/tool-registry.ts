@@ -63,7 +63,7 @@ export function registerOperationalIntelligenceTools(
     description: 'Forecast a tenant-scoped operational metric from persisted telemetry.',
     riskClass: 'read',
     permissionCode: 'iara.operational_intelligence.read',
-    idempotencyRequired: false,
+    idempotencyRequired: true,
     confirmationRequired: false,
     enabled: true,
     inputSchema: {
@@ -95,7 +95,7 @@ export function registerOperationalIntelligenceTools(
     description: 'Assess temporal associations around an observed metric effect without claiming unsupported causality.',
     riskClass: 'read',
     permissionCode: 'iara.operational_intelligence.read',
-    idempotencyRequired: false,
+    idempotencyRequired: true,
     confirmationRequired: false,
     enabled: true,
     inputSchema: {
