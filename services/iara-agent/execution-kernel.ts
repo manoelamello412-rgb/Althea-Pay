@@ -60,30 +60,22 @@ export class IaraExecutionKernel {
       }
     }
 
+    if (this.guardrail) {
+      const guard = await this.guardrail.beforeExecute({ executionId: context.executionId, tool: call, context })
+      if (!guard.allowed) {
+        if (tool.idempotencyRequired && idempotencyKey && this.idempotency) await this.idempotency.fail(context.tenantId, idempotencyKey, guard.reason)
+        return this.finish(call, { executionId: context.executionId, status: 'failed', error: `IARA independent guardrail blocked execution: ${guard.reason}` })
+      }
+    }
+
     let executionContext = context
     if (tool.riskClass === 'high' || tool.riskClass === 'critical') {
       const ticket = issueFEBTicket(call, context)
       if (!ticket) {
-        if (tool.idempotencyRequired && idempotencyKey && this.idempotency) {
-          await this.idempotency.fail(context.tenantId, idempotencyKey, 'Financial Execution Boundary issuer is unavailable.')
-        }
-        return this.finish(call, {
-          executionId: context.executionId,
-          status: 'failed',
-          error: 'Financial execution is unavailable: FEB ticket could not be issued.',
-        })
+        if (tool.idempotencyRequired && idempotencyKey && this.idempotency) await this.idempotency.fail(context.tenantId, idempotencyKey, 'Financial Execution Boundary issuer is unavailable.')
+        return this.finish(call, { executionId: context.executionId, status: 'failed', error: 'Financial execution is unavailable: FEB ticket could not be issued.' })
       }
       executionContext = { ...context, febTicket: ticket }
-    }
-
-    if (this.guardrail) {
-      const guard = await this.guardrail.beforeExecute({ executionId: context.executionId, tool: call, context: executionContext })
-      if (!guard.allowed) {
-        if (tool.idempotencyRequired && idempotencyKey && this.idempotency) {
-          await this.idempotency.fail(context.tenantId, idempotencyKey, guard.reason)
-        }
-        return this.finish(call, { executionId: context.executionId, status: 'failed', error: `IARA independent guardrail blocked execution: ${guard.reason}` })
-      }
     }
 
     try {
