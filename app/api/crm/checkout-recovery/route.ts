@@ -5,6 +5,7 @@ type Body = {
   conversationId?: unknown
   action?: unknown
   linkType?: unknown
+  idempotencyKey?: unknown
 }
 
 type Json = Record<string, unknown>
@@ -12,8 +13,17 @@ type Json = Record<string, unknown>
 const objectOf = (value: unknown): Json =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Json : {}
 
+const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null
+
+const numberValue = (value: unknown) => {
+  const number = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+  return Number.isFinite(number) && number > 0 ? number : null
+}
+
 const json = (status: number, body: Json) =>
   NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
+
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export async function POST(request: NextRequest) {
   const supabase = await createServerClient()
@@ -31,10 +41,9 @@ export async function POST(request: NextRequest) {
   const conversationId = typeof body.conversationId === 'string' ? body.conversationId.trim() : ''
   const action = typeof body.action === 'string' ? body.action : ''
   const linkType = typeof body.linkType === 'string' ? body.linkType : 'payment_link'
+  const requestedIdempotency = typeof body.idempotencyKey === 'string' ? body.idempotencyKey.trim() : ''
 
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(conversationId)) {
-    return json(400, { error: 'invalid_conversation_id' })
-  }
+  if (!uuid.test(conversationId)) return json(400, { error: 'invalid_conversation_id' })
 
   if (action === 'prepare') {
     const { data, error } = await supabase.rpc('crm_operator_prepare_checkout_recovery', {
@@ -47,30 +56,36 @@ export async function POST(request: NextRequest) {
   if (action === 'payment_link') {
     if (!['pix', 'card', 'payment_link'].includes(linkType)) return json(400, { error: 'invalid_link_type' })
 
-    const { data: conversation, error: conversationError } = await supabase
-      .from('crm_conversations')
-      .select('id,funnel_id,checkout_status,metadata')
-      .eq('id', conversationId)
-      .eq('user_id', user.id)
-      .maybeSingle()
+    // The recovery RPC is the authoritative source for checkout/funnel/value.
+    // Do not trust browser metadata for financial amounts.
+    const { data: recoveryData, error: recoveryError } = await supabase.rpc('crm_operator_prepare_checkout_recovery', {
+      p_conversation_id: conversationId,
+    })
+    if (recoveryError) return json(409, { error: recoveryError.message })
 
-    if (conversationError || !conversation) return json(404, { error: 'conversation_not_found' })
-    if (conversation.checkout_status === 'pago') return json(409, { error: 'checkout_already_paid' })
+    const recovery = objectOf(recoveryData)
+    const checkout = objectOf(recovery.checkout)
+    const funnel = objectOf(recovery.funnel)
 
-    const metadata = objectOf(conversation.metadata)
-    const amountValue = metadata.amount
-    const currencyValue = metadata.currency
-    const amount = typeof amountValue === 'number' ? amountValue : typeof amountValue === 'string' ? Number(amountValue) : NaN
-    const currency = typeof currencyValue === 'string' && /^[A-Z]{3}$/.test(currencyValue) ? currencyValue : 'BRL'
+    const funnelId = text(recovery.funnel_id) ?? text(checkout.funnel_id) ?? text(funnel.id)
+    const amount = numberValue(recovery.amount) ?? numberValue(recovery.value) ?? numberValue(checkout.amount) ?? numberValue(checkout.value)
+    const currencyCandidate = text(recovery.currency) ?? text(checkout.currency) ?? 'BRL'
+    const currency = /^[A-Z]{3}$/.test(currencyCandidate) ? currencyCandidate : 'BRL'
 
-    if (!conversation.funnel_id || !Number.isFinite(amount) || amount <= 0) {
-      return json(422, { error: 'missing_checkout_amount_or_funnel' })
+    if (recovery.checkout_status === 'pago' || recovery.status === 'completed' || checkout.status === 'completed') {
+      return json(409, { error: 'checkout_already_paid' })
     }
 
-    const idempotencyKey = `crm-recovery:${conversationId}:${linkType}:${crypto.randomUUID()}`
+    if (!funnelId || !amount) return json(422, { error: 'missing_checkout_context' })
+
+    // Reusing the same key must resolve to the same gateway preparation.
+    // A generated fallback is stable for the conversation + link type.
+    const suppliedKey = requestedIdempotency.replace(/[^a-zA-Z0-9:_-]/g, '').slice(0, 180)
+    const idempotencyKey = suppliedKey || `crm-recovery:${conversationId}:${linkType}`
+
     const { data, error } = await supabase.rpc('prepare_gateway_payment_link', {
       p_user_id: user.id,
-      p_funnel_id: conversation.funnel_id,
+      p_funnel_id: funnelId,
       p_amount: amount,
       p_currency: currency,
       p_link_type: linkType,
@@ -78,7 +93,15 @@ export async function POST(request: NextRequest) {
     })
 
     if (error) return json(409, { error: error.message })
-    return json(200, { paymentLink: objectOf(data) })
+    return json(200, {
+      paymentLink: objectOf(data),
+      recovery: {
+        checkoutId: text(recovery.checkout_id) ?? text(checkout.id),
+        funnelId,
+        amount,
+        currency,
+      },
+    })
   }
 
   return json(400, { error: 'unsupported_action' })
