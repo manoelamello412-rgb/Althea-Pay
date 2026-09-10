@@ -2,6 +2,7 @@ import type { IaraExecutionResult, IaraToolCall, IaraToolContext } from './contr
 import { authorizeTool, type IaraAuthorizationPolicy } from './authorization'
 import { IaraToolRegistry } from './tool-registry'
 import { IaraIdempotencyStore } from './idempotency-store'
+import { issueFEBTicket } from './feb-ticket'
 
 export interface IaraApprovalVerifier {
   verify(input: { executionId: string; tool: IaraToolCall; context: IaraToolContext }): Promise<boolean>
@@ -12,10 +13,6 @@ export interface IaraExecutionAudit {
 }
 
 export interface IaraExecutionGuardrail {
-  /**
-   * Runs after canonical authorization/confirmation and before the tool side effect.
-   * Returning false is a hard deny: the tool is never invoked.
-   */
   beforeExecute(input: {
     executionId: string
     tool: IaraToolCall
@@ -63,8 +60,24 @@ export class IaraExecutionKernel {
       }
     }
 
+    let executionContext = context
+    if (tool.riskClass === 'high' || tool.riskClass === 'critical') {
+      const ticket = issueFEBTicket(call, context)
+      if (!ticket) {
+        if (tool.idempotencyRequired && idempotencyKey && this.idempotency) {
+          await this.idempotency.fail(context.tenantId, idempotencyKey, 'Financial Execution Boundary issuer is unavailable.')
+        }
+        return this.finish(call, {
+          executionId: context.executionId,
+          status: 'failed',
+          error: 'Financial execution is unavailable: FEB ticket could not be issued.',
+        })
+      }
+      executionContext = { ...context, febTicket: ticket }
+    }
+
     if (this.guardrail) {
-      const guard = await this.guardrail.beforeExecute({ executionId: context.executionId, tool: call, context })
+      const guard = await this.guardrail.beforeExecute({ executionId: context.executionId, tool: call, context: executionContext })
       if (!guard.allowed) {
         if (tool.idempotencyRequired && idempotencyKey && this.idempotency) {
           await this.idempotency.fail(context.tenantId, idempotencyKey, guard.reason)
@@ -74,7 +87,7 @@ export class IaraExecutionKernel {
     }
 
     try {
-      const value = await tool.execute(call.input, context)
+      const value = await tool.execute(call.input, executionContext)
       if (tool.idempotencyRequired && idempotencyKey && this.idempotency) await this.idempotency.complete(context.tenantId, idempotencyKey, value)
       return this.finish(call, { executionId: context.executionId, status: 'completed', result: value })
     } catch (error) {
