@@ -13,8 +13,10 @@ interface SnapshotRow { sequence_id:string; state:BrainSnapshot }
 const MAX_RETRY_ATTEMPTS=5, LOCK_TTL_SECONDS=15, LOCK_WAIT_TIMEOUT_MS=8000, LOCK_POLL_BASE_MS=20, SNAPSHOT_VERSION=1
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms))
 const isJsonObject=(value:unknown):value is {[key:string]:JsonValue}=>typeof value==='object'&&value!==null&&!Array.isArray(value)
-const isTransientUniqueViolation=(error:unknown):boolean=>isJsonObject(error)&&error.code==='23505'&&error.constraint==='iara_memory_journal_tenant_sequence_unique'
-const isIdempotencyViolation=(error:unknown):boolean=>isJsonObject(error)&&error.code==='23505'&&error.constraint==='iara_memory_journal_idempotency_unique'
+const errorCode=(error:unknown):string|undefined=>isJsonObject(error)&&typeof error.code==='string'?error.code:undefined
+const errorConstraint=(error:unknown):string|undefined=>isJsonObject(error)&&typeof error.constraint==='string'?error.constraint:undefined
+const isTransientUniqueViolation=(error:unknown):boolean=>errorCode(error)==='23505'&&errorConstraint(error)==='iara_memory_journal_tenant_sequence_unique'
+const isIdempotencyViolation=(error:unknown):boolean=>errorCode(error)==='23505'&&errorConstraint(error)==='iara_memory_journal_idempotency_unique'
 
 export class AltheaPersistentMemoryEngine {
  private readonly pg:Pool; private readonly eventEmitter:EventEmitter; private readonly redisUrl:string; private readonly redisToken:string
