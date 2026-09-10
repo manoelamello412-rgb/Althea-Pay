@@ -1,7 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createHash, randomUUID } from "node:crypto";
-
 type O = Record<string, unknown>;
 const url = Deno.env.get("SUPABASE_URL") ?? "";
 const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? "";
@@ -12,40 +11,30 @@ const rec = (v: unknown): v is O => typeof v === "object" && v !== null && !Arra
 const text = (v: unknown) => typeof v === "string" ? v.trim() : "";
 const stable = (v: unknown): unknown => Array.isArray(v) ? v.map(stable) : !rec(v) ? v : Object.fromEntries(Object.keys(v).sort().map(k => [k, stable(v[k])]));
 const hash = (v: string) => createHash("sha256").update(v, "utf8").digest("hex");
-
-async function user(req: Request) {
-  if (!url || !anon) return null;
-  const authorization = req.headers.get("authorization");
-  if (!authorization) return null;
-  const client = createClient(url, anon, { global: { headers: { Authorization: authorization } } });
-  const result = await client.auth.getUser();
-  return result.error ? null : result.data.user;
-}
-
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const CANONICAL_TOOL = "gateway.financial-command";
+const CANONICAL_VERSION = 1;
+const ROLES = new Set(["owner", "admin", "manager", "operator", "supervisor"]);
+async function user(req: Request) { if (!url || !anon) return null; const authorization = req.headers.get("authorization"); if (!authorization) return null; const client = createClient(url, anon, { global: { headers: { Authorization: authorization } } }); const result = await client.auth.getUser(); return result.error ? null : result.data.user; }
 Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: H });
   if (req.method !== "POST") return json({ ok: false, code: "METHOD_NOT_ALLOWED", retryable: false }, 405);
-  const currentUser = await user(req);
-  if (!currentUser) return json({ ok: false, code: "UNAUTHORIZED", retryable: false }, 401);
+  const currentUser = await user(req); if (!currentUser) return json({ ok: false, code: "UNAUTHORIZED", retryable: false }, 401);
   if (!service) return json({ ok: false, code: "EXECUTION_UNAVAILABLE", reason: "SERVICE_ROLE_NOT_CONFIGURED", retryable: false }, 503);
-
-  let body: O;
-  try { const parsed = await req.json(); if (!rec(parsed)) return json({ ok: false, code: "INVALID_JSON", retryable: false }, 400); body = parsed; }
-  catch { return json({ ok: false, code: "INVALID_JSON", retryable: false }, 400); }
-
+  let body: O; try { const parsed = await req.json(); if (!rec(parsed)) return json({ ok: false, code: "INVALID_JSON", retryable: false }, 400); body = parsed; } catch { return json({ ok: false, code: "INVALID_JSON", retryable: false }, 400); }
   if (body.confirmed !== true) return json({ ok: false, code: "CONFIRMATION_REQUIRED", retryable: false }, 409);
   const tenantId = text(body.tenant_id), gatewayId = text(body.gateway_id), toolKey = text(body.tool_key), idempotencyKey = text(body.idempotency_key), action = text(body.action).toLowerCase();
-  const toolVersion = Number(body.tool_version);
-  const executionId = text(body.execution_id);
-  const input = rec(body.input) ? body.input : {};
-  if (!tenantId || !gatewayId || !toolKey || !idempotencyKey || !executionId || !Number.isInteger(toolVersion) || toolVersion < 1 || !["purchase","capture","refund","void"].includes(action)) return json({ ok: false, code: "COMMAND_INVALID", retryable: false }, 422);
-
+  const toolVersion = Number(body.tool_version), executionId = text(body.execution_id), input = rec(body.input) ? body.input : {};
+  if (!UUID.test(tenantId) || !UUID.test(gatewayId) || !UUID.test(executionId) || !idempotencyKey || !["purchase","capture","refund","void"].includes(action) || !Number.isInteger(toolVersion)) return json({ ok: false, code: "COMMAND_INVALID", retryable: false }, 422);
+  if (toolKey !== CANONICAL_TOOL || toolVersion !== CANONICAL_VERSION) return json({ ok: false, code: "AUTHORIZATION_DENIED", reason: "NON_CANONICAL_FINANCIAL_TOOL", retryable: false }, 403);
+  const amount = Number(input.amount); const currency = text(input.currency).toUpperCase(); if (!Number.isFinite(amount) || amount <= 0 || !/^[A-Z]{3}$/.test(currency)) return json({ ok: false, code: "COMMAND_INVALID", retryable: false }, 422);
   const db = createClient(url, service);
-  const membership = await db.from("organization_members").select("user_id").eq("organization_id", tenantId).eq("user_id", currentUser.id).maybeSingle();
-  if (membership.error || !membership.data) return json({ ok: false, code: "AUTHORIZATION_DENIED", retryable: false }, 403);
+  const membership = await db.from("organization_members").select("user_id,role").eq("organization_id", tenantId).eq("user_id", currentUser.id).maybeSingle();
+  if (membership.error || !membership.data || !ROLES.has(String(membership.data.role))) return json({ ok: false, code: "AUTHORIZATION_DENIED", retryable: false }, 403);
+  const gateway = await db.from("gateways").select("id,user_id,status").eq("id", gatewayId).eq("user_id", currentUser.id).maybeSingle();
+  if (gateway.error || !gateway.data || !["connected", "degraded"].includes(String(gateway.data.status))) return json({ ok: false, code: "AUTHORIZATION_DENIED", reason: "GATEWAY_NOT_AUTHORIZED", retryable: false }, 403);
   const fingerprint = hash(JSON.stringify(stable({ tenant_id: tenantId, user_id: currentUser.id, tool_key: toolKey, tool_version: toolVersion, gateway_id: gatewayId, action, idempotency_key: idempotencyKey, input })));
-  const expiresAt = new Date(Date.now() + 60_000).toISOString();
-  const confirmationId = randomUUID();
+  const expiresAt = new Date(Date.now() + 60_000).toISOString(), confirmationId = randomUUID();
   const inserted = await db.from("iara_financial_confirmations").insert({ confirmation_id: confirmationId, user_id: currentUser.id, tenant_id: tenantId, tool_key: toolKey, tool_version: toolVersion, gateway_id: gatewayId, action, idempotency_key: idempotencyKey, request_fingerprint: fingerprint, expires_at: expiresAt });
   if (inserted.error) return json({ ok: false, code: "EXECUTION_UNAVAILABLE", retryable: false }, 503);
   return json({ ok: true, confirmation_id: confirmationId, execution_id: executionId, request_fingerprint: fingerprint, expires_at: expiresAt });
