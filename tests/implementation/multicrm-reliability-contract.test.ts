@@ -29,10 +29,11 @@ describe('Multi-CRM reliability contracts',()=>{
   expect(migration).toContain("status='executing'")
  })
  it('enforces guarded experiment promotion and conservative sequential learning',()=>{
-  const governance=read('supabase/migrations/20260910022100_crm_experiment_governance_fix_v5.sql')
+  const governance=read('supabase/migrations/20260910022200_crm_experiment_governance_fix_v6.sql')
   const sequential=read('supabase/migrations/20260910004000_crm_experiment_sequential_guardrails_v7.sql')
   const idempotency=read('supabase/migrations/20260910005000_crm_experiment_outcome_idempotency_v8.sql')
   expect(governance).toContain('crm_experiment_promote_winner')
+  expect(governance).toContain("e.status <> 'running'")
   expect(governance).toContain("report->>'winner_eligible'")
   expect(governance).toContain("x->>'id'")
   expect(governance).toContain('winner_not_eligible')
