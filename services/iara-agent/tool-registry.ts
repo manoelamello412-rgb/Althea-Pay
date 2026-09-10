@@ -10,31 +10,40 @@ export interface IaraRegisteredTool<TInput extends object = object, TOutput = un
   enabled: boolean
 }
 
+type StoredIaraTool = IaraRegisteredTool<Record<string, unknown>, unknown>
+
 export interface IaraToolRegistryStore {
-  listEnabled(): Promise<ReadonlyArray<IaraRegisteredTool>>
-  get(toolKey: string, version: number): Promise<IaraRegisteredTool | null>
+  listEnabled(): Promise<ReadonlyArray<StoredIaraTool>>
+  get(toolKey: string, version: number): Promise<StoredIaraTool | null>
 }
 
 export class IaraToolRegistry {
-  private readonly tools = new Map<string, IaraRegisteredTool>()
+  private readonly tools = new Map<string, StoredIaraTool>()
 
   register<TInput extends object, TOutput>(tool: IaraRegisteredTool<TInput, TOutput>): void {
     if (!tool.key.trim()) throw new Error('IARA tool key is required.')
     if (!Number.isInteger(tool.version) || tool.version < 1) throw new Error('IARA tool version is invalid.')
     if (!tool.permissionCode.trim()) throw new Error('IARA tool permission is required.')
-    this.tools.set(`${tool.key}@${tool.version}`, tool)
+
+    const storedTool: StoredIaraTool = {
+      ...tool,
+      execute: async (input: Record<string, unknown>, context: IaraToolContext): Promise<unknown> =>
+        tool.execute(input as TInput, context),
+    }
+
+    this.tools.set(`${tool.key}@${tool.version}`, storedTool)
   }
 
-  resolve(toolKey: string, version: number): IaraRegisteredTool | null {
+  resolve(toolKey: string, version: number): StoredIaraTool | null {
     const tool = this.tools.get(`${toolKey}@${version}`)
     return tool?.enabled ? tool : null
   }
 
-  listEnabled(): ReadonlyArray<IaraRegisteredTool> {
+  listEnabled(): ReadonlyArray<StoredIaraTool> {
     return [...this.tools.values()].filter((tool) => tool.enabled)
   }
 
-  hasRiskAtMost(tool: IaraRegisteredTool, maximum: IaraRiskClass): boolean {
+  hasRiskAtMost(tool: StoredIaraTool, maximum: IaraRiskClass): boolean {
     const order: Record<IaraRiskClass, number> = { read: 0, low: 1, medium: 2, high: 3, critical: 4 }
     return order[tool.riskClass] <= order[maximum]
   }
