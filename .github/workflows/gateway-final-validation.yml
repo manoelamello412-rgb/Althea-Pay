@@ -1,0 +1,69 @@
+name: Gateway — Final Multi-Gateway Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/gateway-all.mjs'
+      - 'scripts/release-preflight.mjs'
+      - 'src/**'
+      - 'supabase/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/gateway-final-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gateway-final-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gateway-all:
+    name: Multi-Gateway release validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: true
+      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ALTHEA_WEBHOOK_SECRET: ${{ secrets.ALTHEA_WEBHOOK_SECRET }}
+      PSP_STRIPE_KEY: ${{ secrets.PSP_STRIPE_KEY }}
+      PSP_STRIPE_WEBHOOK_SECRET: ${{ secrets.PSP_STRIPE_WEBHOOK_SECRET }}
+      SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Supabase CLI
+        run: npm install --global supabase@latest
+
+      - name: Validate required CI configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in SUPABASE_PROJECT_ID SUPABASE_ACCESS_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret: ${name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Run Multi-Gateway orchestrator
+        run: npm run gateway:all
+
+      - name: Verify working tree
+        run: git diff --exit-code
