@@ -23,64 +23,27 @@ export interface GroundedAiResponse {
   readonly score: number
   readonly rationale: string
   readonly recommended_channel: CanonicalChannel
-  readonly payload: {
-    readonly message_body: string
-  }
+  readonly payload: { readonly message_body: string }
 }
 
 type UnknownRecord = Record<string, unknown>
-
-type ProviderResponse = {
-  readonly choices?: readonly {
-    readonly message?: {
-      readonly content?: unknown
-    }
-  }[]
-}
-
-const ACTION_TYPES: readonly CanonicalActionType[] = [
-  'payment_follow_up',
-  'sales_follow_up',
-  'recovery_follow_up',
-  'qualification',
-  'upsell_or_post_sale',
-]
-
+const ACTION_TYPES: readonly CanonicalActionType[] = ['payment_follow_up', 'sales_follow_up', 'recovery_follow_up', 'qualification', 'upsell_or_post_sale']
 const CHANNELS: readonly CanonicalChannel[] = ['WHATSAPP', 'SMS', 'EMAIL']
 const MAX_RETRIES = 3
 const REQUEST_TIMEOUT_MS = 8000
 const MAX_RETRY_AFTER_MS = 10000
 
-function env(name: string): string {
-  return process.env[name]?.trim() ?? ''
-}
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function isCanonicalActionType(value: unknown): value is CanonicalActionType {
-  return typeof value === 'string' && ACTION_TYPES.includes(value as CanonicalActionType)
-}
-
-function isCanonicalChannel(value: unknown): value is CanonicalChannel {
-  return typeof value === 'string' && CHANNELS.includes(value as CanonicalChannel)
-}
+function env(name: string): string { return process.env[name]?.trim() ?? '' }
+function isRecord(value: unknown): value is UnknownRecord { return typeof value === 'object' && value !== null && !Array.isArray(value) }
+function isCanonicalActionType(value: unknown): value is CanonicalActionType { return typeof value === 'string' && ACTION_TYPES.includes(value as CanonicalActionType) }
+function isCanonicalChannel(value: unknown): value is CanonicalChannel { return typeof value === 'string' && CHANNELS.includes(value as CanonicalChannel) }
 
 function safeMessage(value: unknown): string {
   if (typeof value !== 'string') throw new Error('VALIDATION_ERR: payload.message_body inválido.')
   const text = value.trim()
   if (!text || text.length > 4000) throw new Error('VALIDATION_ERR: payload.message_body fora do limite.')
-  const forbidden = [
-    /\bgarant(o|imos|ido)?\b/i,
-    /\bsem risco\b/i,
-    /\bR\$\s*\d/i,
-    /\bdesconto\s+de\s+\d/i,
-    /\bpagamento\s+(aprovado|confirmado)\b/i,
-  ]
-  if (forbidden.some((pattern) => pattern.test(text))) {
-    throw new Error('VALIDATION_ERR: mensagem contém afirmação financeira não fundamentada.')
-  }
+  const forbidden = [/\bgarant(o|imos|ido)?\b/i, /\bsem risco\b/i, /\bR\$\s*\d/i, /\bdesconto\s+de\s+\d/i, /\bpagamento\s+(aprovado|confirmado)\b/i]
+  if (forbidden.some((pattern) => pattern.test(text))) throw new Error('VALIDATION_ERR: mensagem contém afirmação financeira não fundamentada.')
   return text
 }
 
@@ -91,28 +54,12 @@ function parseProviderResponse(value: unknown): GroundedAiResponse {
   const score = value.score
   const rationale = value.rationale
   const payload = value.payload
-
-  if (!isCanonicalActionType(actionType)) {
-    throw new Error(`VALIDATION_ERR: action_type inválido: ${String(actionType)}`)
-  }
-  if (!isCanonicalChannel(channel)) {
-    throw new Error(`VALIDATION_ERR: recommended_channel inválido: ${String(channel)}`)
-  }
-  if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 1) {
-    throw new Error(`VALIDATION_ERR: score fora do intervalo 0..1: ${String(score)}`)
-  }
-  if (typeof rationale !== 'string' || !rationale.trim() || rationale.length > 4000) {
-    throw new Error('VALIDATION_ERR: rationale ausente ou inválido.')
-  }
+  if (!isCanonicalActionType(actionType)) throw new Error(`VALIDATION_ERR: action_type inválido: ${String(actionType)}`)
+  if (!isCanonicalChannel(channel)) throw new Error(`VALIDATION_ERR: recommended_channel inválido: ${String(channel)}`)
+  if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 1) throw new Error(`VALIDATION_ERR: score fora do intervalo 0..1: ${String(score)}`)
+  if (typeof rationale !== 'string' || !rationale.trim() || rationale.length > 4000) throw new Error('VALIDATION_ERR: rationale ausente ou inválido.')
   if (!isRecord(payload)) throw new Error('VALIDATION_ERR: payload ausente ou inválido.')
-
-  return {
-    action_type: actionType,
-    score,
-    rationale: rationale.trim(),
-    recommended_channel: channel,
-    payload: { message_body: safeMessage(payload.message_body) },
-  }
+  return { action_type: actionType, score, rationale: rationale.trim(), recommended_channel: channel, payload: { message_body: safeMessage(payload.message_body) } }
 }
 
 function retryAfterMs(header: string | null): number | null {
@@ -123,15 +70,8 @@ function retryAfterMs(header: string | null): number | null {
   if (Number.isFinite(date)) return Math.min(Math.max(date - Date.now(), 0), MAX_RETRY_AFTER_MS)
   return null
 }
-
-function isRetryableStatus(status: number): boolean {
-  return [408, 409, 425, 429, 500, 502, 503, 504].includes(status)
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  return 'Erro de inferência desconhecido.'
-}
+function isRetryableStatus(status: number): boolean { return [408, 409, 425, 429, 500, 502, 503, 504].includes(status) }
+function errorMessage(error: unknown): string { return error instanceof Error ? error.message : 'Erro de inferência desconhecido.' }
 
 export class AltheaAiInferenceProcessor {
   private readonly llmEndpoint: string
@@ -148,25 +88,17 @@ export class AltheaAiInferenceProcessor {
   public async generateGroundedAction(context: CustomerContext): Promise<GroundedAiResponse> {
     const prompt = this.buildSystemPrompt(context)
     let delayMs = 250
-
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
       try {
         const response = await fetch(this.llmEndpoint, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.aiApiKey}`,
-            'Content-Type': 'application/json',
-          },
+          headers: { Authorization: `Bearer ${this.aiApiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: this.aiModel,
             messages: [
-              {
-                role: 'system',
-                content:
-                  'Você é o AI Revenue Agent da ALTHEA PAY. Retorne somente JSON válido. A ação deve permanecer estritamente no tipo esperado fornecido pelo sistema. Nunca invente preços, descontos, status de pagamento, políticas, fatos do cliente, garantias ou ações executadas. Gere apenas um rascunho para aprovação humana. Não aplique incentivos financeiros. Responda em português-BR.',
-              },
+              { role: 'system', content: 'Você é o AI Revenue Agent da ALTHEA PAY. Retorne somente JSON válido. Preserve estritamente o expected_action_type. Nunca invente preços, descontos, status de pagamento, políticas, fatos do cliente, garantias ou ações executadas. Gere somente um rascunho para aprovação humana. Não aplique incentivos financeiros. Responda em português-BR.' },
               { role: 'user', content: prompt },
             ],
             response_format: { type: 'json_object' },
@@ -175,54 +107,34 @@ export class AltheaAiInferenceProcessor {
           signal: controller.signal,
           cache: 'no-store',
         })
-
         clearTimeout(timeoutId)
-
         if (!response.ok) {
           if (isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
-            const providerDelay = retryAfterMs(response.headers.get('Retry-After'))
-            await new Promise((resolve) => setTimeout(resolve, providerDelay ?? delayMs))
+            await new Promise((resolve) => setTimeout(resolve, retryAfterMs(response.headers.get('Retry-After')) ?? delayMs))
             delayMs *= 2
             continue
           }
           throw new Error(`LLM_PROVIDER_HTTP_ERR_${response.status}`)
         }
-
         const data: unknown = await response.json()
-        if (!isRecord(data)) throw new Error('AI_INFERENCE_ERR: resposta inválida do provedor.')
-        const choices = data.choices
-        if (!Array.isArray(choices) || choices.length === 0 || !isRecord(choices[0])) {
-          throw new Error('AI_INFERENCE_ERR: resposta sem choices.')
-        }
-        const message = choices[0].message
-        if (!isRecord(message) || typeof message.content !== 'string' || !message.content.trim()) {
-          throw new Error('AI_INFERENCE_ERR: conteúdo estruturado ausente.')
-        }
-        const parsed: unknown = JSON.parse(message.content)
-        const result = parseProviderResponse(parsed)
-        if (result.action_type !== context.expectedActionType) {
-          throw new Error('VALIDATION_ERR: modelo tentou alterar a ação determinada pelo motor canônico.')
-        }
+        if (!isRecord(data) || !Array.isArray(data.choices) || data.choices.length === 0 || !isRecord(data.choices[0])) throw new Error('AI_INFERENCE_ERR: resposta sem choices.')
+        const message = data.choices[0].message
+        if (!isRecord(message) || typeof message.content !== 'string' || !message.content.trim()) throw new Error('AI_INFERENCE_ERR: conteúdo estruturado ausente.')
+        const result = parseProviderResponse(JSON.parse(message.content))
+        if (result.action_type !== context.expectedActionType) throw new Error('VALIDATION_ERR: modelo tentou alterar a ação determinada pelo motor canônico.')
         return result
       } catch (error: unknown) {
         clearTimeout(timeoutId)
         if (error instanceof Error && error.name === 'AbortError') {
-          if (attempt < MAX_RETRIES) {
-            await new Promise((resolve) => setTimeout(resolve, delayMs))
-            delayMs *= 2
-            continue
-          }
+          if (attempt < MAX_RETRIES) { await new Promise((resolve) => setTimeout(resolve, delayMs)); delayMs *= 2; continue }
           throw new Error(`AI_INFERENCE_TIMEOUT: limite de ${REQUEST_TIMEOUT_MS}ms excedido.`)
         }
-        if (attempt === MAX_RETRIES) {
-          throw new Error(`AI_INFERENCE_TERMINAL_FAILED: ${errorMessage(error)}`)
+        if (error instanceof TypeError && attempt < MAX_RETRIES) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs)); delayMs *= 2; continue
         }
-        if (!(error instanceof Error && /^LLM_PROVIDER_HTTP_ERR_/.test(error.message))) {
-          throw error
-        }
+        throw new Error(`AI_INFERENCE_TERMINAL_FAILED: ${errorMessage(error)}`)
       }
     }
-
     throw new Error('AI_INFERENCE_TERMINAL_FAILED: contrato de inferência não resolvido.')
   }
 
@@ -236,13 +148,7 @@ export class AltheaAiInferenceProcessor {
       last_interaction_days: context.lastInteractionDays,
       open_carts_total: context.openCartsTotal,
       purchase_history_categories: context.purchaseHistoryCategories,
-      output_contract: {
-        action_type: 'canonical expected_action_type only',
-        score: 'number 0..1',
-        rationale: 'non-empty string grounded in supplied evidence',
-        recommended_channel: 'WHATSAPP | SMS | EMAIL',
-        payload: { message_body: 'customer-facing draft only' },
-      },
+      output_contract: { action_type: 'must equal expected_action_type', score: 'number 0..1', rationale: 'non-empty grounded string', recommended_channel: 'WHATSAPP | SMS | EMAIL', payload: { message_body: 'customer-facing draft only' } },
     })
   }
 }
