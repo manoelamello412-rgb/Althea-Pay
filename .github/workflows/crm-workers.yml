@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: althea-crm-workers
+  cancel-in-progress: false
 jobs:
   workers:
     runs-on: ubuntu-latest
