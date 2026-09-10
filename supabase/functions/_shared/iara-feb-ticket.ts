@@ -4,7 +4,7 @@ export const FEB_ISSUER='althea-pay-iara-execution-kernel' as const
 export type FebAction='purchase'|'capture'|'refund'|'void'
 export type FebRiskClass='low'|'medium'|'high'|'critical'
 export interface IaraFEBTicketClaims{jti:string;execution_id:string;tenant_id:string;user_id:string;tool_key:string;tool_version:number;risk_class:FebRiskClass;gateway_id:string;action:FebAction;request_fingerprint:string;iat:number;exp:number;aud:typeof FEB_AUDIENCE;iss:typeof FEB_ISSUER;kid:string}
-export interface FebVerificationPolicy{clockSkewSeconds:number;maxTicketAgeSeconds:number;maxFreshnessSeconds;lastSuccessfulSyncEpochSeconds:number}
+export interface FebVerificationPolicy{clockSkewSeconds:number;maxTicketAgeSeconds:number;maxFreshnessSeconds:number;lastSuccessfulSyncEpochSeconds:number}
 export interface FebVerificationContext{tenantId:string;userId:string;gatewayId:string;action:FebAction;toolKey:string;toolVersion:number;input:Record<string,unknown>}
 export function canonicalize(value:unknown):string{if(value===null||typeof value!=='object')return JSON.stringify(value);if(Array.isArray(value))return`[${value.map(canonicalize).join(',')}]`;const o=value as Record<string,unknown>;return`{${Object.keys(o).sort().map(k=>`${JSON.stringify(k)}:${canonicalize(o[k])}`).join(',')}}`}
 export async function sha256Hex(value:string):Promise<string>{const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return Array.from(new Uint8Array(d)).map(b=>b.toString(16).padStart(2,'0')).join('')}
