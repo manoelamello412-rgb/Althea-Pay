@@ -1,5 +1,4 @@
 # IARA closure validation remains branch-only; no Vercel deployment is requested.
-# Final source validation checkpoint after checkout boundary convergence.
 name: "IARA: Structural Validation"
 
 on:
@@ -60,13 +59,41 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f supabase/functions/iara-financial-command/index.ts
-          grep -q 'organization_members' supabase/functions/iara-financial-command/index.ts
-          grep -q 'confirmation_id' supabase/functions/iara-financial-command/index.ts
-          grep -q 'evaluation_id' supabase/functions/iara-financial-command/index.ts
-          grep -q 'INDEPENDENT_EVALUATOR_NOT_PASS' supabase/functions/iara-financial-command/index.ts
-          grep -q 'RS256' supabase/functions/iara-financial-command/index.ts
-          grep -q 'requestFingerprint' supabase/functions/iara-financial-command/index.ts
+          f=supabase/functions/iara-financial-command/index.ts
+          test -f "$f"
+          grep -q 'organization_members' "$f"
+          grep -q 'CANONICAL_TOOL = "gateway.financial-command"' "$f"
+          grep -q 'CANONICAL_VERSION = 1' "$f"
+          grep -q 'confirmation_id' "$f"
+          grep -q 'evaluation_id' "$f"
+          grep -q 'INDEPENDENT_EVALUATOR_NOT_PASS' "$f"
+          grep -q 'iara_execution_idempotency' "$f"
+          grep -q 'REQUEST_FINGERPRINT_MISMATCH' "$f"
+          grep -q 'RS256' "$f"
+          grep -q 'requestFingerprint' "$f"
+      - name: Confirmation authority evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=supabase/functions/iara-financial-confirm/index.ts
+          test -f "$f"
+          grep -q 'CANONICAL_TOOL = "gateway.financial-command"' "$f"
+          grep -q 'CANONICAL_VERSION = 1' "$f"
+          grep -q 'organization_members' "$f"
+          grep -q 'GATEWAY_NOT_AUTHORIZED' "$f"
+          grep -q 'body.confirmed !== true' "$f"
+      - name: Gateway FEB binding evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=supabase/functions/gateway-orchestrator/index.ts
+          grep -q 'x-althea-feb-ticket-signature' "$f"
+          grep -q 'TICKET_REPLAYED' "$f"
+          grep -q 'organization_members' "$f"
+          grep -q 'requestFingerprint' "$f"
+          grep -q 'headerIdempotency' "$f"
+          grep -q 'bodyIdempotency' "$f"
+          grep -q 'EXECUTION_UNAVAILABLE' "$f"
       - name: Financial boundary integrity
         shell: bash
         run: |
