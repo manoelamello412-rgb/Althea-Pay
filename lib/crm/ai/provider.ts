@@ -10,7 +10,7 @@ function safeDraft(value:unknown){
  return text
 }
 export async function generateRevenueAgentDraft(ctx:RevenueAgentContext):Promise<RevenueAgentDraft>{
- const key=env('ALTHEA_AI_API_KEY')||env('OPENAI_API_KEY');const endpoint=env('ALTHEA_AI_BASE_URL')||'https://api.openai.com/v1/chat/completions';const model=env('ALTHEA_AI_MODEL')||'gpt-5-mini'
+ const key=env('ALTHEA_AI_API_KEY')||env('OPENAI_API_KEY');const endpoint=env('ALTHEA_AI_BASE_URL')||'https://api.openai.com/v1/chat/completions';const model=env('ALTHEA_AI_MODEL')||'gpt-5.6-luna'
  if(!key)return{available:false,provider:'none',mode:'grounded_behavioral_fallback',draft:null,confidence:0}
  const payload={model,temperature:0.2,messages:[
   {role:'system',content:'You are Althea Pay Revenue Agent. Return ONLY JSON in the form {"draft":"..."}. Draft a concise Portuguese-BR customer-facing sales/recovery reply grounded only in supplied CRM evidence. Never invent prices, payment status, policies, customer facts, discounts, guarantees or promises. Never claim an action was executed. If evidence is insufficient, write a cautious clarification request. Keep under 1200 characters.'},
