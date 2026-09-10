@@ -11,6 +11,18 @@ export interface IaraExecutionAudit {
   record(input: { executionId: string; tool: IaraToolCall; status: IaraExecutionResult['status']; error?: string }): Promise<void>
 }
 
+export interface IaraExecutionGuardrail {
+  /**
+   * Runs after canonical authorization/confirmation and before the tool side effect.
+   * Returning false is a hard deny: the tool is never invoked.
+   */
+  beforeExecute(input: {
+    executionId: string
+    tool: IaraToolCall
+    context: IaraToolContext
+  }): Promise<{ allowed: boolean; reason: string }>
+}
+
 export class IaraExecutionKernel {
   constructor(
     private readonly registry: IaraToolRegistry,
@@ -18,6 +30,7 @@ export class IaraExecutionKernel {
     private readonly approvals?: IaraApprovalVerifier,
     private readonly audit?: IaraExecutionAudit,
     private readonly idempotency?: IaraIdempotencyStore,
+    private readonly guardrail?: IaraExecutionGuardrail,
   ) {}
 
   async execute(call: IaraToolCall, context: IaraToolContext): Promise<IaraExecutionResult> {
@@ -47,6 +60,16 @@ export class IaraExecutionKernel {
       if (claim.kind === 'replay') {
         if (claim.record.status === 'COMPLETED') return this.finish(call, { executionId: claim.record.executionId, status: 'completed', result: claim.record.result })
         return this.finish(call, { executionId: claim.record.executionId, status: 'failed', error: claim.record.error ?? 'Previous idempotent execution failed.' })
+      }
+    }
+
+    if (this.guardrail) {
+      const guard = await this.guardrail.beforeExecute({ executionId: context.executionId, tool: call, context })
+      if (!guard.allowed) {
+        if (tool.idempotencyRequired && idempotencyKey && this.idempotency) {
+          await this.idempotency.fail(context.tenantId, idempotencyKey, guard.reason)
+        }
+        return this.finish(call, { executionId: context.executionId, status: 'failed', error: `IARA independent guardrail blocked execution: ${guard.reason}` })
       }
     }
 
