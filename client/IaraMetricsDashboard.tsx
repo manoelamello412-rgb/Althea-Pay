@@ -52,9 +52,8 @@ export default function IaraMetricsDashboard() {
       const averageLatency = latencies.length ? latencies.reduce((sum, value) => sum + value, 0) / latencies.length : null
       const processingErrors = events.filter((event) => Boolean(event.error_message) || ['failed', 'error', 'timeout'].includes(String(event.status ?? '').toLowerCase())).length
       const retrySignals = events.filter((event) => /23505|retry|duplicate|conflict/i.test(`${event.error_message ?? ''} ${event.status ?? ''}`)).length
-      const newestEvent = events[0]?.created_at ? new Date(events[0].created_at).getTime() : 0
-      const oldestEventRow = events.length > 0 ? events[events.length - 1] : undefined
-      const oldestEvent = oldestEventRow?.created_at ? new Date(oldestEventRow.created_at).getTime() : 0
+      const newestEvent = events.at(0)?.created_at ? new Date(events.at(0)?.created_at ?? 0).getTime() : 0
+      const oldestEvent = events.at(-1)?.created_at ? new Date(events.at(-1)?.created_at ?? 0).getTime() : 0
       const observedSeconds = newestEvent && oldestEvent && newestEvent > oldestEvent ? Math.max(1, (newestEvent - oldestEvent) / 1000) : 0
       const requestsPerSecond = observedSeconds > 0 ? events.length / observedSeconds : null
       setMetrics({ requestsPerSecond, activeLocksCount: null, postgresRetryCount: retrySignals, averageLlmLatencyMs: averageLatency, memoryHeapUsedMb: null, completedRuns: completed.length, failedRuns: failed.length })
