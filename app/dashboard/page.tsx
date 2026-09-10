@@ -1,7 +1,7 @@
 'use client'
 
-import DashboardCommandCenter from '@/components/dashboard-command-center'
+import AltheaDashboardControl from '@/components/althea-dashboard-control'
 
 export default function DashboardPage() {
-  return <DashboardCommandCenter />
+  return <AltheaDashboardControl />
 }
