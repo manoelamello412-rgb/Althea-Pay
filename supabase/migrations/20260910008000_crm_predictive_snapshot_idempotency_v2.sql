@@ -1,0 +1,16 @@
+create or replace function public.crm_predictive_snapshot(p_conversation_id uuid) returns uuid language plpgsql security invoker set search_path=public as $$
+declare u uuid; s jsonb; id uuid; mv text;
+begin
+ select user_id into u from public.crm_conversations where id=p_conversation_id and user_id=auth.uid();
+ if u is null then raise exception 'conversation_not_found'; end if;
+ s:=public.crm_predictive_scores(p_conversation_id);
+ mv:=coalesce(s->>'method','deterministic_behavioral_v1');
+ select e.id into id from public.crm_predictive_evaluations e where e.user_id=u and e.conversation_id=p_conversation_id and e.model_version=mv and e.created_at>=now()-interval '5 minutes' order by e.created_at desc limit 1;
+ if id is not null then return id; end if;
+ insert into public.crm_predictive_evaluations(user_id,conversation_id,model_version,predicted_conversion,predicted_recovery,predicted_ltv,actual_conversion,actual_recovery,actual_ltv,evaluated_at) values(u,p_conversation_id,mv,(s->>'conversion_probability')::numeric/100,(s->>'recovery_probability')::numeric/100,(s->>'ltv_propensity')::numeric/100,null,null,null,null) returning id into id;
+ return id;
+end;
+$$;
+revoke all on function public.crm_predictive_snapshot(uuid) from public,anon;
+grant execute on function public.crm_predictive_snapshot(uuid) to authenticated;
+create index if not exists crm_predictive_eval_snapshot_lookup_idx on public.crm_predictive_evaluations(user_id,conversation_id,model_version,created_at desc);
