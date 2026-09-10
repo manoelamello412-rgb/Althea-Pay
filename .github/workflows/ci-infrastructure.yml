@@ -36,6 +36,42 @@ jobs:
           npm run typecheck
           npm run lint
 
+      - name: Verify IARA authority graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f services/iara-agent/execution-kernel.ts
+          test -f services/iara-agent/tool-registry.ts
+          test -f services/iara-agent/authorization.ts
+          test -f services/iara-agent/idempotency-store.ts
+          test -f services/iara-agent/independent-execution-guardrail.ts
+          test -f services/iara-agent/feb-ticket.ts
+          test -f services/IaraIndependentEvaluator.ts
+          grep -q 'from "./tool-registry"' services/iara-agent/execution-kernel.ts
+          grep -q 'IaraFEBTicket' services/iara-agent/feb-ticket.ts
+          grep -q 'jti' services/iara-agent/feb-ticket.ts
+          grep -q 'requestFingerprint' services/iara-agent/feb-ticket.ts
+          if grep -R -n --exclude-dir=node_modules --exclude-dir=.git 'from ["'"'"']\./registry["'"'"']' services app supabase/functions 2>/dev/null; then
+            echo 'Legacy shadow registry is still imported by runtime code.' >&2
+            exit 1
+          fi
+
+      - name: Verify direct financial writers remain retired
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in \
+            supabase/functions/gateway-provider-adapter/index.ts \
+            supabase/functions/gateway-provider-adapter-v2/index.ts \
+            supabase/functions/gateway-payment-link/index.ts \
+            supabase/functions/gateway-refund/index.ts \
+            supabase/functions/gateway-refund-v2/index.ts \
+            supabase/functions/checkout-engine/index.ts; do
+            if test -f "$f"; then
+              grep -Eq '410|EXECUTION_UNAVAILABLE|RETIRED' "$f" || { echo "Financial boundary is not fail-closed: $f" >&2; exit 1; }
+            fi
+          done
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
@@ -58,6 +94,8 @@ jobs:
             v_occ boolean;
             v_fsm boolean;
             v_fsm_source text;
+            v_membership boolean;
+            v_financial_grants integer;
           BEGIN
             SELECT c.relrowsecurity INTO v_rls
               FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -86,6 +124,20 @@ jobs:
                   AND COALESCE(v_fsm_source,'') ILIKE '%chargeback%'
                   AND COALESCE(v_fsm_source,'') ILIKE '%invalid_status%';
             IF NOT v_fsm THEN RAISE EXCEPTION 'canonical gateway transaction FSM is missing or incomplete'; END IF;
+
+            SELECT EXISTS (
+              SELECT 1 FROM information_schema.columns
+               WHERE table_schema='public' AND table_name='organization_members'
+                 AND column_name IN ('organization_id','user_id')
+            ) INTO v_membership;
+            IF NOT v_membership THEN RAISE EXCEPTION 'organization_members tenant authority columns are missing'; END IF;
+
+            SELECT count(*) INTO v_financial_grants
+              FROM information_schema.routine_privileges
+             WHERE routine_schema='public'
+               AND grantee IN ('authenticated','anon')
+               AND routine_name IN ('crm_execute_ai_action','prepare_gateway_payment_link');
+            IF v_financial_grants <> 0 THEN RAISE EXCEPTION 'financial RPC execute privilege leaked to authenticated/anon'; END IF;
           END $$;
           SQL
 
