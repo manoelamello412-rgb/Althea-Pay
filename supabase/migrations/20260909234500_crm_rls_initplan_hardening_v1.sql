@@ -1,0 +1,10 @@
+drop policy if exists crm_channel_accounts_owner on public.crm_channel_accounts;
+create policy crm_channel_accounts_owner on public.crm_channel_accounts for all to authenticated using (user_id=(select auth.uid())) with check (user_id=(select auth.uid()));
+drop policy if exists crm_channel_identities_owner on public.crm_channel_identities;
+create policy crm_channel_identities_owner on public.crm_channel_identities for all to authenticated using (user_id=(select auth.uid())) with check (user_id=(select auth.uid()));
+drop policy if exists crm_channel_message_outbox_owner on public.crm_channel_message_outbox;
+create policy crm_channel_message_outbox_owner on public.crm_channel_message_outbox for all to authenticated using (user_id=(select auth.uid())) with check (user_id=(select auth.uid()));
+drop policy if exists crm_predictive_evaluations_owner on public.crm_predictive_evaluations;
+create policy crm_predictive_evaluations_owner on public.crm_predictive_evaluations for all to authenticated using (user_id=(select auth.uid())) with check (user_id=(select auth.uid()));
+drop policy if exists crm_experiment_guardrails_owner on public.crm_experiment_guardrails;
+create policy crm_experiment_guardrails_owner on public.crm_experiment_guardrails for all to authenticated using (experiment_id in (select e.id from public.crm_experiments e where e.user_id=(select auth.uid()))) with check (experiment_id in (select e.id from public.crm_experiments e where e.user_id=(select auth.uid())));
