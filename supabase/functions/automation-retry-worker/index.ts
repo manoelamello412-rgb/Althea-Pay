@@ -12,7 +12,7 @@ Deno.serve(async req=>{
   const rows=[...(retry.data||[]).map((row:any)=>({...row,__kind:"retry"})),...(scheduled.data||[]).map((row:any)=>({...row,__kind:"scheduled"}))];
   const results=[];const url=`${Deno.env.get("SUPABASE_URL")}/functions/v1/automation-engine-v2`;
   for(const row of rows){
-   try{const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json","x-internal-secret":secret},body:JSON.stringify({[row.__kind==="scheduled"?"scheduled_execution_id":"retry_execution_id"]:row.id})});const payload=await r.json().catch(()=>({}));if(!r.ok)throw Error(String(payload.error||`automation_engine_http_${r.status}`));results.push(payload);}
+   try{const r=await fetch(url,{method:"POST",headers:{"content-type":"application/json","x-internal-secret":secret},body:JSON.stringify({retry_execution_id:row.id})});const payload=await r.json().catch(()=>({}));if(!r.ok)throw Error(String(payload.error||`automation_engine_http_${r.status}`));results.push(payload);}
    catch(e){const message=e instanceof Error?e.message:String(e);const terminal=Number(row.attempt_count)>=Number(row.max_attempts);if(terminal)await db.rpc("crm_mark_automation_dead_letter",{p_execution_id:row.id,p_error:message});else await db.from("automation_executions").update({status:"failed",error_message:message,next_retry_at:new Date(Date.now()+30000).toISOString(),completed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",row.id);results.push({execution_id:row.id,status:terminal?"dead_letter":"failed",error:message,kind:row.__kind});}
   }
   return json({ok:true,retries:(retry.data||[]).length,scheduled:(scheduled.data||[]).length,results});
