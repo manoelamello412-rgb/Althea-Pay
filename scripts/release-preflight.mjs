@@ -1,92 +1,23 @@
 import { readdir, readFile, access } from "node:fs/promises"
 import { join, relative } from "node:path"
-
-const root = process.cwd()
-const failures = []
-const checked = []
-
-async function walk(dir) {
-  const entries = await readdir(dir, { withFileTypes: true })
-  for (const entry of entries) {
-    if (["node_modules", ".git", ".next"].includes(entry.name)) continue
-    const path = join(dir, entry.name)
-    if (entry.isDirectory()) await walk(path)
-    else if (/\.(ts|tsx|js|mjs|sql|toml|json)$/.test(entry.name)) checked.push(path)
-  }
-}
-
+const root=process.cwd(),failures=[],checked=[]
+async function walk(dir){for(const entry of await readdir(dir,{withFileTypes:true})){if(["node_modules",".git",".next"].includes(entry.name))continue;const path=join(dir,entry.name);if(entry.isDirectory())await walk(path);else if(/\.(ts|tsx|js|mjs|sql|toml|json)$/.test(entry.name))checked.push(path)}}
 await walk(root)
-const source = new Map()
-for (const file of checked) source.set(file, await readFile(file, "utf8"))
-
-function assertNo(pattern, label, files = checked) {
-  for (const file of files) if (pattern.test(source.get(file))) failures.push(`${label}: ${relative(root, file)}`)
-}
-
-const browserFiles = checked.filter((file) => /(^|[\\/])app[\\/]|(^|[\\/])components[\\/]/.test(file))
-assertNo(/SUPABASE_SERVICE_ROLE_KEY|service_role/i, "Service-role secret referenced by browser/UI code", browserFiles)
-
-const cardDataProductionFiles = checked.filter((file) =>
-  !file.includes(`${join("tests")}${join("")}`) &&
-  !file.endsWith(join("lib", "vault.ts")) &&
-  !file.endsWith(join("scripts", "release-preflight.mjs")) &&
-  !file.includes(`${join("supabase", "migrations")}${join("")}`)
-)
-assertNo(/\b(?:card_number|cardNumber|pan|cvc|cvv|security_code|securityCode)\b\s*[:=]/i, "Raw card credential field assignment detected", cardDataProductionFiles)
-
-const webhookFunctionFiles = checked.filter((file) => file.includes(`${join("supabase", "functions")}${join("")}`))
-assertNo(/from\(['"]webhook_integrations['"]\)\.select\([^)]*\bsecret\b/i, "Plaintext webhook secret selected directly from webhook_integrations", webhookFunctionFiles)
-
-// Every production Edge Function that creates a timer must also clear it.
-// This is intentionally conservative: timer cleanup is required even on exceptions.
-for (const file of webhookFunctionFiles) {
-  const text = source.get(file)
-  if (/\bsetTimeout\s*\(/.test(text) && !/\bclearTimeout\s*\(/.test(text)) {
-    failures.push(`Timer without clearTimeout cleanup: ${relative(root, file)}`)
-  }
-}
-
-// Flag the most dangerous fire-and-forget network patterns in payment code.
-// Deliberate async work must be awaited or explicitly delegated to a durable queue.
-const paymentFiles = webhookFunctionFiles.filter((file) => /gateway|checkout|refund|payment|reconciliation|risk-engine|event-worker|automation-engine/.test(file))
-assertNo(/(^|[=({,:;\s])void\s+fetch\s*\(/, "Fire-and-forget fetch in payment-critical code", paymentFiles)
-assertNo(/(^|[=({,:;\s])fetch\s*\([^;\n]+\)\s*;\s*(?:return|})/s, "Potential unawaited fetch in payment-critical code", paymentFiles)
-
-const protectedFunctions = [
-  "event-worker",
-  "automation-engine-v2",
-  "reconciliation-worker",
-  "risk-engine",
-  "core-worker",
-  "integration-event-processor",
-  "gateway-webhook-processor",
-]
-for (const name of protectedFunctions) {
-  const file = join(root, "supabase", "functions", name, "index.ts")
-  try {
-    const text = await readFile(file, "utf8")
-    if (!text.includes("ALTHEA_INTERNAL_SECRET") && !text.includes("x-internal-secret")) failures.push(`Internal function missing explicit internal-secret guard: ${name}`)
-  } catch { failures.push(`Required internal function missing: ${name}`) }
-}
-
-const requiredFiles = [
-  "supabase/functions/gateway-orchestrator/index.ts",
-  "supabase/functions/checkout-engine-v2/index.ts",
-  "supabase/functions/gateway-webhook/index.ts",
-  "supabase/functions/gateway-webhook-processor/index.ts",
-  "supabase/functions/gateway-refund/index.ts",
-  "supabase/functions/althea-public-api/index.ts",
-  "supabase/functions/althea-webhook/index.ts",
-  "supabase/functions/health/index.ts",
-  "scripts/load-smoke.mjs",
-]
-for (const file of requiredFiles) if (!source.has(join(root, file))) failures.push(`Required release component missing: ${file}`)
-try { await access(join(root, "docs", "PRODUCTION_READINESS.md")) } catch { failures.push("Production readiness document missing") }
-
+const source=new Map();for(const file of checked)source.set(file,await readFile(file,"utf8"))
+function assertNo(pattern,label,files=checked){for(const file of files)if(pattern.test(source.get(file)))failures.push(`${label}: ${relative(root,file)}`)}
+const browserFiles=checked.filter(file=>/(^|[\\/])app[\\/]|(^|[\\/])components[\\/]/.test(file));assertNo(/SUPABASE_SERVICE_ROLE_KEY|service_role/i,"Service-role secret referenced by browser/UI code",browserFiles)
+const cardDataProductionFiles=checked.filter(file=>!file.includes(`${join("tests")}${join("")}`)&&!file.endsWith(join("lib","vault.ts"))&&!file.endsWith(join("scripts","release-preflight.mjs"))&&!file.includes(`${join("supabase","migrations")}${join("")}`));assertNo(/\b(?:card_number|cardNumber|pan|cvc|cvv|security_code|securityCode)\b\s*[:=]/i,"Raw card credential field assignment detected",cardDataProductionFiles)
+const webhookFunctionFiles=checked.filter(file=>file.includes(`${join("supabase","functions")}${join("")}`));assertNo(/from\(['"]webhook_integrations['"]\)\.select\([^)]*\bsecret\b/i,"Plaintext webhook secret selected directly from webhook_integrations",webhookFunctionFiles)
+for(const file of webhookFunctionFiles){const text=source.get(file);if(/\bsetTimeout\s*\(/.test(text)&&!/\bclearTimeout\s*\(/.test(text))failures.push(`Timer without clearTimeout cleanup: ${relative(root,file)}`)}
+const paymentFiles=webhookFunctionFiles.filter(file=>/gateway|checkout|refund|payment|reconciliation|risk-engine|event-worker|automation-engine/.test(file));assertNo(/(^|[=({,:;\s])void\s+fetch\s*\(/,"Fire-and-forget fetch in payment-critical code",paymentFiles);assertNo(/(^|[=({,:;\s])fetch\s*\([^;\n]+\)\s*;\s*(?:return|})/s,"Potential unawaited fetch in payment-critical code",paymentFiles)
+const protectedFunctions=["event-worker","automation-engine-v2","reconciliation-worker","risk-engine","core-worker","integration-event-processor","gateway-webhook-processor"]
+for(const name of protectedFunctions){const file=join(root,"supabase","functions",name,"index.ts");try{const text=await readFile(file,"utf8");if(!text.includes("ALTHEA_INTERNAL_SECRET")&&!text.includes("x-internal-secret"))failures.push(`Internal function missing explicit internal-secret guard: ${name}`)}catch{failures.push(`Required internal function missing: ${name}`)}}
+const crmFiles=["supabase/functions/crm-channel-outbox-dispatcher/index.ts","supabase/functions/crm-channel-inbound-webhook/index.ts","supabase/functions/crm-channel-twilio-inbound/index.ts","supabase/functions/crm-predictive-outcome-worker/index.ts","supabase/functions/automation-retry-worker/index.ts","app/api/crm/ai-agent/execute/route.ts","app/api/crm/observability/route.ts"]
+for(const file of crmFiles){if(!source.has(join(root,file)))failures.push(`Required Multi-CRM component missing: ${file}`)}
+assertNo(/SUPABASE_SERVICE_ROLE_KEY/i,"Service-role secret referenced by CRM browser/API surface",checked.filter(file=>/(^|[\\/])app[\\/]dashboard[\\/]crm[\\/]|(^|[\\/])components[\\/]crm[\\/]/.test(file)))
+const requiredFiles=["supabase/functions/gateway-orchestrator/index.ts","supabase/functions/checkout-engine-v2/index.ts","supabase/functions/gateway-webhook/index.ts","supabase/functions/gateway-webhook-processor/index.ts","supabase/functions/gateway-refund/index.ts","supabase/functions/althea-public-api/index.ts","supabase/functions/althea-webhook/index.ts","supabase/functions/health/index.ts","scripts/load-smoke.mjs"]
+for(const file of requiredFiles)if(!source.has(join(root,file)))failures.push(`Required release component missing: ${file}`)
+try{await access(join(root,"docs","PRODUCTION_READINESS.md"))}catch{failures.push("Production readiness document missing")}
 console.log(`Release preflight: checked ${checked.length} source/config files.`)
-if (failures.length) {
-  console.error("Release preflight FAILED:")
-  for (const failure of failures) console.error(`- ${failure}`)
-  process.exit(1)
-}
-console.log("Release preflight PASSED: browser secret exposure, raw-card assignments, webhook Vault access, timer cleanup, async payment calls, required internal guards and core release components are clear.")
+if(failures.length){console.error("Release preflight FAILED:");for(const failure of failures)console.error(`- ${failure}`);process.exit(1)}
+console.log("Release preflight PASSED: browser secret exposure, raw-card assignments, webhook Vault access, timer cleanup, async payment calls, internal guards, Multi-CRM release components and core release components are clear.")
