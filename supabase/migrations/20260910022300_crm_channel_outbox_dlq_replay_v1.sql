@@ -11,7 +11,6 @@ create table if not exists public.crm_channel_outbox_replay_events (
 
 create index if not exists crm_channel_outbox_replay_events_user_idx
  on public.crm_channel_outbox_replay_events(user_id,created_at desc);
-
 create index if not exists crm_channel_outbox_replay_events_outbox_idx
  on public.crm_channel_outbox_replay_events(outbox_id,created_at desc);
 
@@ -63,7 +62,7 @@ begin
      last_error=null,
      updated_at=now(),
      metadata=jsonb_set(
-       jsonb_set(coalesce(metadata,'{}'::jsonb),'%s'::text[],'[]'::jsonb,false),
+       coalesce(metadata,'{}'::jsonb),
        '{dlq_replay}',
        jsonb_build_object('replay_id',r_id,'replay_key',p_replay_key,'reason',p_reason,'requested_by',(select auth.uid()),'requested_at',now()),
        true
