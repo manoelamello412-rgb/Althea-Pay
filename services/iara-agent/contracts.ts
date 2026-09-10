@@ -17,7 +17,7 @@ export interface IaraToolDefinition<TInput extends object = object, TOutput = un
   permissionCode: string
   idempotencyRequired: boolean
   confirmationRequired: boolean
-  execute: (input: TInput, context: IaraToolContext) => Promise<TOutput>
+  execute(input: TInput, context: IaraToolContext): Promise<TOutput>
 }
 
 export interface IaraToolCall {
