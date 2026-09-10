@@ -1,258 +1,47 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowUpRight, CheckCircle2, Clock3, Copy, CreditCard, Loader2, RefreshCw, Search, TriangleAlert, XCircle } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Copy, CreditCard, Eye, Loader2, RefreshCw, Search, TriangleAlert, XCircle } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type JsonRecord = Record<string, unknown>
+type Sale = { id:string; user_id:string; funnel_id:string|null; product_id:string|null; gateway_id:string|null; external_id:string|null; idempotency_key:string|null; amount:number; currency:string; status:string; customer:JsonRecord; metadata:JsonRecord; error_message:string|null; created_at:string; updated_at:string; attempt_count:number; completed_at:string|null; failure_code:string|null; routing_metadata:JsonRecord; version:number }
+type Summary = { total_count:number; approved_count:number; approved_volume:number; pending_count:number; failed_count:number; refunded_count:number; chargeback_count:number }
+const PAGE_SIZE=50
+const STATUSES=[['all','Todos'],['approved','Aprovadas'],['pending','Pendentes'],['failed','Falhas'],['refunded','Estornadas'],['chargeback','Chargeback']] as const
+const APPROVED=new Set(['approved','completed','paid','success','succeeded'])
+const money=(v:number,c='BRL')=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:c||'BRL'}).format(Number(v)||0)
+const text=(v:unknown)=>typeof v==='string'||typeof v==='number'?String(v):''
+const rec=(v:unknown):JsonRecord=>v&&typeof v==='object'&&!Array.isArray(v)?v as JsonRecord:{}
+const customer=(s:Sale)=>{const c=rec(s.metadata?.customer);return Object.keys(c).length?c:rec(s.customer)}
+const statusMeta=(s:string)=>{const n=s.toLowerCase();if(APPROVED.has(n))return ['APROVADA','text-emerald-400',CheckCircle2] as const;if(n==='pending'||n==='created')return [n==='created'?'CRIADA':'PENDENTE','text-amber-400',Clock3] as const;if(n==='refunded')return ['ESTORNADA','text-sky-400',RefreshCw] as const;if(n==='chargeback')return ['CHARGEBACK','text-orange-400',TriangleAlert] as const;return [n?n.toUpperCase():'FALHA','text-rose-400',XCircle] as const}
 
-type GatewayTransaction = {
-  id: string
-  user_id: string
-  funnel_id: string | null
-  product_id: string | null
-  gateway_id: string | null
-  external_id: string | null
-  idempotency_key: string | null
-  amount: number
-  currency: string
-  status: string
-  customer: JsonRecord
-  metadata: JsonRecord
-  error_message: string | null
-  created_at: string
-  updated_at: string
-  attempt_count: number
-  completed_at: string | null
-  failure_code: string | null
-  routing_metadata: JsonRecord
-  version: number
+export default function SalesPage(){
+ const router=useRouter(); const params=useSearchParams(); const supabase=useMemo(()=>createSupabaseBrowserClient(),[])
+ const [rows,setRows]=useState<Sale[]>([]); const [summary,setSummary]=useState<Summary>({total_count:0,approved_count:0,approved_volume:0,pending_count:0,failed_count:0,refunded_count:0,chargeback_count:0})
+ const [search,setSearch]=useState(params.get('search')||''); const [status,setStatus]=useState<(typeof STATUSES)[number][0]>('all'); const [from,setFrom]=useState(''); const [to,setTo]=useState(''); const [funnel,setFunnel]=useState(''); const [gateway,setGateway]=useState(''); const [funnels,setFunnels]=useState<{id:string;nome:string}[]>([]); const [gateways,setGateways]=useState<{id:string;display_name:string;provider:string}[]>([])
+ const [page,setPage]=useState(0); const [loading,setLoading]=useState(true); const [refreshing,setRefreshing]=useState(false); const [error,setError]=useState(''); const [selected,setSelected]=useState<Sale|null>(null); const [copied,setCopied]=useState('')
+ const loadFilters=useCallback(async()=>{const [{data:f},{data:g}]=await Promise.all([supabase.from('funnels').select('id,nome').order('created_at',{ascending:false}),supabase.from('gateways').select('id,display_name,provider').order('created_at',{ascending:false})]);setFunnels((f||[]) as {id:string;nome:string}[]);setGateways((g||[]) as {id:string;display_name:string;provider:string}[])},[supabase])
+ const load=useCallback(async(silent=false)=>{if(silent)setRefreshing(true);else setLoading(true);setError('');try{const {data:auth,error:a}=await supabase.auth.getUser();if(a||!auth.user){router.replace('/login');return}const {data,error:e}=await supabase.rpc('sales_ledger_for_user',{p_search:search.trim()||null,p_status:status,p_from:from||null,p_to:to||null,p_funnel_id:funnel||null,p_gateway_id:gateway||null,p_limit:PAGE_SIZE,p_offset:page*PAGE_SIZE});if(e)throw e;const payload=rec(data);setRows(Array.isArray(payload.rows)?payload.rows as Sale[]:[]);setSummary(rec(payload.summary) as unknown as Summary)}catch(err){console.error('[ALTHEA-SALES]',err);setError('Não foi possível sincronizar o ledger de vendas.')}finally{setLoading(false);setRefreshing(false)}},[from,funnel,gateway,page,router,search,status,supabase,to])
+ useEffect(()=>{void loadFilters()},[loadFilters]); useEffect(()=>{void load()},[load])
+ useEffect(()=>{const channel=supabase.channel('sales-ledger-realtime').on('postgres_changes',{event:'*',schema:'public',table:'gateway_transactions'},()=>void load(true)).subscribe();return()=>{void supabase.removeChannel(channel)}},[load,supabase])
+ const totalPages=Math.max(1,Math.ceil(summary.total_count/PAGE_SIZE)); const canPrev=page>0; const canNext=page+1<totalPages
+ const applyFilter=(fn:()=>void)=>{fn();setPage(0)}
+ async function copyId(id:string){try{await navigator.clipboard.writeText(id);setCopied(id);window.setTimeout(()=>setCopied(''),1200)}catch{}}
+ return <main className="min-h-screen bg-[#060608] text-zinc-100 antialiased"><header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-[#191921] bg-[#0b0b0f]/95 px-4 backdrop-blur sm:px-6"><button type="button" onClick={()=>router.push('/dashboard')} className="inline-flex min-h-11 items-center gap-2 text-xs font-mono text-zinc-500 hover:text-white"><ArrowLeft size={14}/> INÍCIO</button><div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[.18em] text-zinc-500"><CreditCard size={14} className="text-[#1DB854]"/> VENDAS</div><button type="button" onClick={()=>void load(true)} disabled={refreshing} aria-label="Atualizar vendas" className="grid min-h-11 min-w-11 place-items-center text-zinc-500 hover:text-white">{refreshing?<Loader2 size={16} className="animate-spin"/>:<RefreshCw size={16}/>}</button></header>
+ <div className="mx-auto max-w-7xl space-y-4 p-4 pb-32 sm:p-6">
+  <section className="rounded-2xl border border-[#191921] bg-[#0b0b0f] p-4 sm:p-5"><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><h1 className="text-xl font-bold">Ledger de vendas</h1><p className="mt-1 text-[11px] text-zinc-500">Fonte canônica: transações financeiras reais do ALTHEA PAY.</p></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><Stat label="Aprovadas" value={summary.approved_count}/><Stat label="Volume" value={money(summary.approved_volume)}/><Stat label="Pendentes" value={summary.pending_count}/><Stat label="Falhas" value={summary.failed_count}/></div></div>
+   <div className="mt-5 grid gap-2 lg:grid-cols-[1fr_auto_auto_auto_auto]"><div className="relative"><Search size={15} className="pointer-events-none absolute left-3 top-3 text-zinc-600"/><input value={search} onChange={e=>applyFilter(()=>setSearch(e.target.value))} placeholder="ID, cliente, e-mail, gateway, funil ou metadata" className="h-11 w-full rounded-lg border border-[#191921] bg-[#060608] pl-9 pr-3 text-xs outline-none focus:border-zinc-600"/></div><input type="date" value={from} onChange={e=>applyFilter(()=>setFrom(e.target.value))} className="h-11 rounded-lg border border-[#191921] bg-[#060608] px-3 text-xs [color-scheme:dark]" aria-label="Data inicial"/><input type="date" value={to} onChange={e=>applyFilter(()=>setTo(e.target.value))} className="h-11 rounded-lg border border-[#191921] bg-[#060608] px-3 text-xs [color-scheme:dark]" aria-label="Data final"/><select value={funnel} onChange={e=>applyFilter(()=>setFunnel(e.target.value))} className="h-11 rounded-lg border border-[#191921] bg-[#060608] px-3 text-xs text-zinc-300"><option value="">Todos os funis</option>{funnels.map(f=><option key={f.id} value={f.id}>{f.nome||f.id}</option>)}</select><select value={gateway} onChange={e=>applyFilter(()=>setGateway(e.target.value))} className="h-11 rounded-lg border border-[#191921] bg-[#060608] px-3 text-xs text-zinc-300"><option value="">Todos os gateways</option>{gateways.map(g=><option key={g.id} value={g.id}>{g.display_name||g.provider||g.id}</option>)}</select></div>
+   <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">{STATUSES.map(([v,l])=><button key={v} type="button" onClick={()=>applyFilter(()=>setStatus(v))} className={`min-h-10 whitespace-nowrap rounded-lg border px-3 text-[11px] ${status===v?'border-white bg-white text-black':'border-[#191921] bg-[#060608] text-zinc-500 hover:text-white'}`}>{l}</button>)}</div>
+  </section>
+  {error&&<section role="alert" className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4 text-xs text-rose-300">{error}<button type="button" onClick={()=>void load()} className="ml-3 underline">Tentar novamente</button></section>}
+  <section className="overflow-hidden rounded-2xl border border-[#191921] bg-[#0b0b0f]"><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left"><thead className="border-b border-[#191921] bg-[#08080b] text-[9px] font-mono uppercase tracking-wider text-zinc-600"><tr><th className="px-4 py-3">Transação</th><th className="px-4 py-3">Comprador</th><th className="px-4 py-3">Valor</th><th className="px-4 py-3">Funil</th><th className="px-4 py-3">Gateway</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Data</th><th className="px-4 py-3">Detalhes</th></tr></thead><tbody>{loading?Array.from({length:8}).map((_,i)=><tr key={i} className="border-b border-[#191921]/60"><td colSpan={8} className="px-4 py-5"><div className="h-4 animate-pulse rounded bg-zinc-900"/></td></tr>):rows.length===0?<tr><td colSpan={8} className="px-4 py-16 text-center text-xs text-zinc-600">Nenhuma venda encontrada para os filtros atuais.</td></tr>:rows.map(s=><SaleRow key={s.id} sale={s} onCopy={copyId} copied={copied===s.id} onOpen={()=>setSelected(s)}/>)}</tbody></table></div>
+   <footer className="flex items-center justify-between border-t border-[#191921] px-4 py-3"><span className="text-[10px] font-mono text-zinc-600">{summary.total_count} registro(s) · página {page+1} de {totalPages}</span><div className="flex gap-1"><button type="button" disabled={!canPrev||loading} onClick={()=>setPage(p=>p-1)} className="grid h-9 w-9 place-items-center rounded-lg border border-[#191921] text-zinc-500 disabled:opacity-30"><ChevronLeft size={15}/></button><button type="button" disabled={!canNext||loading} onClick={()=>setPage(p=>p+1)} className="grid h-9 w-9 place-items-center rounded-lg border border-[#191921] text-zinc-500 disabled:opacity-30"><ChevronRight size={15}/></button></div></footer>
+  </section>
+ </div>{selected&&<Details sale={selected} onClose={()=>setSelected(null)}/>}</main>
 }
 
-const PAGE_SIZE = 100
-const STATUS_FILTERS = [
-  { value: 'all', label: 'Todos' },
-  { value: 'approved', label: 'Aprovados' },
-  { value: 'pending', label: 'Pendentes' },
-  { value: 'failed', label: 'Falhas' },
-  { value: 'refunded', label: 'Estornados' },
-  { value: 'chargeback', label: 'Chargeback' },
-] as const
-
-const APPROVED = new Set(['approved', 'completed', 'paid', 'success', 'succeeded'])
-
-function asRecord(value: unknown): JsonRecord {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {}
-}
-
-function nestedCustomer(tx: GatewayTransaction): JsonRecord {
-  const metadataCustomer = asRecord(tx.metadata.customer)
-  return Object.keys(metadataCustomer).length ? metadataCustomer : asRecord(tx.customer)
-}
-
-function textValue(value: unknown): string {
-  return typeof value === 'string' || typeof value === 'number' ? String(value) : ''
-}
-
-function money(amount: number, currency: string): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: currency || 'BRL' }).format(Number(amount) || 0)
-}
-
-function statusMeta(status: string) {
-  const normalized = status.toLowerCase()
-  if (APPROVED.has(normalized)) return { label: 'APROVADA', className: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400', Icon: CheckCircle2 }
-  if (normalized === 'pending' || normalized === 'created') return { label: normalized === 'created' ? 'CRIADA' : 'PENDENTE', className: 'border-amber-500/20 bg-amber-500/10 text-amber-400', Icon: Clock3 }
-  if (normalized === 'refunded') return { label: 'ESTORNADA', className: 'border-sky-500/20 bg-sky-500/10 text-sky-400', Icon: RefreshCw }
-  if (normalized === 'chargeback') return { label: 'CHARGEBACK', className: 'border-orange-500/20 bg-orange-500/10 text-orange-400', Icon: TriangleAlert }
-  return { label: normalized ? normalized.toUpperCase() : 'FALHA', className: 'border-rose-500/20 bg-rose-500/10 text-rose-400', Icon: XCircle }
-}
-
-export default function SalesAuditPage() {
-  const router = useRouter()
-  const supabase = useMemo(() => createSupabaseBrowserClient(), [])
-  const [transactions, setTransactions] = useState<GatewayTransaction[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [copiedId, setCopiedId] = useState('')
-
-  const loadSalesLedger = useCallback(async () => {
-    const { data: auth, error: authError } = await supabase.auth.getUser()
-    if (authError || !auth.user) {
-      router.replace('/login')
-      return
-    }
-
-    const { data, error: queryError } = await supabase
-      .from('gateway_transactions')
-      .select('id,user_id,funnel_id,product_id,gateway_id,external_id,idempotency_key,amount,currency,status,customer,metadata,error_message,created_at,updated_at,attempt_count,completed_at,failure_code,routing_metadata,version')
-      .eq('user_id', auth.user.id)
-      .order('created_at', { ascending: false })
-      .limit(PAGE_SIZE)
-
-    if (queryError) throw queryError
-    setTransactions((data ?? []) as GatewayTransaction[])
-  }, [router, supabase])
-
-  const refresh = useCallback(async () => {
-    setRefreshing(true)
-    setError('')
-    try {
-      await loadSalesLedger()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Não foi possível sincronizar o ledger de vendas.')
-    } finally {
-      setRefreshing(false)
-      setLoading(false)
-    }
-  }, [loadSalesLedger])
-
-  useEffect(() => {
-    let active = true
-    void refresh()
-
-    const channel = supabase
-      .channel('sales-audit-gateway-transactions')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_transactions' }, (payload) => {
-        if (!active) return
-        const next = payload.new as Partial<GatewayTransaction>
-        const previous = payload.old as Partial<GatewayTransaction>
-        setTransactions((current) => {
-          if (payload.eventType === 'INSERT') {
-            if (!next.id || !next.user_id) return current
-            return next.user_id === current[0]?.user_id && !current.some((tx) => tx.id === next.id) ? [next as GatewayTransaction, ...current].slice(0, PAGE_SIZE) : next.user_id ? [next as GatewayTransaction, ...current.filter((tx) => tx.id !== next.id)].slice(0, PAGE_SIZE) : current
-          }
-          if (payload.eventType === 'UPDATE') {
-            if (!next.id) return current
-            if (next.user_id && current.length && next.user_id !== current[0]?.user_id) return current
-            return current.map((tx) => tx.id === next.id ? next as GatewayTransaction : tx)
-          }
-          if (payload.eventType === 'DELETE') return previous.id ? current.filter((tx) => tx.id !== previous.id) : current
-          return current
-        })
-      })
-      .subscribe()
-
-    return () => {
-      active = false
-      void supabase.removeChannel(channel)
-    }
-  }, [refresh, supabase])
-
-  const filteredTransactions = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
-    return transactions.filter((tx) => {
-      if (statusFilter !== 'all' && tx.status.toLowerCase() !== statusFilter) return false
-      if (!query) return true
-
-      const customer = nestedCustomer(tx)
-      const searchable = [
-        tx.id,
-        tx.external_id,
-        tx.gateway_id,
-        tx.funnel_id,
-        tx.product_id,
-        textValue(customer.name),
-        textValue(customer.email),
-        textValue(customer.phone),
-        JSON.stringify(tx.metadata),
-      ].filter(Boolean).join(' ').toLowerCase()
-
-      return searchable.includes(query)
-    })
-  }, [searchQuery, statusFilter, transactions])
-
-  const totals = useMemo(() => {
-    const approved = transactions.filter((tx) => APPROVED.has(tx.status.toLowerCase()))
-    return { count: approved.length, volume: approved.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0) }
-  }, [transactions])
-
-  async function copyTransactionId(id: string) {
-    try {
-      await navigator.clipboard.writeText(id)
-      setCopiedId(id)
-      window.setTimeout(() => setCopiedId(''), 1400)
-    } catch { setCopiedId('') }
-  }
-
-  return (
-    <div className="min-h-screen bg-[#060608] text-zinc-100 antialiased font-sans">
-      <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-[#191921] bg-[#0b0b0f]/95 px-4 backdrop-blur sm:px-6">
-        <button type="button" onClick={() => router.push('/dashboard/settings')} className="min-h-11 px-1 text-xs font-mono text-zinc-400 transition hover:text-white">← VOLTAR</button>
-        <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-zinc-500"><CreditCard size={13} className="text-[#1DB854]" /> Auditoria de Vendas</div>
-      </header>
-
-      <main className="mx-auto w-full max-w-7xl space-y-4 p-4 pb-32 sm:p-6 sm:pb-32">
-        <section className="rounded-2xl border border-[#191921] bg-[#0b0b0f] p-4 sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div><h1 className="text-lg font-bold tracking-tight text-white">Vendas</h1><p className="mt-1 text-[11px] text-zinc-500">Ledger transacional da operação, atualizado em tempo real.</p></div>
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
-              <div className="rounded-lg border border-[#191921] bg-[#060608] px-3 py-2"><span className="block text-[9px] font-mono uppercase text-zinc-600">Aprovadas</span><strong className="text-sm text-white">{totals.count}</strong></div>
-              <div className="rounded-lg border border-[#191921] bg-[#060608] px-3 py-2"><span className="block text-[9px] font-mono uppercase text-zinc-600">Volume carregado</span><strong className="text-sm text-white">{money(totals.volume, 'BRL')}</strong></div>
-            </div>
-          </div>
-
-          <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="relative min-w-0 flex-1">
-              <Search size={15} className="pointer-events-none absolute left-3 top-3 text-zinc-600" />
-              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="ID, e-mail, nome, telefone, gateway ou metadata..." className="h-11 w-full rounded-lg border border-[#191921] bg-[#060608] pl-9 pr-3 text-xs text-white outline-none transition placeholder:text-zinc-600 focus:border-zinc-600" aria-label="Pesquisar vendas" />
-            </div>
-            <div className="flex max-w-full gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              {STATUS_FILTERS.map((filter) => <button key={filter.value} type="button" onClick={() => setStatusFilter(filter.value)} className={`min-h-11 whitespace-nowrap rounded-lg border px-3 text-[11px] font-medium transition ${statusFilter === filter.value ? 'border-white bg-white text-black' : 'border-[#191921] bg-[#060608] text-zinc-500 hover:text-white'}`}>{filter.label}</button>)}
-            </div>
-            <button type="button" onClick={() => void refresh()} disabled={refreshing} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-[#191921] bg-[#060608] px-3 text-[10px] font-mono text-zinc-400 transition hover:text-white disabled:opacity-50">{refreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} ATUALIZAR</button>
-          </div>
-        </section>
-
-        {error && <div role="alert" className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-[11px] text-rose-300">{error}</div>}
-
-        <section className="sm:hidden space-y-3">
-          {loading ? Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-xl border border-[#191921] bg-[#0b0b0f]" />) : filteredTransactions.length === 0 ? <EmptyState /> : filteredTransactions.map((tx) => <MobileTransaction key={tx.id} tx={tx} onCopy={copyTransactionId} copied={copiedId === tx.id} />)}
-        </section>
-
-        <section className="hidden overflow-hidden rounded-2xl border border-[#191921] bg-[#0b0b0f] sm:block">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-collapse text-left">
-              <thead><tr className="border-b border-[#191921] bg-[#08080b] text-[9px] font-mono uppercase tracking-wider text-zinc-600"><th className="px-4 py-3 font-normal">Transação</th><th className="px-4 py-3 font-normal">Comprador</th><th className="px-4 py-3 font-normal">Volume</th><th className="px-4 py-3 font-normal">Gateway</th><th className="px-4 py-3 font-normal">Status</th><th className="px-4 py-3 font-normal">Data</th></tr></thead>
-              <tbody>
-                {loading ? Array.from({ length: 6 }).map((_, index) => <tr key={index} className="border-b border-[#191921]/60"><td colSpan={6} className="px-4 py-5"><div className="h-4 animate-pulse rounded bg-zinc-900" /></td></tr>) : filteredTransactions.length === 0 ? <tr><td colSpan={6}><EmptyState /></td></tr> : filteredTransactions.map((tx) => <DesktopTransaction key={tx.id} tx={tx} onCopy={copyTransactionId} copied={copiedId === tx.id} />)}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </main>
-    </div>
-  )
-}
-
-function DesktopTransaction({ tx, onCopy, copied }: { tx: GatewayTransaction; onCopy: (id: string) => void; copied: boolean }) {
-  const customer = nestedCustomer(tx)
-  const meta = statusMeta(tx.status)
-  const Icon = meta.Icon
-  return <tr className="border-b border-[#191921]/60 transition hover:bg-white/[0.015] last:border-0">
-    <td className="px-4 py-3"><div className="flex items-center gap-2"><div><p className="max-w-[210px] truncate font-mono text-[11px] text-zinc-300">{tx.id}</p><p className="mt-1 max-w-[210px] truncate text-[9px] text-zinc-600">ext: {tx.external_id || '—'}</p></div><button type="button" onClick={() => void onCopy(tx.id)} aria-label="Copiar ID" className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-zinc-600 transition hover:bg-white/5 hover:text-white">{copied ? <CheckCircle2 size={13} /> : <Copy size={13} />}</button></div></td>
-    <td className="px-4 py-3"><p className="max-w-[190px] truncate text-xs text-zinc-200">{textValue(customer.name) || 'Cliente não identificado'}</p><p className="mt-1 max-w-[190px] truncate text-[10px] text-zinc-600">{textValue(customer.email) || textValue(customer.phone) || 'Contato não informado'}</p></td>
-    <td className="px-4 py-3"><span className="font-mono text-xs font-semibold text-white">{money(tx.amount, tx.currency)}</span></td>
-    <td className="px-4 py-3"><span className="font-mono text-[10px] text-zinc-400">{tx.gateway_id || '—'}</span></td>
-    <td className="px-4 py-3"><span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[9px] font-bold ${meta.className}`}><Icon size={11} />{meta.label}</span></td>
-    <td className="px-4 py-3"><span className="text-[10px] text-zinc-500">{new Date(tx.created_at).toLocaleString('pt-BR')}</span></td>
-  </tr>
-}
-
-function MobileTransaction({ tx, onCopy, copied }: { tx: GatewayTransaction; onCopy: (id: string) => void; copied: boolean }) {
-  const customer = nestedCustomer(tx)
-  const meta = statusMeta(tx.status)
-  const Icon = meta.Icon
-  return <article className="rounded-xl border border-[#191921] bg-[#0b0b0f] p-4">
-    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-mono text-[11px] text-zinc-300">{tx.id}</p><p className="mt-1 truncate text-[10px] text-zinc-600">{textValue(customer.email) || textValue(customer.phone) || 'Contato não informado'}</p></div><span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-bold ${meta.className}`}><Icon size={10} />{meta.label}</span></div>
-    <div className="mt-4 flex items-end justify-between gap-3"><div><p className="text-[10px] uppercase tracking-wider text-zinc-600">Comprador</p><p className="mt-1 text-xs font-medium text-zinc-200">{textValue(customer.name) || 'Cliente não identificado'}</p></div><p className="font-mono text-sm font-bold text-white">{money(tx.amount, tx.currency)}</p></div>
-    <div className="mt-4 flex items-center justify-between border-t border-[#191921] pt-3"><span className="text-[9px] font-mono text-zinc-600">{tx.gateway_id || 'gateway —'} · {new Date(tx.created_at).toLocaleString('pt-BR')}</span><button type="button" onClick={() => void onCopy(tx.id)} className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-[9px] font-mono text-zinc-500 hover:bg-white/5 hover:text-white">{copied ? <CheckCircle2 size={12} /> : <Copy size={12} />}{copied ? 'COPIADO' : 'ID'}</button></div>
-  </article>
-}
-
-function EmptyState() {
-  return <div className="flex min-h-32 flex-col items-center justify-center gap-2 p-6 text-center"><ArrowUpRight size={18} className="text-zinc-700" /><p className="text-xs text-zinc-500">Nenhum registro operacional localizado.</p><p className="text-[10px] text-zinc-700">Ajuste a busca ou o filtro de status.</p></div>
-}
+function Stat({label,value}:{label:string;value:number|string}){return <div className="rounded-lg border border-[#191921] bg-[#060608] px-3 py-2"><span className="block text-[8px] font-mono uppercase text-zinc-600">{label}</span><strong className="text-sm text-white">{value}</strong></div>}
+function SaleRow({sale,onCopy,copied,onOpen}:{sale:Sale;onCopy:(id:string)=>void;copied:boolean;onOpen:()=>void}){const c=customer(sale);const [label,cls,Icon]=statusMeta(sale.status);return <tr className="border-b border-[#191921]/60 last:border-0 hover:bg-white/[.015]"><td className="px-4 py-3"><div className="flex items-center gap-2"><span className="max-w-[190px] truncate font-mono text-[10px] text-zinc-300">{sale.id}</span><button type="button" onClick={()=>void onCopy(sale.id)} className="grid h-8 w-8 place-items-center rounded-md text-zinc-600 hover:text-white" aria-label="Copiar ID">{copied?<CheckCircle2 size={13}/>:<Copy size={13}/>}</button></div><p className="mt-1 text-[9px] text-zinc-600">{sale.external_id||'sem referência externa'}</p></td><td className="px-4 py-3"><p className="max-w-[170px] truncate text-xs">{text(c.name)||'Cliente não identificado'}</p><p className="max-w-[170px] truncate text-[10px] text-zinc-600">{text(c.email)||text(c.phone)||'Contato não informado'}</p></td><td className="px-4 py-3 font-mono text-xs font-semibold">{money(sale.amount,sale.currency)}</td><td className="px-4 py-3 font-mono text-[10px] text-zinc-500">{sale.funnel_id||'—'}</td><td className="px-4 py-3 font-mono text-[10px] text-zinc-500">{sale.gateway_id||'—'}</td><td className="px-4 py-3"><span className={`inline-flex items-center gap-1.5 text-[9px] font-bold ${cls}`}><Icon size={11}/>{label}</span></td><td className="px-4 py-3 text-[10px] text-zinc-500">{new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(new Date(sale.created_at))}</td><td className="px-4 py-3"><button type="button" onClick={onOpen} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[#191921] px-2.5 text-[10px] text-zinc-500 hover:text-white"><Eye size={13}/> Ver</button></td></tr>}
+function Details({sale,onClose}:{sale:Sale;onClose:()=>void}){const c=customer(sale);return <div className="fixed inset-0 z-[80] grid place-items-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Detalhes da venda"><div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border border-[#191921] bg-[#0b0b0f] p-5 shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-[9px] font-mono uppercase tracking-widest text-zinc-600">Transação</p><h2 className="mt-1 font-mono text-sm">{sale.id}</h2></div><button type="button" onClick={onClose} className="min-h-11 px-3 text-xs text-zinc-500 hover:text-white">Fechar</button></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{[['Status',sale.status],['Valor',money(sale.amount,sale.currency)],['Cliente',text(c.name)||'—'],['E-mail',text(c.email)||'—'],['Funil',sale.funnel_id||'—'],['Produto',sale.product_id||'—'],['Gateway',sale.gateway_id||'—'],['ID externo',sale.external_id||'—'],['Tentativas',String(sale.attempt_count)],['Criada',new Date(sale.created_at).toLocaleString('pt-BR')]].map(([k,v])=><div key={k} className="rounded-xl border border-[#191921] bg-[#060608] p-3"><span className="block text-[9px] font-mono uppercase text-zinc-600">{k}</span><span className="mt-1 block break-words text-xs text-zinc-200">{v}</span></div>)}</div>{sale.error_message&&<div className="mt-3 rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-xs text-rose-300">{sale.error_message}</div>}<pre className="mt-3 overflow-auto rounded-xl border border-[#191921] bg-[#060608] p-3 text-[9px] text-zinc-500">{JSON.stringify({metadata:sale.metadata,routing_metadata:sale.routing_metadata},null,2)}</pre></div></div>}
