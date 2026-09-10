@@ -89,8 +89,8 @@ run('Multi-CRM omnichannel runtime concurrency', () => {
       [accountId, externalMessageId, duplicateEvent],
     )
 
-    expect(first.rows[0].result->>'audit_recorded').toBe('true')
-    expect(second.rows[0].result->>'audit_recorded').toBe('false')
-    expect(second.rows[0].result->>'ignored_out_of_order').toBe('false')
+    expect(first.rows[0].result.audit_recorded).toBe(true)
+    expect(second.rows[0].result.audit_recorded).toBe(false)
+    expect(second.rows[0].result.ignored_out_of_order).toBe(false)
   })
 })
