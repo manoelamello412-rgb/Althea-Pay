@@ -8,6 +8,11 @@ function gateForRisk(riskClass: IaraRiskClass): GateContext {
   return GateContext.READ
 }
 
+function containsExternallyVerifiableReference(input: Record<string, unknown>): boolean {
+  const serialized = JSON.stringify(input)
+  return /\btx_[A-Za-z0-9_-]+\b|\bprod_[A-Za-z0-9_-]+\b|R\$\s*[0-9]/i.test(serialized)
+}
+
 export class IaraIndependentExecutionGuardrail implements IaraExecutionGuardrail {
   constructor(
     private readonly evaluator: IaraIndependentEvaluator,
@@ -20,6 +25,15 @@ export class IaraIndependentExecutionGuardrail implements IaraExecutionGuardrail
     context: IaraToolContext
   }): Promise<{ allowed: boolean; reason: string }> {
     const riskClass = this.riskResolver(input.tool)
+
+    // Purely contextual tools without externally verifiable business entities
+    // still pass through canonical authorization; there is no invented evidence
+    // to verify. The independent evaluator is invoked when the input contains
+    // business references that can be checked against the authoritative store.
+    if (!containsExternallyVerifiableReference(input.tool.input)) {
+      return { allowed: true, reason: 'No externally verifiable business reference was present; canonical authorization remains authoritative.' }
+    }
+
     const report = await this.evaluator.auditIaraOutput(
       {
         tenantId: input.context.tenantId,
