@@ -24,6 +24,7 @@ export interface IaraToolCall {
   toolKey: string
   version: number
   input: Record<string, unknown>
+  idempotencyKey?: string
 }
 
 export interface IaraExecutionPlan {
