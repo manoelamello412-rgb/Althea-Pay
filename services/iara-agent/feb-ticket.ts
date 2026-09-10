@@ -20,6 +20,10 @@ export interface IaraFEBTicket {
   readonly requestFingerprint: string
   readonly issuedAt: number
   readonly expiresAt: number
+  readonly iat: number
+  readonly exp: number
+  readonly iss: string
+  readonly aud: string
   readonly issuer: string
   readonly audience: string
   readonly kid: string
@@ -79,6 +83,7 @@ export function issueFEBTicket(call: IaraToolCall, context: IaraToolContext): st
   const now = Math.floor(Date.now() / 1000)
   const maxSeconds = Number(process.env.ALTHEA_FEB_TICKET_MAX_SECONDS || DEFAULT_TICKET_MAX_SECONDS)
   const ttl = Number.isFinite(maxSeconds) && maxSeconds > 0 ? Math.min(Math.floor(maxSeconds), 60) : DEFAULT_TICKET_MAX_SECONDS
+  const expiresAt = now + ttl
   const payload: IaraFEBTicket = {
     jti: randomUUID(),
     executionId: context.executionId,
@@ -91,7 +96,11 @@ export function issueFEBTicket(call: IaraToolCall, context: IaraToolContext): st
     idempotencyKey,
     requestFingerprint: fingerprint(call, context, gatewayId, action, idempotencyKey),
     issuedAt: now,
-    expiresAt: now + ttl,
+    expiresAt,
+    iat: now,
+    exp: expiresAt,
+    iss: issuer,
+    aud: audience,
     issuer,
     audience,
     kid,
