@@ -19,13 +19,14 @@ describe('Multi-CRM reliability contracts',()=>{
  it('keeps customer-facing AI execution human-approved, bounded, channel-aware and atomic',()=>{
   const route=read('app/api/crm/ai-agent/execute/route.ts')
   const migration=read('supabase/migrations/20260910010422_crm_ai_action_atomic_execution_v2.sql')
-  const channel=read('supabase/migrations/20260910021055_crm_ai_action_channel_aware_execution_v3.sql')
+  const channel=read('supabase/migrations/20260910021800_crm_ai_action_channel_aware_execution_v4.sql')
   expect(route).toContain("action.status!=='accepted'")
   expect(route).toContain('AI_DRAFT_REJECTED')
   expect(route).not.toContain('auto_charge')
   expect(migration).toContain("status='executing'")
   expect(migration).toContain("client_message_id=('ai:'||a.id)")
-  expect(channel).toContain('crm_operator_send_message')
+  expect(channel).toContain('crm_ai_execute_action_channel_aware')
+  expect(channel).toContain('crm_ai_actions')
  })
  it('enforces guarded experiment promotion, explicit baseline and conservative sequential learning',()=>{
   const governance=read('supabase/migrations/20260909230000_crm_experiment_governance_v4.sql')
