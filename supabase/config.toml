@@ -3,6 +3,10 @@ project_id = "hkraryqoziravulvqkid"
 [functions.gateway-orchestrator]
 verify_jwt = true
 
+[functions.gateway-provider-adapter]
+# Adapter is an internal service boundary authenticated by ALTHEA_INTERNAL_SECRET.
+verify_jwt = false
+
 [functions.gateway-webhook]
 verify_jwt = false
 
@@ -13,6 +17,9 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.gateway-refund]
+verify_jwt = true
+
+[functions.gateway-refund-v2]
 verify_jwt = true
 
 [functions.checkout-engine]
