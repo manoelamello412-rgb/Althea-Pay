@@ -17,18 +17,22 @@ async function verify(req:Request,body:Record<string,unknown>,userId:string,acti
   if(!token)return{ok:false as const,status:401,code:"TICKET_INVALID"};
   try{
     const parts=token.split(".");if(parts.length!==3)throw new Error("malformed");
-    const h=JSON.parse(atob(parts[0].replace(/-/g,"+").replace(/_/g,"/")));
-    if(!rec(h)||h.alg!=="RS256"||h.kid!==jwk.kid)throw new Error("header");
+    const decode=(s:string)=>JSON.parse(atob(s.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(s.length/4)*4,"=")));
+    const h=decode(parts[0]);if(!rec(h)||h.alg!=="RS256"||h.kid!==jwk.kid)throw new Error("header");
     const key=await importJWK(jwk,"RS256");
     const v=await jwtVerify(token,key,{algorithms:["RS256"],issuer:Deno.env.get("IARA_FEB_ISSUER")??"althea-pay:iara-kernel",audience:Deno.env.get("IARA_FEB_AUDIENCE")??"althea-pay:gateway-orchestrator",clockTolerance:10});
     const p=v.payload,now=Math.floor(Date.now()/1000);
-    if(typeof p.iat!=="number"||typeof p.exp!=="number"||now>p.exp||p.iat>now+10||now-p.iat>60)return{ok:false as const,status:403,code:"TICKET_EXPIRED"};
-    if(typeof p.jti!=="string"||typeof p.executionId!=="string"||typeof p.tenantId!=="string"||typeof p.userId!=="string"||typeof p.gatewayId!=="string"||typeof p.toolKey!=="string"||typeof p.toolVersion!=="number"||typeof p.idempotencyKey!=="string")return{ok:false as const,status:403,code:"TICKET_INVALID"};
+    if(typeof p.iat!=="number"||typeof p.exp!=="number"||now>p.exp||p.iat>now+10||now-p.iat>60)return{ok:false as const,status:403,code:now>Number(p.exp??0)?"TICKET_EXPIRED":"TICKET_INVALID"};
+    if(typeof p.jti!=="string"||typeof p.executionId!=="string"||typeof p.tenantId!=="string"||typeof p.userId!=="string"||typeof p.gatewayId!=="string"||typeof p.toolKey!=="string"||typeof p.toolVersion!=="number"||typeof p.idempotencyKey!=="string"||typeof p.requestFingerprint!=="string")return{ok:false as const,status:403,code:"TICKET_INVALID"};
     if(p.userId!==userId||p.action!==action)return{ok:false as const,status:403,code:"TICKET_IDENTITY_MISMATCH"};
     if(!(await tenantMember(userId,p.tenantId)))return{ok:false as const,status:403,code:"AUTHORIZATION_DENIED"};
-    const bodyGateway=typeof body.gateway_id==="string"?body.gateway_id.trim():"";
-    if(bodyGateway&&bodyGateway!==p.gatewayId)return{ok:false as const,status:403,code:"TICKET_COMMAND_MISMATCH"};
-    const input=rec(body.input)?body.input:body;
+    const bodyGateway=typeof body.gateway_id==="string"?body.gateway_id.trim():"";if(bodyGateway&&bodyGateway!==p.gatewayId)return{ok:false as const,status:403,code:"TICKET_COMMAND_MISMATCH"};
+    const headerIdempotency=(req.headers.get("x-idempotency-key")??req.headers.get("idempotency-key")??"").trim();if(headerIdempotency!==p.idempotencyKey)return{ok:false as const,status:403,code:"TICKET_COMMAND_MISMATCH"};
+    const bodyIdempotency=typeof body.idempotency_key==="string"?body.idempotency_key.trim():"";if(bodyIdempotency!==p.idempotencyKey)return{ok:false as const,status:403,code:"TICKET_COMMAND_MISMATCH"};
+    if(typeof body.execution_id==="string"&&body.execution_id.trim()!==p.executionId)return{ok:false as const,status:403,code:"TICKET_COMMAND_MISMATCH"};
+    if(typeof body.tool_key==="string"&&body.tool_key.trim()!==p.toolKey)return{ok:false as const,status:403,code:"TICKET_COMMAND_MISMATCH"};
+    if(body.tool_version!==undefined&&Number(body.tool_version)!==p.toolVersion)return{ok:false as const,status:403,code:"TICKET_COMMAND_MISMATCH"};
+    const input={funnel_id:body.funnel_id??null,product_id:body.product_id??null,amount:body.amount,currency:body.currency,customer:rec(body.customer)?body.customer:{},metadata:rec(body.metadata)?body.metadata:{}};
     const fingerprint=await hash(JSON.stringify(stable({tenant_id:p.tenantId,user_id:p.userId,tool_key:p.toolKey,tool_version:p.toolVersion,gateway_id:p.gatewayId,action:p.action,idempotency_key:p.idempotencyKey,input})));
     if(fingerprint!==p.requestFingerprint)return{ok:false as const,status:403,code:"TICKET_COMMAND_MISMATCH"};
     return{ok:true as const,jti:p.jti,executionId:p.executionId,tenantId:p.tenantId,userId:p.userId,toolKey:p.toolKey,toolVersion:p.toolVersion,gatewayId:p.gatewayId,action:p.action,idempotencyKey:p.idempotencyKey,issuer:String(p.iss??""),audience:String(p.aud??""),kid:String(h.kid),issuedAt:p.iat,expiresAt:p.exp,requestFingerprint:p.requestFingerprint};
@@ -36,22 +40,10 @@ async function verify(req:Request,body:Record<string,unknown>,userId:string,acti
 }
 
 async function consumeJti(ticket:Extract<Awaited<ReturnType<typeof verify>>,{ok:true}>){
-  const url=Deno.env.get("SUPABASE_URL"),service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if(!url||!service)return{ok:false as const,code:"EXECUTION_UNAVAILABLE"};
-  const db=createClient(url,service);
-  const {error}=await db.from("feb_consumed_tickets").insert({jti:ticket.jti,execution_id:ticket.executionId,tenant_id:ticket.tenantId,user_id:ticket.userId,tool_key:ticket.toolKey,tool_version:ticket.toolVersion,gateway_id:ticket.gatewayId,action:ticket.action,idempotency_key:ticket.idempotencyKey,request_fingerprint:ticket.requestFingerprint,issuer:ticket.issuer,audience:ticket.audience,kid:ticket.kid,issued_at:new Date(ticket.issuedAt*1000).toISOString(),expires_at:new Date(ticket.expiresAt*1000).toISOString()});
+  const url=Deno.env.get("SUPABASE_URL"),service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");if(!url||!service)return{ok:false as const,code:"EXECUTION_UNAVAILABLE"};
+  const db=createClient(url,service);const {error}=await db.from("feb_consumed_tickets").insert({jti:ticket.jti,execution_id:ticket.executionId,tenant_id:ticket.tenantId,user_id:ticket.userId,tool_key:ticket.toolKey,tool_version:ticket.toolVersion,gateway_id:ticket.gatewayId,action:ticket.action,idempotency_key:ticket.idempotencyKey,request_fingerprint:ticket.requestFingerprint,issuer:ticket.issuer,audience:ticket.audience,kid:ticket.kid,issued_at:new Date(ticket.issuedAt*1000).toISOString(),expires_at:new Date(ticket.expiresAt*1000).toISOString()});
   if(!error)return{ok:true as const};if(error.code==="23505")return{ok:false as const,code:"TICKET_REPLAYED"};return{ok:false as const,code:"EXECUTION_UNAVAILABLE"};
 }
 
-Deno.serve(async req=>{
-  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
-  if(req.method!=="POST")return json({ok:false,code:"METHOD_NOT_ALLOWED",retryable:false},405);
-  const user=await auth(req);if(!user)return json({ok:false,code:"UNAUTHORIZED",retryable:false},401);
-  let body:Record<string,unknown>;try{const x=await req.json();if(!rec(x))return json({ok:false,code:"INVALID_JSON",retryable:false},400);body=x}catch{return json({ok:false,code:"INVALID_JSON",retryable:false},400)}
-  const op=typeof body.operation==="string"?body.operation.toLowerCase():"create_payment";
-  const action=op==="refund"?"refund":"purchase";
-  if(op==="capture"||op==="void")return json({ok:false,code:"EXECUTION_UNAVAILABLE",retryable:false},503);
-  const v=await verify(req,body,user.id,action);if(!v.ok)return json({ok:false,code:v.code,retryable:false},v.status);
-  const consumed=await consumeJti(v);if(!consumed.ok)return json({ok:false,code:consumed.code,executionId:v.executionId,retryable:false},consumed.code==="TICKET_REPLAYED"?409:503);
-  return json({ok:false,code:"EXECUTION_UNAVAILABLE",executionId:v.executionId,retryable:false},503);
+Deno.serve(async req=>{if(req.method==="OPTIONS")return new Response("ok",{headers:cors});if(req.method!=="POST")return json({ok:false,code:"METHOD_NOT_ALLOWED",retryable:false},405);const user=await auth(req);if(!user)return json({ok:false,code:"UNAUTHORIZED",retryable:false},401);let body:Record<string,unknown>;try{const x=await req.json();if(!rec(x))return json({ok:false,code:"INVALID_JSON",retryable:false},400);body=x}catch{return json({ok:false,code:"INVALID_JSON",retryable:false},400)}const op=typeof body.operation==="string"?body.operation.toLowerCase():"create_payment";const action=op==="refund"?"refund":"purchase";if(op==="capture"||op==="void")return json({ok:false,code:"EXECUTION_UNAVAILABLE",retryable:false},503);const v=await verify(req,body,user.id,action);if(!v.ok)return json({ok:false,code:v.code,retryable:false},v.status);const consumed=await consumeJti(v);if(!consumed.ok)return json({ok:false,code:consumed.code,executionId:v.executionId,retryable:false},consumed.code==="TICKET_REPLAYED"?409:503);return json({ok:false,code:"EXECUTION_UNAVAILABLE",executionId:v.executionId,retryable:false},503);
 });
