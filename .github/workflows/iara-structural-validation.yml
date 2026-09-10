@@ -1,0 +1,57 @@
+name: "IARA: Structural Validation"
+
+on:
+  push:
+    branches: [ci/iara-validation]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iara-structural-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install --no-audit --no-fund --legacy-peer-deps
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: IARA authority graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f services/iara-agent/execution-kernel.ts
+          test -f services/iara-agent/tool-registry.ts
+          test -f services/iara-agent/authorization.ts
+          test -f services/iara-agent/idempotency-store.ts
+          test -f services/iara-agent/independent-execution-guardrail.ts
+          test -f services/iara-agent/feb-ticket.ts
+          test -f services/IaraIndependentEvaluator.ts
+          grep -q 'from "./tool-registry"' services/iara-agent/execution-kernel.ts
+          grep -q 'IaraFEBTicket' services/iara-agent/feb-ticket.ts
+          grep -q 'requestFingerprint' services/iara-agent/feb-ticket.ts
+          if grep -R -n --exclude-dir=node_modules --exclude-dir=.git 'from ["'"'"']\./registry["'"'"']' services app supabase/functions 2>/dev/null; then
+            echo 'Legacy shadow registry import detected.' >&2
+            exit 1
+          fi
+      - name: Fail-closed financial writers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in supabase/functions/gateway-provider-adapter/index.ts supabase/functions/gateway-provider-adapter-v2/index.ts supabase/functions/gateway-payment-link/index.ts supabase/functions/gateway-refund/index.ts supabase/functions/gateway-refund-v2/index.ts supabase/functions/checkout-engine/index.ts; do
+            if test -f "$f"; then grep -Eq '410|EXECUTION_UNAVAILABLE|RETIRED' "$f"; fi
+          done
+      - name: Unit tests
+        run: npm test -- --run
