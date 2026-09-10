@@ -46,6 +46,18 @@ jobs:
             echo 'Legacy shadow registry import detected.' >&2
             exit 1
           fi
+      - name: Financial boundary integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f supabase/functions/checkout-engine-v2/index.ts; then
+            if grep -n 'functions/v1/gateway-orchestrator' supabase/functions/checkout-engine-v2/index.ts >/dev/null 2>&1; then
+              grep -n 'x-althea-feb-ticket-signature' supabase/functions/checkout-engine-v2/index.ts >/dev/null 2>&1 || {
+                echo 'checkout-engine-v2 calls gateway-orchestrator without FEB ticket propagation.' >&2
+                exit 1
+              }
+            fi
+          fi
       - name: Fail-closed financial writers
         shell: bash
         run: |
