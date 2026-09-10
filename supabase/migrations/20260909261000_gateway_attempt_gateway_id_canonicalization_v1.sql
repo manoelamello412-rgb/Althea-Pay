@@ -3,8 +3,6 @@ alter table public.gateway_payment_attempts alter column gateway_id type text us
 alter table public.gateway_payment_attempts drop constraint if exists gateway_payment_attempts_gateway_id_fkey;
 alter table public.gateway_payment_attempts add constraint gateway_payment_attempts_gateway_id_fkey foreign key (gateway_id) references public.gateways(id);
 
-create index if not exists idx_gateway_payment_attempts_tenant_gateway on public.gateway_payment_attempts(user_id,gateway_id,created_at desc);
-
 create or replace function public.gateway_attempt_gateway_tenant_integrity()
 returns trigger
 language plpgsql
