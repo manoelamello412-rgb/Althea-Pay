@@ -1,0 +1,5 @@
+create index if not exists crm_channel_identities_conversation_fk_idx on public.crm_channel_identities(conversation_id);
+create index if not exists crm_channel_message_outbox_account_fk_idx on public.crm_channel_message_outbox(channel_account_id);
+create index if not exists crm_channel_message_outbox_conversation_fk_idx on public.crm_channel_message_outbox(conversation_id);
+drop index if exists public.automation_executions_user_rule_key_idx_v2;
+drop index if exists public.crm_messages_conversation_created_idx_v2;
