@@ -1,0 +1,1 @@
+grant execute on function public.persist_iara_independent_evaluation(uuid, uuid, text, numeric, numeric, numeric, numeric, numeric, numeric, numeric, bigint, integer, text, text, jsonb, jsonb, jsonb, jsonb) to service_role;
