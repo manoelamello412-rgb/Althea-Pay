@@ -1,7 +1,7 @@
 'use client'
 
-import DashboardMobile from '@/components/dashboard-control'
+import DashboardCommandCenter from '@/components/dashboard-command-center'
 
 export default function DashboardPage() {
-  return <DashboardMobile />
+  return <DashboardCommandCenter />
 }
