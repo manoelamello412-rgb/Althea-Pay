@@ -34,6 +34,17 @@ describe('Multi-CRM reliability contracts',()=>{
   expect(sequential).toContain('eligible_for_winner')
   expect(idempotency).toContain('crm_exp_outcome_subject_once_uidx')
  })
+ it('keeps predictive calibration grounded in persisted snapshots and real outcomes',()=>{
+  const route=read('app/api/crm/predictive-scores/route.ts')
+  const snapshot=read('supabase/migrations/20260910008000_crm_predictive_snapshot_idempotency_v2.sql')
+  const summary=read('supabase/migrations/20260910007000_crm_predictive_summary_ltv_v2.sql')
+  expect(route).toContain("crm_predictive_snapshot")
+  expect(route).toContain('evaluation_status')
+  expect(snapshot).toContain("created_at>=now()-interval '5 minutes'")
+  expect(snapshot).toContain('crm_predictive_eval_snapshot_lookup_idx')
+  expect(summary).toContain('evaluation_coverage')
+  expect(summary).toContain('ltv_mae')
+ })
  it('keeps automation attempt auditing retry-aware, owner-scoped and initplan-safe',()=>{
   const base=read('supabase/migrations/20260910002000_crm_automation_attempt_audit_v3.sql')
   const cleanup=read('supabase/migrations/20260910003000_crm_automation_attempts_rls_cleanup_v4.sql')
