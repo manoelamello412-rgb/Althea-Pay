@@ -28,11 +28,12 @@ const executionResultSchema = {
   properties: {
     ok: { type: 'boolean' },
     action_id: { type: 'string' },
+    execution_id: { type: 'string' },
     status: { type: 'string' },
     executed_at: { type: 'string' },
     message: { type: 'object' },
   },
-  required: ['ok', 'action_id', 'status'],
+  required: ['ok', 'action_id', 'execution_id', 'status'],
   additionalProperties: true,
 } as const
 
