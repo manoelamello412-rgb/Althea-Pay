@@ -77,7 +77,7 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
     <div className="min-h-screen bg-[var(--althea-bg)] text-white antialiased">
       <aside className="fixed inset-y-0 left-0 z-[80] hidden w-[250px] border-r border-white/[0.04] bg-[var(--althea-surface)] px-4 py-6 lg:flex lg:flex-col">
         <button type="button" onClick={() => go('dashboard')} aria-label="ALTHEA PAY — Dashboard" className="mb-8 flex items-center justify-center rounded-2xl border border-white/[0.04] bg-[var(--althea-bg)] p-4">
-          <BrandLogo variant="main" priority alt="ALTHEA PAY" className="h-12 w-auto object-contain" />
+          <BrandLogo variant="inner" priority alt="ALTHEA PAY" className="h-12 w-auto max-w-full object-contain" />
         </button>
         <nav aria-label="Navegação principal" className="space-y-1">
           {tabs.map(({ id, label, icon: Icon, href }) => (
@@ -89,7 +89,7 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
       <header className="fixed inset-x-0 top-0 z-[100] h-[141px] border-b border-white/[0.04] bg-[rgba(11,11,13,0.97)] px-5 backdrop-blur-xl lg:pl-[274px]">
         <div className="mx-auto flex h-full w-full max-w-[1180px] items-center gap-0">
           <button type="button" onClick={() => go('dashboard')} aria-label="Voltar ao Dashboard" className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)]">
-            <BrandLogo variant="mark" priority alt="ALTHEA PAY" className="h-14 w-14 object-contain drop-shadow-[0_0_20px_rgba(29,187,84,0.2)]" />
+            <BrandLogo variant="inner" priority alt="ALTHEA PAY" className="h-14 w-14 object-contain" />
           </button>
           <div className="mx-6 h-12 w-px shrink-0 bg-white/[0.10]" aria-hidden="true" />
           <h1 className="min-w-0 truncate whitespace-nowrap text-[27px] font-semibold tracking-[-0.025em] text-[#F4F5F4] sm:text-[30px]">
