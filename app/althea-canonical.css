@@ -167,13 +167,6 @@ a { -webkit-user-select: none; user-select: none; }
 .althea-page-content [class*="border-white/[0.08]"] { border-color: var(--althea-border) !important; }
 .althea-page-content [class*="divide-white/[0.08]"] > :not([hidden]) ~ :not([hidden]) { border-color: var(--althea-border) !important; }
 
-@media (min-width: 768px) {
-  .althea-page-content > div.min-h-screen > main.max-w-md,
-  .althea-page-content > div.min-h-screen > main[class*="max-w-md"] {
-    max-width: min(1280px, calc(100vw - 282px)) !important;
-  }
-}
-
 @media (max-width: 767px) {
   :root { --althea-content-bottom: 128px; }
   .althea-ds-card,
