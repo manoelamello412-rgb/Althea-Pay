@@ -139,6 +139,32 @@ a { -webkit-user-select: none; user-select: none; }
 .brand-lockup-pay,
 .brand-lockup-tag b { color: var(--althea-brand); }
 
+/* Compatibility normalization for older dashboard modules.
+ * These selectors intentionally reuse the canonical tokens instead of creating another theme.
+ */
+.althea-page-content [class*="bg-[#020203]"] { background: var(--althea-bg) !important; }
+.althea-page-content [class*="bg-[#0a0a0c]"] { background: var(--althea-surface) !important; }
+.althea-page-content [class*="bg-[#0B0B0D]"] { background: var(--althea-bg) !important; }
+.althea-page-content [class*="bg-[#0F1A16]"] { background: var(--althea-surface) !important; }
+.althea-page-content [class*="border-white/[0.12]"] { border-color: var(--althea-border) !important; }
+.althea-page-content [class*="text-emerald-"] { color: var(--althea-brand) !important; }
+.althea-page-content [class*="bg-emerald-"] { background-color: var(--althea-brand) !important; }
+.althea-page-content [class*="border-emerald-"] { border-color: rgba(29, 184, 84, 0.25) !important; }
+.althea-page-content [class*="text-zinc-500"],
+.althea-page-content [class*="text-zinc-400"] { color: var(--althea-muted) !important; }
+.althea-page-content [class*="text-zinc-300"],
+.althea-page-content [class*="text-zinc-200"],
+.althea-page-content [class*="text-zinc-100"] { color: #F5F7F6 !important; }
+.althea-page-content [class*="border-white/[0.08]"] { border-color: var(--althea-border) !important; }
+.althea-page-content [class*="divide-white/[0.08]"] > :not([hidden]) ~ :not([hidden]) { border-color: var(--althea-border) !important; }
+
+@media (min-width: 768px) {
+  .althea-page-content > div.min-h-screen > main.max-w-md,
+  .althea-page-content > div.min-h-screen > main[class*="max-w-md"] {
+    max-width: min(1280px, calc(100vw - 282px)) !important;
+  }
+}
+
 @media (max-width: 767px) {
   :root { --althea-content-bottom: 128px; }
   .althea-ds-card,
