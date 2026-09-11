@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, CheckCircle2, Clock3, Loader2, Radio, RefreshCw, ServerCog, TriangleAlert, XCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import MobileShell from '@/components/mobile-shell'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type HealthState = 'collecting' | 'operational' | 'degraded' | 'unstable'
@@ -40,10 +41,10 @@ function routingLatency(log: RoutingLog): number | null {
 
 function statusMeta(status: HealthState) {
   switch (status) {
-    case 'operational': return { label: 'SISTEMA OPERACIONAL', className: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400', icon: CheckCircle2 }
-    case 'degraded': return { label: 'SISTEMA DEGRADADO', className: 'border-amber-500/20 bg-amber-500/10 text-amber-400', icon: TriangleAlert }
+    case 'operational': return { label: 'SISTEMA OPERACIONAL', className: 'border-[#1DB854]/20 bg-[#1DB854]/10 text-[#1DB854]', icon: CheckCircle2 }
+    case 'degraded': return { label: 'SISTEMA DEGRADADO', className: 'border-[#D4AF37]/25 bg-[#D4AF37]/10 text-[#D4AF37]', icon: TriangleAlert }
     case 'unstable': return { label: 'INSTABILIDADE DETECTADA', className: 'border-rose-500/20 bg-rose-500/10 text-rose-400', icon: XCircle }
-    default: return { label: 'COLETANDO DADOS', className: 'border-zinc-800 bg-zinc-900/40 text-zinc-500', icon: Activity }
+    default: return { label: 'COLETANDO DADOS', className: 'border-white/[0.06] bg-[#0F1A16] text-[#A6A6A6]', icon: Activity }
   }
 }
 
@@ -86,7 +87,6 @@ export default function PerformanceSettingsPage() {
     }
     setTelemetry((current) => ({ ...current, edgeLatencyMs: latency, lastChecked: checkedAt, healthOk: ok }))
     setPings((current) => [{ id: `${checkedAt}-${latency}`, latency, at: checkedAt, ok }, ...current].slice(0, MAX_PINGS))
-    return ok
   }, [])
 
   useEffect(() => {
@@ -121,19 +121,42 @@ export default function PerformanceSettingsPage() {
   const StatusIcon = meta.icon
   const lastCheck = telemetry.lastChecked ? new Date(telemetry.lastChecked).toLocaleTimeString('pt-BR') : '—'
 
-  return <div className="min-h-screen bg-[#060608] text-zinc-100 antialiased font-sans">
-    <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-[#191921] bg-[#0b0b0f]/95 px-4 backdrop-blur sm:px-6"><button type="button" onClick={() => router.push('/dashboard/settings')} className="min-h-11 px-1 text-xs font-mono text-zinc-400 transition hover:text-white">← VOLTAR</button><div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-zinc-500"><Radio size={13} className="text-[#1DB854]"/> Desempenho</div></header>
-    <main className="mx-auto w-full max-w-4xl space-y-4 p-4 pb-32 sm:p-6 sm:pb-32">
-      <section className="rounded-2xl border border-[#191921] bg-[#0b0b0f] p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl border border-[#1DB854]/20 bg-[#0f1a16] text-[#1DB854]"><ServerCog size={18}/></span><div><h1 className="text-lg font-bold tracking-tight">Saúde da Plataforma</h1><p className="text-[11px] text-zinc-500">Telemetria real de borda e roteamento transacional.</p></div></div><div className={`inline-flex min-h-9 items-center gap-2 self-start rounded-full border px-3 text-[10px] font-bold tracking-wide ${meta.className}`}><StatusIcon size={13}/>{meta.label}</div></div><div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2"><Metric label="Latência de Borda" value={telemetry.edgeLatencyMs} suffix="ms" description="Tempo medido do cliente até a resposta da rota de health."/><Metric label="Latência de Adquirentes" value={telemetry.acquirerLatencyMs} suffix="ms" description="Média dos tempos observados nos logs reais de roteamento."/></div></section>
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2"><MetricCard label="Estabilidade do Roteamento" value={telemetry.stabilityRate === null ? '—' : `${telemetry.stabilityRate.toFixed(1)}%`} icon={<Activity size={15}/>} description="Sucesso dos últimos eventos de roteamento disponíveis para esta conta."/><MetricCard label="Disponibilidade do Core" value={telemetry.coreAvailabilityRate === null ? '—' : `${telemetry.coreAvailabilityRate.toFixed(1)}%`} icon={<CheckCircle2 size={15}/>} description="Disponibilidade observada pelos probes desta sessão; não é um SLA global."/></section>
-      {telemetry.acquirerLatencyMs !== null && telemetry.acquirerLatencyMs > DEGRADED_ACQUIRER_MS && <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-200"><TriangleAlert size={16} className="mt-0.5 shrink-0"/><div><p className="font-semibold">Gargalo de adquirência detectado</p><p className="mt-1 text-[11px] text-amber-200/70">A latência observada ultrapassou {DEGRADED_ACQUIRER_MS} ms. Isso pode aumentar o tempo de checkout e merece investigação operacional.</p></div></div>}
-      <section className="rounded-2xl border border-[#191921] bg-[#0b0b0f] p-5"><div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><Clock3 size={14} className="text-zinc-500"/><h2 className="text-sm font-semibold">Histórico de Latência</h2></div><p className="mt-1 text-[10px] text-zinc-600">Últimos probes realizados nesta sessão.</p></div><button type="button" disabled={refreshing} onClick={() => void refresh()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#191921] bg-[#060608] px-3 text-[10px] font-mono text-zinc-400 transition hover:text-white disabled:opacity-50">{refreshing ? <Loader2 size={13} className="animate-spin"/> : <RefreshCw size={13}/>} ATUALIZAR</button></div><div className="mt-4 overflow-hidden rounded-xl border border-[#191921] bg-[#060608]"><div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-[#191921] px-4 py-2 text-[9px] font-mono uppercase tracking-wider text-zinc-600"><span>Sequência</span><span>Resposta</span><span>Status</span></div>{pings.length === 0 ? <div className="p-6 text-center text-[11px] text-zinc-600">Aguardando telemetria.</div> : pings.map((ping, index) => <div key={ping.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[#191921]/60 px-4 py-2.5 text-[10px] font-mono last:border-0"><span className="text-zinc-500">PULSE_{String(index + 1).padStart(2, '0')} · {new Date(ping.at).toLocaleTimeString('pt-BR')}</span><span className={ping.latency > 300 ? 'font-semibold text-amber-400' : 'text-zinc-300'}>{ping.latency} ms</span><span className={ping.ok ? 'text-emerald-400' : 'text-rose-400'}>{ping.ok ? 'OK' : 'FALHA'}</span></div>)}</div><div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-zinc-600"><span>ÚLTIMA VARREDURA · {lastCheck}</span><span>{logs.length} logs transacionais carregados</span></div></section>
-      {error && <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-[11px] text-rose-300" role="alert">{error}</div>}
-      {loading && <div className="flex items-center justify-center gap-2 py-8 text-xs text-zinc-600"><Loader2 size={14} className="animate-spin"/> Inicializando telemetria…</div>}
-    </main>
-  </div>
+  return (
+    <MobileShell activeTab="dashboard" onTabChange={(tab) => {
+      const routes = { dashboard: '/dashboard', gateways: '/dashboard/gateways', chat: '/dashboard/crm', ia: '/dashboard/ia', funil: '/dashboard/funil' } as const
+      router.push(routes[tab])
+    }}>
+      <div className="mx-auto w-full max-w-4xl space-y-4 pb-16">
+        <div className="flex items-center gap-3 border-b border-white/[0.06] pb-4">
+          <button type="button" onClick={() => router.push('/dashboard/settings')} className="min-h-11 rounded-lg px-1 text-xs font-mono text-[#A6A6A6] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1DB854]/40">← VOLTAR</button>
+          <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-[#A6A6A6]"><Radio size={13} className="text-[#1DB854]" aria-hidden="true" /> Desempenho</div>
+        </div>
+
+        <section className="rounded-2xl border border-white/[0.06] bg-[#0F1A16] p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#1DB854]/20 bg-[#0D362D] text-[#1DB854]"><ServerCog size={18} aria-hidden="true" /></span><div><h1 className="text-lg font-bold tracking-tight text-white">Saúde da Plataforma</h1><p className="text-[11px] text-[#A6A6A6]">Telemetria real de borda e roteamento transacional.</p></div></div>
+            <div className={`inline-flex min-h-9 items-center gap-2 self-start rounded-full border px-3 text-[10px] font-bold tracking-wide ${meta.className}`}><StatusIcon size={13} aria-hidden="true" />{meta.label}</div>
+          </div>
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2"><Metric label="Latência de Borda" value={telemetry.edgeLatencyMs} suffix="ms" description="Tempo medido do cliente até a resposta da rota de health."/><Metric label="Latência de Adquirentes" value={telemetry.acquirerLatencyMs} suffix="ms" description="Média dos tempos observados nos logs reais de roteamento."/></div>
+        </section>
+
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2"><MetricCard label="Estabilidade do Roteamento" value={telemetry.stabilityRate === null ? '—' : `${telemetry.stabilityRate.toFixed(1)}%`} icon={<Activity size={15} aria-hidden="true" />} description="Sucesso dos últimos eventos de roteamento disponíveis para esta conta."/><MetricCard label="Disponibilidade do Core" value={telemetry.coreAvailabilityRate === null ? '—' : `${telemetry.coreAvailabilityRate.toFixed(1)}%`} icon={<CheckCircle2 size={15} aria-hidden="true" />} description="Disponibilidade observada pelos probes desta sessão; não é um SLA global."/></section>
+
+        {telemetry.acquirerLatencyMs !== null && telemetry.acquirerLatencyMs > DEGRADED_ACQUIRER_MS && <div className="flex items-start gap-3 rounded-xl border border-[#D4AF37]/20 bg-[#D4AF37]/5 p-4 text-xs text-[#D4AF37]" role="status"><TriangleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true"/><div><p className="font-semibold">Gargalo de adquirência detectado</p><p className="mt-1 text-[11px] opacity-70">A latência observada ultrapassou {DEGRADED_ACQUIRER_MS} ms. Isso pode aumentar o tempo de checkout e merece investigação operacional.</p></div></div>}
+
+        <section className="rounded-2xl border border-white/[0.06] bg-[#0F1A16] p-5">
+          <div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><Clock3 size={14} className="text-[#A6A6A6]" aria-hidden="true"/><h2 className="text-sm font-semibold text-white">Histórico de Latência</h2></div><p className="mt-1 text-[10px] text-[#A6A6A6]">Últimos probes realizados nesta sessão.</p></div><button type="button" disabled={refreshing} onClick={() => void refresh()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/[0.06] bg-[#0B0B0D] px-3 text-[10px] font-mono text-[#A6A6A6] transition hover:text-white disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1DB854]/40">{refreshing ? <Loader2 size={13} className="animate-spin" aria-hidden="true"/> : <RefreshCw size={13} aria-hidden="true"/>} ATUALIZAR</button></div>
+          <div className="mt-4 overflow-x-auto rounded-xl border border-white/[0.06] bg-[#0B0B0D]"><div className="grid min-w-[420px] grid-cols-[1fr_auto_auto] gap-3 border-b border-white/[0.06] px-4 py-2 text-[9px] font-mono uppercase tracking-wider text-[#A6A6A6]"><span>Sequência</span><span>Resposta</span><span>Status</span></div>{pings.length === 0 ? <div className="p-6 text-center text-[11px] text-[#A6A6A6]">Aguardando telemetria.</div> : pings.map((ping, index) => <div key={ping.id} className="grid min-w-[420px] grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-white/[0.04] px-4 py-2.5 text-[10px] font-mono last:border-0"><span className="truncate text-[#A6A6A6]">PULSE_{String(index + 1).padStart(2, '0')} · {new Date(ping.at).toLocaleTimeString('pt-BR')}</span><span className={ping.latency > 300 ? 'font-semibold text-[#D4AF37]' : 'text-white'}>{ping.latency} ms</span><span className={ping.ok ? 'text-[#1DB854]' : 'text-rose-400'}>{ping.ok ? 'OK' : 'FALHA'}</span></div>)}</div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-[#A6A6A6]"><span>ÚLTIMA VARREDURA · {lastCheck}</span><span>{logs.length} logs transacionais carregados</span></div>
+        </section>
+
+        {error && <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-[11px] text-rose-300" role="alert">{error}</div>}
+        {loading && <div className="flex items-center justify-center gap-2 py-8 text-xs text-[#A6A6A6]" role="status"><Loader2 size={14} className="animate-spin" aria-hidden="true"/> Inicializando telemetria…</div>}
+      </div>
+    </MobileShell>
+  )
 }
 
-function Metric({ label, value, suffix, description }: { label: string; value: number | null; suffix: string; description: string }) { return <div className="rounded-xl border border-[#191921]/70 bg-[#060608] p-4"><span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">{label}</span><div className="mt-2 flex items-baseline gap-1.5"><span className="text-3xl font-bold tracking-tight text-white">{value === null ? '—' : value}</span><span className="text-xs font-mono text-zinc-600">{suffix}</span></div><p className="mt-2 text-[10px] leading-relaxed text-zinc-600">{description}</p></div> }
+function Metric({ label, value, suffix, description }: { label: string; value: number | null; suffix: string; description: string }) { return <div className="rounded-xl border border-white/[0.06] bg-[#0B0B0D] p-4"><span className="text-[10px] font-mono uppercase tracking-wider text-[#A6A6A6]">{label}</span><div className="mt-2 flex items-baseline gap-1.5"><span className="text-3xl font-bold tracking-tight text-white">{value === null ? '—' : value}</span><span className="text-xs font-mono text-[#A6A6A6]">{suffix}</span></div><p className="mt-2 text-[10px] leading-relaxed text-[#A6A6A6]">{description}</p></div> }
 
-function MetricCard({ label, value, icon, description }: { label: string; value: string; icon: React.ReactNode; description: string }) { return <div className="rounded-2xl border border-[#191921] bg-[#0b0b0f] p-5"><div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-zinc-500">{icon}{label}</div><div className="mt-2 text-2xl font-bold tracking-tight text-white">{value}</div><p className="mt-1 text-[10px] leading-relaxed text-zinc-600">{description}</p></div> }
+function MetricCard({ label, value, icon, description }: { label: string; value: string; icon: React.ReactNode; description: string }) { return <div className="rounded-2xl border border-white/[0.06] bg-[#0F1A16] p-5"><div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-[#A6A6A6]">{icon}{label}</div><div className="mt-2 text-2xl font-bold tracking-tight text-white">{value}</div><p className="mt-1 text-[10px] leading-relaxed text-[#A6A6A6]">{description}</p></div> }
