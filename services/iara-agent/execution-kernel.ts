@@ -21,6 +21,7 @@ interface AiActionRow {
 export interface IaraExecutionResult {
   readonly ok: boolean
   readonly action_id: string
+  readonly execution_id: string
   readonly status: string
   readonly executed_at?: string
   readonly message?: Record<string, unknown>
@@ -41,14 +42,8 @@ export class IaraExecutionKernel {
 
     const tool = getIaraToolDefinition(action.action_type)
     if (!tool) throw new IaraKernelError('ACTION_NOT_REGISTERED', 422)
-
-    if (tool.authorization !== 'authenticated_owner') {
-      throw new IaraKernelError('AUTHORIZATION_POLICY_INVALID', 403)
-    }
-
-    if (action.status !== 'accepted') {
-      throw new IaraKernelError('HUMAN_APPROVAL_REQUIRED', 409)
-    }
+    if (tool.authorization !== 'authenticated_owner') throw new IaraKernelError('AUTHORIZATION_POLICY_INVALID', 403)
+    if (action.status !== 'accepted') throw new IaraKernelError('HUMAN_APPROVAL_REQUIRED', 409)
 
     const payload = action.payload ?? {}
     const draft = typeof payload.ai_draft === 'string' ? payload.ai_draft.trim() : ''
@@ -62,13 +57,21 @@ export class IaraExecutionKernel {
     })
 
     if (error) throw new IaraKernelError('AI_ACTION_EXECUTION_FAILED', 409, error.message)
-    if (!isExecutionRecord(data) || data.ok !== true || data.action_id !== action.id || data.status !== 'executed') {
+    if (
+      !isExecutionRecord(data)
+      || data.ok !== true
+      || data.action_id !== action.id
+      || data.status !== 'executed'
+      || typeof data.execution_id !== 'string'
+      || !isUuid(data.execution_id)
+    ) {
       throw new IaraKernelError('INVALID_EXECUTION_RESULT', 502)
     }
 
     return {
       ok: true,
       action_id: action.id,
+      execution_id: data.execution_id,
       status: 'executed',
       executed_at: typeof data.executed_at === 'string' ? data.executed_at : undefined,
       message: isRecord(data.message) ? data.message : undefined,
@@ -94,6 +97,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isExecutionRecord(value: unknown): value is {
   ok: boolean
   action_id: string
+  execution_id: string
   status: string
   executed_at?: unknown
   message?: unknown
@@ -101,5 +105,10 @@ function isExecutionRecord(value: unknown): value is {
   return isRecord(value)
     && typeof value.ok === 'boolean'
     && typeof value.action_id === 'string'
+    && typeof value.execution_id === 'string'
     && typeof value.status === 'string'
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
