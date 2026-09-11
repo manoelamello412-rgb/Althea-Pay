@@ -62,10 +62,7 @@ export class IaraExecutionKernel {
     })
 
     if (error) throw new IaraKernelError('AI_ACTION_EXECUTION_FAILED', 409, error.message)
-    if (!data || typeof data !== 'object') throw new IaraKernelError('INVALID_EXECUTION_RESULT', 502)
-
-    const result = data as Record<string, unknown>
-    if (result.ok !== true || result.action_id !== action.id || result.status !== 'executed') {
+    if (!isExecutionRecord(data) || data.ok !== true || data.action_id !== action.id || data.status !== 'executed') {
       throw new IaraKernelError('INVALID_EXECUTION_RESULT', 502)
     }
 
@@ -73,8 +70,8 @@ export class IaraExecutionKernel {
       ok: true,
       action_id: action.id,
       status: 'executed',
-      executed_at: typeof result.executed_at === 'string' ? result.executed_at : undefined,
-      message: isRecord(result.message) ? result.message : undefined,
+      executed_at: typeof data.executed_at === 'string' ? data.executed_at : undefined,
+      message: isRecord(data.message) ? data.message : undefined,
     }
   }
 }
@@ -92,4 +89,17 @@ export class IaraKernelError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isExecutionRecord(value: unknown): value is {
+  ok: boolean
+  action_id: string
+  status: string
+  executed_at?: unknown
+  message?: unknown
+} {
+  return isRecord(value)
+    && typeof value.ok === 'boolean'
+    && typeof value.action_id === 'string'
+    && typeof value.status === 'string'
 }
