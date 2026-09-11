@@ -10,7 +10,7 @@ describe('Multi-CRM inbox operational contracts',()=>{
     expect(page).toContain("supabase.rpc('crm_assign_conversation'")
     expect(page).toContain("supabase.from('crm_agents')")
     expect(page).toContain("supabase.from('crm_teams')")
-    expect(page).toContain('/dashboard/crm/customer-360?conversation=')
+    expect(page).toContain('loading360')
     expect(page).toContain("supabase.rpc('crm_customer_360'")
   })
 
