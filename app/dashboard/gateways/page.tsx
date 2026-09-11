@@ -30,7 +30,7 @@ interface NetworkLogEvent {
 
 interface GatewayRow {
   id: string;
-  name?: string | null;
+  display_name?: string | null;
   provider?: string | null;
   status?: string | null;
   priority?: number | null;
@@ -83,12 +83,12 @@ export default function GatewaysManagementPage() {
         return;
       }
 
-      const { data, error } = await supabase.from('gateways').select('id,name,provider,status,priority').eq('user_id', userId).order('priority', { ascending: true });
+      const { data, error } = await supabase.from('gateways').select('id,display_name,provider,status,priority').eq('user_id', userId).order('priority', { ascending: true });
       if (error) throw error;
 
       const rows = (data ?? []) as GatewayRow[];
       const mapped = rows.map((row, index): GatewayState | null => {
-        const provider = normalizeProvider(row.provider ?? row.name);
+        const provider = normalizeProvider(row.provider ?? row.display_name);
         if (!provider) return null;
         const priority = Number.isFinite(row.priority) ? Number(row.priority) : index + 1;
         return {
@@ -123,7 +123,7 @@ export default function GatewaysManagementPage() {
       if (!active || !userId) return;
       channel = supabase.channel(`gateway-telemetry-${userId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'gateways', filter: `user_id=eq.${userId}` }, (payload) => {
         const row = (payload.new ?? payload.old) as GatewayRow;
-        const provider = normalizeProvider(row.provider ?? row.name);
+        const provider = normalizeProvider(row.provider ?? row.display_name);
         if (!provider || !row.id) return;
         const nextStatus = normalizeStatus(row.status);
         setGateways((current) => {
