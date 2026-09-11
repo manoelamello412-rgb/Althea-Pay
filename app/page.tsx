@@ -2,7 +2,7 @@
 
 import { WhiteLabelWorkspace } from '@/components/white-label-workspace'
 import MobileBottomNav from '@/components/mobile-bottom-nav'
-import DashboardControl from '@/components/dashboard-control'
+import AltheaDashboardControl from '@/components/althea-dashboard-control'
 import SalesMobile from '@/components/sales-mobile'
 import GatewaysMobile from '@/components/gateways-mobile'
 import FunnelsMobile from '@/components/funnels-mobile'
@@ -30,7 +30,7 @@ export default function DashboardPage() {
         paddingBottom: mobile ? '5.5rem' : undefined,
       }}
     >
-      <div style={{ display: mobilePage === 'dashboard' ? 'block' : 'none' }}><DashboardControl /></div>
+      <div style={{ display: mobilePage === 'dashboard' ? 'block' : 'none' }}><AltheaDashboardControl /></div>
       <div style={{ display: mobilePage === 'vendas' ? 'block' : 'none' }}><SalesMobile /></div>
       <div style={{ display: mobilePage === 'funis' ? 'block' : 'none' }}><FunnelsMobile /></div>
       <div style={{ display: mobilePage === 'gateways' ? 'block' : 'none' }}><GatewaysMobile /></div>
