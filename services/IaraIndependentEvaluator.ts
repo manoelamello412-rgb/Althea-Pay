@@ -26,8 +26,115 @@ export interface IaraEvaluationResult {
   readonly decision: string
 }
 
+export interface IaraExecutionEvidenceAssessment {
+  readonly executionId: string
+  readonly tenantId: string
+  readonly actionId: string
+  readonly actionStatus: string
+  readonly executedAt: string
+  readonly metrics: {
+    readonly latencyMs: number | null
+    readonly totalCostMinor: number | null
+    readonly overallScore: number | null
+    readonly hallucinationRisk: number | null
+    readonly groundingScore: number | null
+    readonly toolCallAccuracy: number | null
+    readonly evidenceCoverage: number | null
+    readonly causalConfidence: number | null
+    readonly dataConfidence: number | null
+  }
+  readonly calculability: {
+    readonly latencyMs: boolean
+    readonly totalCostMinor: boolean
+    readonly overallScore: boolean
+    readonly hallucinationRisk: boolean
+    readonly groundingScore: boolean
+    readonly toolCallAccuracy: boolean
+    readonly evidenceCoverage: boolean
+    readonly causalConfidence: boolean
+    readonly dataConfidence: boolean
+  }
+  readonly persistable: boolean
+  readonly blockers: readonly string[]
+}
+
+interface ExecutionActionRow {
+  readonly id: string
+  readonly user_id: string
+  readonly status: string
+  readonly created_at: string
+  readonly executed_at: string | null
+  readonly execution_id: string | null
+}
+
 export class IaraIndependentEvaluator {
   constructor(private readonly supabase: SupabaseClient) {}
+
+  async assessExecution(tenantId: string, executionId: string): Promise<IaraExecutionEvidenceAssessment> {
+    if (!isUuid(tenantId) || !isUuid(executionId)) {
+      throw new IaraEvaluatorError('EVALUATION_IDENTITY_INVALID')
+    }
+
+    const { data: action, error } = await this.supabase
+      .from('crm_ai_actions')
+      .select('id,user_id,status,created_at,executed_at,execution_id')
+      .eq('execution_id', executionId)
+      .eq('user_id', tenantId)
+      .maybeSingle<ExecutionActionRow>()
+
+    if (error) throw new IaraEvaluatorError('EXECUTION_EVIDENCE_LOAD_FAILED', error.message)
+    if (!action) throw new IaraEvaluatorError('EXECUTION_NOT_FOUND')
+    if (action.execution_id !== executionId) throw new IaraEvaluatorError('EXECUTION_IDENTITY_MISMATCH')
+    if (action.user_id !== tenantId) throw new IaraEvaluatorError('EVALUATION_TENANT_MISMATCH')
+    if (action.status !== 'executed' || !action.executed_at) throw new IaraEvaluatorError('EXECUTION_NOT_COMPLETED')
+
+    const latencyMs = deterministicLatency(action.created_at, action.executed_at)
+    const blockers: string[] = []
+
+    if (latencyMs === null) blockers.push('LATENCY_EVIDENCE_UNAVAILABLE')
+    blockers.push(
+      'OVERALL_SCORE_EVIDENCE_UNAVAILABLE',
+      'HALLUCINATION_RISK_EVIDENCE_UNAVAILABLE',
+      'GROUNDING_SCORE_EVIDENCE_UNAVAILABLE',
+      'TOOL_CALL_ACCURACY_EVIDENCE_UNAVAILABLE',
+      'EVIDENCE_COVERAGE_EVIDENCE_UNAVAILABLE',
+      'CAUSAL_CONFIDENCE_EVIDENCE_UNAVAILABLE',
+      'DATA_CONFIDENCE_EVIDENCE_UNAVAILABLE',
+      'TOTAL_COST_EVIDENCE_UNAVAILABLE',
+    )
+
+    return {
+      executionId,
+      tenantId,
+      actionId: action.id,
+      actionStatus: action.status,
+      executedAt: action.executed_at,
+      metrics: {
+        latencyMs,
+        totalCostMinor: null,
+        overallScore: null,
+        hallucinationRisk: null,
+        groundingScore: null,
+        toolCallAccuracy: null,
+        evidenceCoverage: null,
+        causalConfidence: null,
+        dataConfidence: null,
+      },
+      calculability: {
+        latencyMs: latencyMs !== null,
+        totalCostMinor: false,
+        overallScore: false,
+        hallucinationRisk: false,
+        groundingScore: false,
+        toolCallAccuracy: false,
+        evidenceCoverage: false,
+        causalConfidence: false,
+        dataConfidence: false,
+      },
+      persistable: blockers.length === 0,
+      blockers,
+    }
+  }
 
   async persist(input: IaraEvaluationInput): Promise<IaraEvaluationResult> {
     validateInput(input)
@@ -77,6 +184,13 @@ function validateInput(input: IaraEvaluationInput): void {
   if (scores.some((value) => !Number.isFinite(value) || value < 0 || value > 1)) throw new IaraEvaluatorError('EVALUATION_SCORE_INVALID')
   if (!Number.isInteger(input.totalCostMinor) || input.totalCostMinor < 0) throw new IaraEvaluatorError('EVALUATION_COST_INVALID')
   if (!Number.isInteger(input.latencyMs) || input.latencyMs < 0) throw new IaraEvaluatorError('EVALUATION_LATENCY_INVALID')
+}
+
+function deterministicLatency(createdAt: string, executedAt: string): number | null {
+  const start = Date.parse(createdAt)
+  const end = Date.parse(executedAt)
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null
+  return end - start
 }
 
 function isUuid(value: string): boolean {
