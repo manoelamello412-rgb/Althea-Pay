@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Building2, FileKey2, GitBranch, Globe2, LayoutDashboard, MessageCircle, Network, Search, Settings, ShieldCheck, Sparkles, UserRound, Users, X } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import BrandLogo from '@/components/brand-logo'
 
 export type MobileShellTab = 'dashboard' | 'gateways' | 'chat' | 'ia' | 'funil'
@@ -41,22 +41,12 @@ function tabIsActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-function titleForPath(pathname: string): string {
-  if (pathname.startsWith('/dashboard/gateways')) return 'GATEWAY'
-  if (pathname.startsWith('/dashboard/crm')) return 'CHAT'
-  if (pathname.startsWith('/dashboard/ia')) return 'IA'
-  if (pathname.startsWith('/dashboard/funil')) return 'FUNIL'
-  if (pathname.startsWith('/dashboard/settings')) return 'CONFIGURAÇÃO'
-  return 'DASHBOARD'
-}
-
 export default function MobileShell({ activeTab, onTabChange, children }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const [searchOpen, setSearchOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const title = useMemo(() => titleForPath(pathname), [pathname])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -77,7 +67,7 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
     <div className="min-h-screen bg-[var(--althea-bg)] text-white antialiased">
       <aside className="fixed inset-y-0 left-0 z-[80] hidden w-[250px] border-r border-white/[0.04] bg-[var(--althea-surface)] px-4 py-6 lg:flex lg:flex-col">
         <button type="button" onClick={() => go('dashboard')} aria-label="ALTHEA PAY — Dashboard" className="mb-8 flex items-center justify-center rounded-2xl border border-white/[0.04] bg-[var(--althea-bg)] p-4">
-          <BrandLogo variant="inner" priority alt="ALTHEA PAY" className="h-12 w-auto max-w-full object-contain" />
+          <BrandLogo variant="inner" priority alt="Althea Pay" className="h-12 w-auto max-w-full object-contain" />
         </button>
         <nav aria-label="Navegação principal" className="space-y-1">
           {tabs.map(({ id, label, icon: Icon, href }) => (
@@ -86,31 +76,27 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
         </nav>
       </aside>
 
-      <header className="fixed inset-x-0 top-0 z-[100] h-[141px] border-b border-white/[0.04] bg-[rgba(11,11,13,0.97)] px-5 backdrop-blur-xl lg:pl-[274px]">
-        <div className="mx-auto flex h-full w-full max-w-[1180px] items-center gap-0">
-          <button type="button" onClick={() => go('dashboard')} aria-label="Voltar ao Dashboard" className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)]">
-            <BrandLogo variant="inner" priority alt="ALTHEA PAY" className="h-14 w-14 object-contain" />
+      <header className="fixed inset-x-0 top-0 z-[100] h-[76px] border-b border-white/[0.04] bg-[rgba(11,11,13,0.97)] px-4 backdrop-blur-xl lg:pl-[274px]">
+        <div className="mx-auto flex h-full w-full max-w-[1180px] items-center">
+          <button type="button" onClick={() => go('dashboard')} aria-label="Ir para o Dashboard" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)]">
+            <BrandLogo variant="inner" priority alt="Althea Pay" className="h-11 w-auto max-w-[132px] object-contain" />
           </button>
-          <div className="mx-6 h-12 w-px shrink-0 bg-white/[0.10]" aria-hidden="true" />
-          <h1 className="min-w-0 truncate whitespace-nowrap text-[27px] font-semibold tracking-[-0.025em] text-[#F4F5F4] sm:text-[30px]">
-            ALTHEA PAY <span className="text-[var(--althea-muted)]">//</span> {title}
-          </h1>
-          <div className="ml-auto flex shrink-0 items-center gap-7 pl-5">
-            <button type="button" aria-label="Pesquisar" aria-expanded={searchOpen} onClick={() => setSearchOpen((value) => !value)} className={`grid h-12 w-12 place-items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)] ${searchOpen ? 'text-[var(--althea-brand)]' : 'text-[var(--althea-muted)] hover:text-white'}`}>
-              <Search size={38} strokeWidth={1.55} />
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <button type="button" aria-label="Buscar" aria-expanded={searchOpen} onClick={() => setSearchOpen((value) => !value)} className={`grid h-11 w-11 place-items-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)] ${searchOpen ? 'text-[var(--althea-brand)] bg-[rgba(29,187,84,0.08)]' : 'text-[var(--althea-muted)] hover:bg-white/[0.03] hover:text-white'}`}>
+              <Search size={25} strokeWidth={1.55} />
             </button>
             <div className="relative">
-              <button type="button" aria-label="Configurações" title="Configurações" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((value) => !value)} className={`grid h-12 w-12 place-items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)] ${settingsOpen ? 'text-[var(--althea-brand)]' : 'text-[var(--althea-muted)] hover:text-white'}`}>
-                <Settings size={38} strokeWidth={1.55} />
+              <button type="button" aria-label="Configurações" title="Configurações" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((value) => !value)} className={`grid h-11 w-11 place-items-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)] ${settingsOpen ? 'text-[var(--althea-brand)] bg-[rgba(29,187,84,0.08)]' : 'text-[var(--althea-muted)] hover:bg-white/[0.03] hover:text-white'}`}>
+                <Settings size={25} strokeWidth={1.55} />
               </button>
               <AnimatePresence>
                 {settingsOpen && (
-                  <motion.div initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }} className="absolute right-0 top-[58px] z-[120] w-[310px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[rgba(15,26,22,0.98)] p-2 shadow-[0_32px_64px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
+                  <motion.div initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }} className="absolute right-0 top-[52px] z-[120] w-[310px] overflow-hidden rounded-2xl border border-white/[0.06] bg-[rgba(15,26,22,0.98)] p-2 shadow-[0_32px_64px_rgba(0,0,0,0.7)] backdrop-blur-2xl">
                     <button type="button" onClick={() => { setSettingsOpen(false); router.push('/dashboard/settings') }} className="mb-1 flex w-full items-center gap-3 rounded-xl border border-[rgba(29,187,84,0.2)] bg-[rgba(29,187,84,0.08)] px-3 py-3 text-left">
                       <Settings size={17} className="text-[var(--althea-brand)]" />
                       <span><strong className="block text-sm text-white">Central de Configuração</strong><small className="text-[10px] text-[var(--althea-muted)]">Abrir visão geral das configurações</small></span>
                     </button>
-                    <div className="max-h-[min(520px,calc(100vh-180px))] overflow-y-auto pr-1">
+                    <div className="max-h-[min(520px,calc(100vh-120px))] overflow-y-auto pr-1">
                       {settingsItems.map(({ label, href, icon: Icon }) => (
                         <button key={href} type="button" onClick={() => { setSettingsOpen(false); router.push(href) }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-[var(--althea-muted)] transition hover:bg-white/[0.03] hover:text-white">
                           <Icon size={16} strokeWidth={1.8} />
@@ -127,7 +113,7 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
 
         <AnimatePresence initial={false}>
           {searchOpen && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 42 }} exit={{ opacity: 0, height: 0 }} className="absolute left-0 right-0 top-[141px] border-b border-white/[0.04] bg-[rgba(11,11,13,0.98)] px-5 py-2 backdrop-blur-xl lg:pl-[274px]">
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 42 }} exit={{ opacity: 0, height: 0 }} className="absolute left-0 right-0 top-[76px] border-b border-white/[0.04] bg-[rgba(11,11,13,0.98)] px-4 py-2 backdrop-blur-xl lg:pl-[274px]">
               <div className="mx-auto flex h-[42px] max-w-[1180px] items-center gap-2 rounded-xl border border-white/[0.04] bg-[var(--althea-surface)] px-3">
                 <Search size={15} className="text-[var(--althea-muted)]" />
                 <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[var(--althea-muted)]" />
@@ -138,7 +124,7 @@ export default function MobileShell({ activeTab, onTabChange, children }: Props)
         </AnimatePresence>
       </header>
 
-      <main className="min-w-0 pt-[141px] pb-[104px] lg:pl-[250px] lg:pb-10">
+      <main className="min-w-0 pt-[76px] pb-[104px] lg:pl-[250px] lg:pb-10">
         <div className="mx-auto w-full max-w-[1280px] px-4 py-6 sm:px-5 lg:px-8">{children}</div>
       </main>
 

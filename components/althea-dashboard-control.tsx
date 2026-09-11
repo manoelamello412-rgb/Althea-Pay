@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowRight, CalendarDays, Clock3, Eye, EyeOff, LayoutDashboard, Network, RefreshCw, ShoppingBag, Wifi, WifiOff } from 'lucide-react'
+import { ArrowRight, CalendarDays, Clock3, Eye, EyeOff, Network, ShoppingBag, Wifi, WifiOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -38,9 +38,10 @@ export default function AltheaDashboardControl() {
     if (!auth.user) return false
     const { data: profile, error: profileError } = await supabase.from('profiles').select('display_name,full_name,gender').eq('id', auth.user.id).maybeSingle()
     if (profileError) throw profileError
-    const profileName = profile?.display_name || profile?.full_name || auth.user.user_metadata?.display_name || auth.user.user_metadata?.name || auth.user.email || 'Usuário'
+    const metadata = auth.user.user_metadata as Record<string, unknown>
+    const profileName = profile?.display_name || profile?.full_name || metadata.display_name || metadata.name || auth.user.email || 'Usuário'
     setName(firstName(String(profileName)))
-    const value = profile?.gender
+    const value = profile?.gender ?? metadata.gender
     setGender(value === 'M' || value === 'F' ? value : 'outro')
     return true
   }, [supabase])
@@ -81,9 +82,9 @@ export default function AltheaDashboardControl() {
     return () => { cancelled = true; for (const channel of channels) void supabase.removeChannel(channel) }
   }, [loadMetrics, supabase])
 
-  const greeting = gender === 'F' ? 'Seja bem-vinda' : gender === 'M' ? 'Seja bem-vindo' : 'Seja bem-vindo(a)'
+  const greeting = gender === 'F' ? 'Seja bem-vinda' : gender === 'M' ? 'Seja bem-vindo' : 'Acompanhe sua operação em tempo real.'
   const noGateway = !metrics?.gateways?.length
-  const hasRealFinancialData = !noGateway && (metrics?.revenue ?? 0) > 0 || !noGateway && (metrics?.paidSales ?? 0) > 0 || !noGateway && (metrics?.waitingPix ?? 0) > 0 || !noGateway && (metrics?.checkoutHits ?? 0) > 0
+  const hasRealFinancialData = !noGateway && ((metrics?.revenue ?? 0) > 0 || (metrics?.paidSales ?? 0) > 0 || (metrics?.waitingPix ?? 0) > 0 || (metrics?.checkoutHits ?? 0) > 0)
   const syncLabel: Record<SyncState, string> = { loading: 'Sincronizando', synchronized: 'Sincronizado', empty: 'Aguardando conexão', error: 'Sincronização indisponível', reconnecting: 'Reconectando', unauthorized: 'Sessão não autorizada' }
   const displayRevenue = noGateway || !hasRealFinancialData ? '—' : muted ? 'R$ ••••••' : money(metrics?.revenue ?? 0)
   const displayNumber = (value: number | undefined) => noGateway || !hasRealFinancialData ? '—' : muted ? '••••' : String(value ?? 0)
@@ -92,15 +93,9 @@ export default function AltheaDashboardControl() {
   return (
     <main className="min-h-screen bg-[#0B0B0D] pb-28 text-white antialiased">
       <div className="mx-auto w-full max-w-[1280px] space-y-6 p-4 sm:p-6 lg:p-8">
-        <header className="flex items-center justify-between border-b border-white/[0.05] pb-4">
-          <div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl border border-[#1DB854]/20 bg-[#1DB854]/10 text-[#1DB854]"><LayoutDashboard size={17} /></div><div><span className="block text-[11px] font-black tracking-[0.28em] text-[#A6A6A6]">ALTHEA PAY</span><span className="text-[10px] text-[#59645e]">Central operacional</span></div></div>
-          <button type="button" onClick={() => void loadMetrics()} aria-label="Atualizar dados" className="grid h-10 w-10 place-items-center rounded-xl border border-white/[0.06] bg-[#0F1A16] text-[#A6A6A6] transition hover:text-white"><RefreshCw size={16} className={sync === 'loading' || sync === 'reconnecting' ? 'animate-spin' : ''} /></button>
-        </header>
-
         <section>
-          <div className="flex items-center gap-2"><span className="text-xs font-black uppercase tracking-[0.2em] text-[#1DB854]">Althea Pay</span><span className="inline-block origin-[70%_70%] animate-[althea-wave_2.5s_ease-in-out_infinite]" aria-hidden="true">👋</span></div>
-          <h1 className="mt-1 text-[30px] font-bold tracking-tight sm:text-[34px]">Olá, {name}</h1>
-          <p className="mt-1 text-sm text-[#A6A6A6]">{greeting} onde você constrói, a sua Raiz financeira.</p>
+          <h1 className="text-[30px] font-bold tracking-tight sm:text-[34px]">Olá, <span className="inline-block origin-[70%_70%] animate-[althea-wave_2.5s_ease-in-out_infinite]" aria-hidden="true">👋</span> {name}</h1>
+          <p className="mt-2 text-sm text-[#A6A6A6]">{greeting}</p>
           <p className="mt-2 text-xs text-[#69736e]">Veja o resumo do seu desempenho!</p>
         </section>
 

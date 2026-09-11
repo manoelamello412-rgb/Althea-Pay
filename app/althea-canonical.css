@@ -7,12 +7,12 @@
   --althea-bg: #0B0B0D;
   --althea-surface: #0F1A16;
   --althea-inner: #0D362D;
-  --althea-brand: #1DBB54;
+  --althea-brand: #1DB854;
   --althea-gold: #D4AF37;
   --althea-muted: #A6A6A6;
   --althea-border: rgba(255, 255, 255, 0.04);
-  --althea-brand-glance: rgba(29, 187, 84, 0.08);
-  --althea-glow: 0 0 20px rgba(29, 187, 84, 0.20);
+  --althea-brand-glance: rgba(29, 184, 84, 0.08);
+  --althea-glow: 0 0 20px rgba(29, 184, 84, 0.20);
   --althea-panel-shadow: 0 32px 64px rgba(0, 0, 0, 0.70);
   --althea-card-radius: 16px;
   --althea-control-radius: 12px;
@@ -48,7 +48,6 @@ a { -webkit-user-select: none; user-select: none; }
 
 ::selection { background: var(--althea-brand); color: #050806; }
 
-/* Canonical primitives */
 .althea-ds-card,
 .althea-card {
   position: relative;
@@ -79,8 +78,8 @@ a { -webkit-user-select: none; user-select: none; }
 
 .althea-ds-input:focus,
 .althea-input:focus {
-  border-color: rgba(29, 187, 84, 0.40);
-  box-shadow: 0 0 0 3px rgba(29, 187, 84, 0.08);
+  border-color: rgba(29, 184, 84, 0.40);
+  box-shadow: 0 0 0 3px rgba(29, 184, 84, 0.08);
 }
 
 .althea-ds-button-primary,
@@ -99,7 +98,7 @@ a { -webkit-user-select: none; user-select: none; }
   font-size: 12px;
   font-weight: 700;
   transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease;
-  box-shadow: 0 4px 20px rgba(29, 187, 84, 0.25);
+  box-shadow: 0 4px 20px rgba(29, 184, 84, 0.25);
 }
 
 .althea-ds-button-primary:hover,
@@ -136,7 +135,6 @@ a { -webkit-user-select: none; user-select: none; }
 
 .althea-ds-mobile-safe { padding-bottom: var(--althea-content-bottom); }
 
-/* Shared legacy visual names are normalized here while page migration completes. */
 .app-brand-pay,
 .brand-lockup-pay,
 .brand-lockup-tag b { color: var(--althea-brand); }

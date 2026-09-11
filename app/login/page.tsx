@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import BrandLogo from '@/components/brand-logo'
 import { createSupabaseBrowserClient } from '../../lib/supabase/client'
 
+type Gender = 'F' | 'M'
+
 function friendlyAuthError(message: string) {
   const text = message.toLowerCase()
   if (text.includes('invalid login credentials')) return 'E-mail ou senha incorretos. Confira os dados e tente novamente.'
@@ -20,6 +22,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [gender, setGender] = useState<Gender | ''>('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -52,7 +55,21 @@ export default function LoginPage() {
           setError('A senha precisa ter pelo menos 6 caracteres.')
           return
         }
-        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: fullName.trim() } } })
+        if (!gender) {
+          setError('Selecione o sexo do perfil para personalizar corretamente sua saudação.')
+          return
+        }
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: {
+              display_name: fullName.trim(),
+              full_name: fullName.trim(),
+              gender,
+            },
+          },
+        })
         if (error) throw error
         if (data.session) {
           setMessage('Conta criada e acesso liberado. Abrindo seu painel...')
@@ -82,6 +99,7 @@ export default function LoginPage() {
         </div>
         <form onSubmit={handleSubmit} className="auth-form">
           {mode === 'signup' && <label>Nome<input value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" required /></label>}
+          {mode === 'signup' && <label>Sexo<select value={gender} onChange={e => setGender(e.target.value as Gender | '')} required><option value="" disabled>Selecione</option><option value="F">Feminino</option><option value="M">Masculino</option></select></label>}
           <label>E-mail<input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required /></label>
           <label>Senha<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} required /></label>
           {mode === 'login' && <button type="button" className="auth-switch auth-forgot" onClick={() => router.push('/forgot-password')}>Esqueci minha senha</button>}
@@ -89,7 +107,7 @@ export default function LoginPage() {
           {message && <div className="auth-message" role="status">{message}</div>}
           <button className="primary auth-submit" type="submit" disabled={loading}>{loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar conta'}</button>
         </form>
-        <button type="button" className="auth-switch" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage('') }}>
+        <button type="button" className="auth-switch" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage(''); setGender('') }}>
           {mode === 'login' ? 'Ainda não tenho conta → Criar acesso' : 'Já tenho uma conta → Entrar'}
         </button>
       </section>
