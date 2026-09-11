@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 const processorPath = 'lib/crm/ai-inference-processor.ts'
 const providerPath = 'lib/crm/ai/provider.ts'
 const executionPath = 'app/api/crm/ai-agent/execute/route.ts'
+const kernelPath = 'services/iara-agent/execution-kernel.ts'
 const migrationPath = 'supabase/migrations/20260910009000_crm_ai_action_channel_aware_execution_v3.sql'
 
 describe('AI Revenue Agent inference contracts', () => {
@@ -33,10 +34,13 @@ describe('AI Revenue Agent inference contracts', () => {
 
   it('keeps execution behind accepted human approval and canonical atomic RPCs', async () => {
     const execution = await readFile(executionPath, 'utf8')
+    const kernel = await readFile(kernelPath, 'utf8')
     const migration = await readFile(migrationPath, 'utf8')
-    expect(execution).toContain("action.status!=='accepted'")
-    expect(execution).toContain('HUMAN_APPROVAL_REQUIRED')
-    expect(execution).toContain('crm_execute_ai_action')
+    expect(execution).toContain('IaraExecutionKernel')
+    expect(execution).toContain('kernel.execute(actionId, user.id)')
+    expect(kernel).toMatch(/action\.status\s*!==\s*['"]accepted['"]/) 
+    expect(kernel).toContain('HUMAN_APPROVAL_REQUIRED')
+    expect(kernel).toContain('tool.executor')
     expect(migration).toContain("status='executing'")
     expect(migration).toContain('crm_operator_send_message')
     expect(migration).toContain("client_message_id=('ai:'||a.id)")
