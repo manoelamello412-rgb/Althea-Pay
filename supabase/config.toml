@@ -19,9 +19,6 @@ verify_jwt = true
 [functions.gateway-refund]
 verify_jwt = true
 
-[functions.gateway-refund-v2]
-verify_jwt = true
-
 [functions.checkout-engine]
 # retired: 410 stub, see checkout-engine-v2
 verify_jwt = false
