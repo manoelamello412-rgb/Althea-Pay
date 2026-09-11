@@ -3,7 +3,7 @@ import {
   type CanonicalActionType,
   type CanonicalChannel,
   type CustomerContext,
-} from './ai-inference-processor'
+} from '../ai-inference-processor'
 
 export type RevenueAgentContext = {
   readonly conversationId: string
