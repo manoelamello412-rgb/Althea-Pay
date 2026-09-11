@@ -6,6 +6,10 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl
 
 let browserClient: SupabaseClient | undefined
 
+type BrowserSupabaseClient = Omit<SupabaseClient, 'rpc'> & {
+  rpc: (fn: string, args?: Record<string, unknown>, options?: { head?: boolean; get?: boolean }) => Promise<any>
+}
+
 function getBrowserClient(): SupabaseClient {
   if (browserClient) return browserClient
 
@@ -17,7 +21,7 @@ function getBrowserClient(): SupabaseClient {
   return browserClient
 }
 
-const lazyBrowserClient = new Proxy({} as SupabaseClient, {
+const lazyBrowserClient = new Proxy({} as BrowserSupabaseClient, {
   get(_target, property) {
     const client = getBrowserClient()
     const value = Reflect.get(client as object, property)
@@ -25,6 +29,6 @@ const lazyBrowserClient = new Proxy({} as SupabaseClient, {
   },
 })
 
-export function createSupabaseBrowserClient(): SupabaseClient {
+export function createSupabaseBrowserClient(): BrowserSupabaseClient {
   return lazyBrowserClient
 }
