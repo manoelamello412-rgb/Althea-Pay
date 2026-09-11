@@ -55,12 +55,10 @@ export class IaraIndependentEvaluator {
 
     if (error) throw new IaraEvaluatorError('EVALUATION_PERSISTENCE_FAILED', error.message)
 
-    const result = asRecord(data)
-    const evaluationId = typeof result?.evaluation_id === 'string' ? result.evaluation_id : null
-    const decision = typeof result?.decision === 'string' ? result.decision : input.decision
-    if (!evaluationId) throw new IaraEvaluatorError('EVALUATION_RESULT_INVALID')
+    const evaluationId = typeof data === 'string' ? data : null
+    if (!evaluationId || !isUuid(evaluationId)) throw new IaraEvaluatorError('EVALUATION_RESULT_INVALID')
 
-    return { evaluationId, decision }
+    return { evaluationId, decision: input.decision }
   }
 }
 
@@ -74,6 +72,7 @@ export class IaraEvaluatorError extends Error {
 function validateInput(input: IaraEvaluationInput): void {
   if (!isUuid(input.tenantId) || !isUuid(input.executionId)) throw new IaraEvaluatorError('EVALUATION_IDENTITY_INVALID')
   if (!input.evaluatorVersion.trim() || !input.summary.trim()) throw new IaraEvaluatorError('EVALUATION_METADATA_INVALID')
+  if (!['PASS', 'REVIEW', 'BLOCK'].includes(input.decision)) throw new IaraEvaluatorError('EVALUATION_DECISION_INVALID')
   const scores = [input.overallScore, input.hallucinationRisk, input.groundingScore, input.toolCallAccuracy, input.evidenceCoverage, input.causalConfidence, input.dataConfidence]
   if (scores.some((value) => !Number.isFinite(value) || value < 0 || value > 1)) throw new IaraEvaluatorError('EVALUATION_SCORE_INVALID')
   if (!Number.isInteger(input.totalCostMinor) || input.totalCostMinor < 0) throw new IaraEvaluatorError('EVALUATION_COST_INVALID')
@@ -82,8 +81,4 @@ function validateInput(input: IaraEvaluationInput): void {
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null
 }
