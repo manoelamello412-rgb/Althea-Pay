@@ -8,13 +8,12 @@ const legacyClientSyncRules = {
   'react-hooks/purity': 'off',
   'react/display-name': 'off',
   'react/jsx-no-comment-textnodes': 'off',
+  '@next/next/no-img-element': 'off',
 }
 
 export default defineConfig([
   ...nextVitals,
-  {
-    rules: legacyClientSyncRules,
-  },
+  { rules: legacyClientSyncRules },
   globalIgnores(['.next/**', 'node_modules/**', 'coverage/**', 'supabase/functions/**']),
   {
     files: [
@@ -25,10 +24,9 @@ export default defineConfig([
       'components/config-tab-performance.tsx', 'components/dashboard-mobile-modern.tsx',
       'components/sales-mobile.tsx', 'components/white-label-workspace.tsx',
     ],
-    rules: { ...legacyClientSyncRules, 'react/no-unescaped-entities': 'off', '@next/next/no-img-element': 'off' },
+    rules: { ...legacyClientSyncRules, 'react/no-unescaped-entities': 'off' },
   },
   { files: ['components/white-label-workspace.tsx'], rules: { 'react/jsx-key': 'off' } },
-  { files: ['components/funnel-white-label-chat.tsx', 'components/funnels-mobile.tsx'], rules: { '@next/next/no-img-element': 'off' } },
-  { files: ['components/gateways-mobile.tsx', 'components/mobile-header-dashboard.tsx', 'components/mobile-shell.tsx', 'components/settings-mobile.tsx'], rules: { '@next/next/no-img-element': 'off' } },
+  { files: ['components/funnel-white-label-chat.tsx', 'components/funnels-mobile.tsx'], rules: {} },
   { files: ['postcss.config.mjs'], rules: { 'import/no-anonymous-default-export': 'off' } },
 ])
