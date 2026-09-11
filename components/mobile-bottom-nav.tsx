@@ -29,7 +29,7 @@ export function MobileBottomNav() {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] px-3 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 sm:px-4">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] px-3 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 sm:px-4 lg:hidden">
       <nav aria-label="Navegação principal" className="pointer-events-auto mx-auto grid h-[72px] w-full max-w-[760px] grid-cols-5 items-stretch gap-1 rounded-[36px] border border-white/[0.06] bg-[rgba(15,26,22,0.94)] p-1.5 shadow-[0_32px_64px_rgba(0,0,0,0.7)] backdrop-blur-xl">
         {navItems.map((item) => {
           const isActive = isActivePath(pathname, item.path)
