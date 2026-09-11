@@ -7,7 +7,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Gender = 'M' | 'F' | 'outro'
 type Gateway = { gateway_code: string; gateway_name: string; is_operational: boolean; latency_ms: number | null; circuit_state: string; checked_at: string }
-type Metrics = { revenue: number; paidSales: number; waitingPix: number; checkoutHits: number; conversionRate: number; gateways: Gateway[]; measuredAt: string }
+type Metrics = { revenue: number; paidSales: number; waitingPix: number; checkoutHits: number; conversionRate: number; gateways: Gateway[]; measuredAt: string | null }
 type SyncState = 'loading' | 'synchronized' | 'empty' | 'error' | 'reconnecting' | 'unauthorized'
 
 const TZ = 'America/Sao_Paulo'
@@ -50,14 +50,15 @@ export default function AltheaDashboardControl() {
     setSync(silent ? 'reconnecting' : 'loading')
     try {
       const authenticated = await loadProfile()
-      if (!authenticated) { setSync('unauthorized'); setMetrics(null); return }
+      if (!authenticated) { setSync('unauthorized'); setMetrics(null); setLastUpdated(null); return }
       const { data, error } = await supabase.rpc('dashboard_metrics_for_user', { p_start_date: selectedDate, p_end_date: selectedDate })
       if (error) throw error
       const value = data as Metrics
       setMetrics(value)
-      setLastUpdated(value.measuredAt || new Date().toISOString())
-      const hasRealData = value.gateways.length > 0 && (value.revenue > 0 || value.paidSales > 0 || value.waitingPix > 0 || value.checkoutHits > 0)
-      setSync(hasRealData || value.gateways.length > 0 ? 'synchronized' : 'empty')
+      setLastUpdated(value.measuredAt || null)
+      const gateways = Array.isArray(value.gateways) ? value.gateways : []
+      const hasRealData = gateways.length > 0 && (value.revenue > 0 || value.paidSales > 0 || value.waitingPix > 0 || value.checkoutHits > 0)
+      setSync(hasRealData || gateways.length > 0 ? 'synchronized' : 'empty')
     } catch (cause) {
       console.error('[ALTHEA-DASHBOARD]', cause)
       setSync('error')
@@ -89,14 +90,16 @@ export default function AltheaDashboardControl() {
   const displayRevenue = noGateway || !hasRealFinancialData ? '—' : muted ? 'R$ ••••••' : money(metrics?.revenue ?? 0)
   const displayNumber = (value: number | undefined) => noGateway || !hasRealFinancialData ? '—' : muted ? '••••' : String(value ?? 0)
   const displayConversion = noGateway || !hasRealFinancialData ? '—' : muted ? '••••' : `${(metrics?.conversionRate ?? 0).toFixed(1).replace('.', ',')}%`
+  const formattedLastUpdated = lastUpdated ? timeFormatter.format(new Date(lastUpdated)) : sync === 'loading' || sync === 'reconnecting' ? 'Sincronizando...' : '—'
 
   return (
-    <main className="min-h-screen bg-[#0B0B0D] pb-28 text-white antialiased">
-      <div className="mx-auto w-full max-w-[1280px] space-y-6 p-4 sm:p-6 lg:p-8">
+    <main className="min-h-screen bg-[var(--althea-bg)] pb-28 text-white antialiased">
+      <div className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6 lg:p-8">
         <section>
-          <h1 className="text-[30px] font-bold tracking-tight sm:text-[34px]">Olá, <span className="inline-block origin-[70%_70%] animate-[althea-wave_2.5s_ease-in-out_infinite]" aria-hidden="true">👋</span> {name}</h1>
-          <p className="mt-2 text-sm text-[#A6A6A6]">{greeting}</p>
+          <h1 className="text-[30px] font-bold tracking-tight sm:text-[34px]">Olá, {name} <span className="inline-block origin-[70%_70%] animate-[althea-wave_2.5s_ease-in-out_infinite]" aria-hidden="true">👋</span></h1>
+          <p className="mt-2 text-sm text-[var(--althea-muted)]">{greeting}</p>
           <p className="mt-2 text-xs text-[#69736e]">Veja o resumo do seu desempenho!</p>
+          <p className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-mono text-[#77817c]"><Clock3 size={12} aria-hidden="true" />Última atualização: {formattedLastUpdated}</p>
         </section>
 
         <section className="flex flex-wrap items-center gap-3">
@@ -115,11 +118,9 @@ export default function AltheaDashboardControl() {
 
         {noGateway ? <section className="rounded-3xl border border-[#0D362D] bg-[linear-gradient(135deg,#0F1A16,#0B0B0D)] p-6 sm:p-8"><div className="mx-auto max-w-2xl text-center"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/[0.06] text-[#D4AF37]"><Network size={24} /></div><p className="mt-5 text-xs font-black uppercase tracking-[0.22em] text-[#A6A6A6]">Dados de pagamento</p><h2 className="mt-2 text-2xl font-bold">Nenhum Gateway conectado</h2><p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#77817c]">Conecte um Gateway para configurar credenciais, validar o ambiente e iniciar a sincronização dos dados reais do provider.</p><button type="button" onClick={() => router.push('/dashboard/gateways')} className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#1DB854] px-6 text-sm font-bold text-[#07110c] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]">CONECTAR GATEWAY <ArrowRight size={16} /></button></div></section> : null}
 
-        {!noGateway ? <section className="rounded-2xl border border-[#0D362D] bg-[#0F1A16] p-5"><div className="flex items-center justify-between"><div><h2 className="text-xs font-black uppercase tracking-[0.15em] text-[#A6A6A6]">Dados de pagamento</h2><p className="mt-1 text-[10px] text-[#59645e]">Dados sincronizados a partir das integrações reais.</p></div><Wifi size={15} className="text-[#1DB854]" /></div><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{metrics?.gateways.map((gateway) => <div key={`${gateway.gateway_code}-${gateway.gateway_name}`} className="rounded-xl border border-white/[0.05] bg-[#0B0B0D] p-4"><div className="flex items-center justify-between"><span className="text-sm font-semibold">{gateway.gateway_name || gateway.gateway_code}</span><span className={`h-2 w-2 rounded-full ${gateway.is_operational ? 'bg-[#1DB854]' : 'bg-red-500'}`} /></div><p className="mt-2 text-[10px] font-mono text-[#707b75]">{gateway.is_operational ? `Operacional · ${gateway.latency_ms ?? 0}ms` : `Indisponível · ${gateway.circuit_state}`}</p></div>)}</div></section> : null}
+        {!noGateway ? <section className="rounded-2xl border border-[#0D362D] bg-[#0F1A16] p-5"><div className="flex items-center justify-between"><div><h2 className="text-xs font-black uppercase tracking-[0.15em] text-[#A6A6A6]">Dados de pagamento</h2><p className="mt-1 text-[10px] text-[#59645e]">Dados sincronizados a partir das integrações reais.</p></div><Wifi size={15} className="text-[#1DB854]" /></div><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{metrics?.gateways.map((gateway) => <div key={`${gateway.gateway_code}-${gateway.gateway_name}`} className="rounded-xl border border-white/[0.05] bg-[#0B0B0D] p-4"><div className="flex items-center justify-between"><span className="text-sm font-semibold">{gateway.gateway_name || gateway.gateway_code}</span><span className={`h-2 w-2 rounded-full ${gateway.is_operational ? 'bg-[#1DB854]' : 'bg-red-500'}`} /></div><p className="mt-2 text-[10px] font-mono text-[#707b75]">{gateway.is_operational ? `Operacional · ${gateway.latency_ms == null ? '—' : `${gateway.latency_ms}ms`}` : `Indisponível · ${gateway.circuit_state}`}</p></div>)}</div></section> : null}
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-3"><Metric label="Vendas pagas" value={displayNumber(metrics?.paidSales)} icon={<ShoppingBag size={15} />} /><Metric label="Pix pendentes" value={displayNumber(metrics?.waitingPix)} icon={<Clock3 size={15} />} /><Metric label="Checkout → venda" value={displayConversion} icon={<ArrowRight size={15} />} /></section>
-
-        <section className="flex flex-col gap-2 border-t border-white/[0.05] pt-4 text-[10px] font-mono text-[#65706a] sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-1.5"><Clock3 size={13} />Última atualização: {lastUpdated ? timeFormatter.format(new Date(lastUpdated)) : 'Sincronizando...'}</span><span className="flex items-center gap-1.5">{sync === 'synchronized' ? <Wifi size={13} className="text-[#1DB854]" /> : <WifiOff size={13} />} {syncLabel[sync]}</span></section>
       </div>
       <style jsx global>{`@keyframes althea-wave{0%,100%{transform:rotate(0deg)}10%{transform:rotate(14deg)}20%{transform:rotate(-8deg)}30%{transform:rotate(14deg)}40%{transform:rotate(-4deg)}50%{transform:rotate(10deg)}60%{transform:rotate(0deg)}}@media(prefers-reduced-motion:reduce){.animate-\[althea-wave_2\.5s_ease-in-out_infinite\]{animation:none!important}}`}</style>
     </main>
