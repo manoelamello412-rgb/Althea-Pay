@@ -65,14 +65,14 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
 
       <header className="fixed inset-x-0 top-0 z-[100] h-[76px] border-b border-white/[0.06] bg-[rgba(11,11,13,0.97)] px-4 backdrop-blur-xl lg:pl-[274px]">
         <div className="mx-auto flex h-full w-full max-w-[1180px] items-center">
-          <button type="button" onClick={() => go('dashboard')} aria-label="Ir para o Dashboard" className="flex h-16 min-w-0 shrink items-center justify-start rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)]">
-            <img src="/althea-logo-inner.PNG" alt="Althea Pay" className="h-14 w-auto max-w-[220px] object-contain drop-shadow-[0_0_22px_rgba(29,187,84,0.2)] sm:h-16 sm:max-w-[240px]" />
+          <button type="button" onClick={() => go('dashboard')} aria-label="Ir para o Dashboard" className="flex h-16 min-w-0 shrink items-center justify-start rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,184,84,0.4)]">
+            <img src="/althea-logo-inner.PNG" alt="Althea Pay" className="h-14 w-auto max-w-[220px] object-contain drop-shadow-[0_0_22px_rgba(29,184,84,0.2)] sm:h-16 sm:max-w-[240px]" />
           </button>
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <button type="button" aria-label="Buscar" aria-expanded={searchOpen} onClick={() => setSearchOpen((value) => !value)} className={`grid h-11 w-11 place-items-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)] ${searchOpen ? 'bg-[rgba(29,187,84,0.08)] text-[var(--althea-brand)]' : 'text-[var(--althea-muted)] hover:bg-white/[0.03] hover:text-white'}`}>
+            <button type="button" aria-label="Buscar" aria-expanded={searchOpen} onClick={() => setSearchOpen((value) => !value)} className={`grid h-11 w-11 place-items-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,184,84,0.4)] ${searchOpen ? 'bg-[rgba(29,184,84,0.08)] text-[var(--althea-brand)]' : 'text-[var(--althea-muted)] hover:bg-white/[0.03] hover:text-white'}`}>
               <Search size={25} strokeWidth={1.55} aria-hidden="true" />
             </button>
-            <button type="button" aria-label="Abrir configurações" title="Configurações" onClick={openSettings} className="grid h-11 w-11 place-items-center rounded-xl text-[var(--althea-muted)] transition-colors hover:bg-white/[0.03] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)]">
+            <button type="button" aria-label="Abrir configurações" title="Configurações" onClick={openSettings} className="grid h-11 w-11 place-items-center rounded-xl text-[var(--althea-muted)] transition-colors hover:bg-white/[0.03] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,184,84,0.4)]">
               <Settings size={25} strokeWidth={1.55} aria-hidden="true" />
             </button>
           </div>
@@ -116,7 +116,7 @@ function Nav({ id, label, icon: Icon, active, onClick, mobile = false }: {
 }) {
   return (
     <motion.button type="button" aria-current={active ? 'page' : undefined} aria-label={label} onClick={() => onClick(id)} whileTap={{ scale: 0.97 }} className={`group relative flex min-w-0 items-center justify-center rounded-[30px] transition-all duration-200 ${mobile ? 'h-full flex-col gap-1.5 px-1' : 'w-full justify-start gap-2 px-3 py-3'} ${active ? 'text-[var(--althea-brand)]' : 'text-[var(--althea-muted)] hover:text-white'}`}>
-      <span aria-hidden="true" className={`absolute rounded-[30px] border transition-colors ${active ? 'inset-0 border-[rgba(29,187,84,0.2)] bg-[rgba(29,187,84,0.08)]' : 'inset-0 border-transparent group-hover:bg-white/[0.02]'}`} />
+      <span aria-hidden="true" className={`absolute rounded-[30px] border transition-colors ${active ? 'inset-0 border-[rgba(29,184,84,0.2)] bg-[rgba(29,184,84,0.08)]' : 'inset-0 border-transparent group-hover:bg-white/[0.02]'}`} />
       <Icon className="relative z-10 shrink-0" size={mobile ? 24 : 19} strokeWidth={active ? 2 : 1.8} />
       <span className={`relative z-10 max-w-full truncate leading-none ${mobile ? 'px-1 text-[10px] font-medium sm:text-[11px]' : 'text-xs'}`}>{label}</span>
     </motion.button>
