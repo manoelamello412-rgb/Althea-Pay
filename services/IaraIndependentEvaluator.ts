@@ -62,6 +62,15 @@ export interface IaraExecutionEvidenceAssessment {
     readonly outputEvidenceValid: boolean
     readonly validationEvidenceValid: boolean
     readonly messageId: string | null
+    readonly inference: {
+      readonly model: string | null
+      readonly endpointHost: string | null
+      readonly responseId: string | null
+      readonly inputTokens: number | null
+      readonly outputTokens: number | null
+      readonly totalTokens: number | null
+      readonly temporalEvidenceValid: boolean
+    }
   }
   readonly persistable: boolean
   readonly blockers: readonly string[]
@@ -77,19 +86,18 @@ interface ExecutionActionRow {
   readonly execution_id: string | null
   readonly execution_message_id: string | null
   readonly execution_provenance: unknown
+  readonly payload: unknown
 }
 
 export class IaraIndependentEvaluator {
   constructor(private readonly supabase: SupabaseClient) {}
 
   async assessExecution(tenantId: string, executionId: string): Promise<IaraExecutionEvidenceAssessment> {
-    if (!isUuid(tenantId) || !isUuid(executionId)) {
-      throw new IaraEvaluatorError('EVALUATION_IDENTITY_INVALID')
-    }
+    if (!isUuid(tenantId) || !isUuid(executionId)) throw new IaraEvaluatorError('EVALUATION_IDENTITY_INVALID')
 
     const { data: action, error } = await this.supabase
       .from('crm_ai_actions')
-      .select('id,user_id,action_type,status,executing_at,executed_at,execution_id,execution_message_id,execution_provenance')
+      .select('id,user_id,action_type,status,executing_at,executed_at,execution_id,execution_message_id,execution_provenance,payload')
       .eq('execution_id', executionId)
       .eq('user_id', tenantId)
       .maybeSingle<ExecutionActionRow>()
@@ -107,6 +115,18 @@ export class IaraIndependentEvaluator {
     const output = isRecord(provenance.output) ? provenance.output : {}
     const validation = isRecord(provenance.validation) ? provenance.validation : {}
     const execution = isRecord(provenance.execution) ? provenance.execution : {}
+
+    const payload = isRecord(action.payload) ? action.payload : {}
+    const inference = isRecord(payload.inference_provenance) ? payload.inference_provenance : {}
+    const inferenceModel = typeof inference.model === 'string' ? inference.model : null
+    const endpointHost = typeof inference.endpoint_host === 'string' ? inference.endpoint_host : null
+    const responseId = typeof inference.response_id === 'string' ? inference.response_id : null
+    const inputTokens = nonNegativeIntegerOrNull(inference.input_tokens)
+    const outputTokens = nonNegativeIntegerOrNull(inference.output_tokens)
+    const totalTokens = nonNegativeIntegerOrNull(inference.total_tokens)
+    const inferenceStartedAt = typeof inference.started_at === 'string' ? inference.started_at : null
+    const inferenceCompletedAt = typeof inference.completed_at === 'string' ? inference.completed_at : null
+    const inferenceTemporalEvidenceValid = validTimestampPair(inferenceStartedAt, inferenceCompletedAt)
 
     const toolKey = typeof tool.key === 'string' ? tool.key : null
     const executor = typeof tool.executor === 'string' ? tool.executor : null
@@ -142,6 +162,8 @@ export class IaraIndependentEvaluator {
 
     if (latencyMs === null) blockers.push('LATENCY_EVIDENCE_UNAVAILABLE')
     if (!toolCallEvidenceValid) blockers.push('TOOL_CALL_EVIDENCE_INVALID_OR_INCOMPLETE')
+    if (!inferenceModel) blockers.push('INFERENCE_MODEL_EVIDENCE_UNAVAILABLE')
+    if (!inferenceTemporalEvidenceValid) blockers.push('INFERENCE_TEMPORAL_EVIDENCE_UNAVAILABLE')
     blockers.push(
       'OVERALL_SCORE_EVIDENCE_UNAVAILABLE',
       'HALLUCINATION_RISK_EVIDENCE_UNAVAILABLE',
@@ -175,10 +197,10 @@ export class IaraIndependentEvaluator {
         overallScore: false,
         hallucinationRisk: false,
         groundingScore: false,
-        toolCallAccuracy: toolCallEvidenceValid,
         evidenceCoverage: false,
         causalConfidence: false,
         dataConfidence: false,
+        toolCallAccuracy: toolCallEvidenceValid,
       },
       provenance: {
         toolKey,
@@ -188,6 +210,15 @@ export class IaraIndependentEvaluator {
         outputEvidenceValid,
         validationEvidenceValid,
         messageId: outputMessageId,
+        inference: {
+          model: inferenceModel,
+          endpointHost,
+          responseId,
+          inputTokens,
+          outputTokens,
+          totalTokens,
+          temporalEvidenceValid: inferenceTemporalEvidenceValid,
+        },
       },
       persistable: blockers.length === 0,
       blockers,
@@ -196,7 +227,6 @@ export class IaraIndependentEvaluator {
 
   async persist(input: IaraEvaluationInput): Promise<IaraEvaluationResult> {
     validateInput(input)
-
     const { data, error } = await this.supabase.rpc('persist_iara_independent_evaluation', {
       p_tenant_id: input.tenantId,
       p_execution_id: input.executionId,
@@ -217,12 +247,9 @@ export class IaraIndependentEvaluator {
       p_failures: input.failures,
       p_tool_calls: input.toolCalls,
     })
-
     if (error) throw new IaraEvaluatorError('EVALUATION_PERSISTENCE_FAILED', error.message)
-
     const evaluationId = typeof data === 'string' ? data : null
     if (!evaluationId || !isUuid(evaluationId)) throw new IaraEvaluatorError('EVALUATION_RESULT_INVALID')
-
     return { evaluationId, decision: input.decision }
   }
 }
@@ -244,12 +271,20 @@ function validateInput(input: IaraEvaluationInput): void {
   if (!Number.isInteger(input.latencyMs) || input.latencyMs < 0) throw new IaraEvaluatorError('EVALUATION_LATENCY_INVALID')
 }
 
-function deterministicLatency(startAt: string | null, endAt: string): number | null {
-  if (!startAt) return null
+function deterministicLatency(startAt: string | null, endAt: string | null): number | null {
+  if (!startAt || !endAt) return null
   const start = Date.parse(startAt)
   const end = Date.parse(endAt)
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null
   return end - start
+}
+
+function validTimestampPair(startAt: string | null, endAt: string | null): boolean {
+  return deterministicLatency(startAt, endAt) !== null
+}
+
+function nonNegativeIntegerOrNull(value: unknown): number | null {
+  return Number.isInteger(value) && Number(value) >= 0 ? Number(value) : null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
