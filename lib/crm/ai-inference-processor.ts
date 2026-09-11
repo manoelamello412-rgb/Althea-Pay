@@ -20,12 +20,24 @@ export interface CustomerContext {
   readonly expectedActionType: CanonicalActionType
 }
 
+export interface InferenceProvenance {
+  readonly endpointHost: string | null
+  readonly model: string | null
+  readonly responseId: string | null
+  readonly inputTokens: number | null
+  readonly outputTokens: number | null
+  readonly totalTokens: number | null
+  readonly startedAt: string
+  readonly completedAt: string
+}
+
 export interface GroundedAiResponse {
   readonly action_type: CanonicalActionType
   readonly score: number
   readonly rationale: string
   readonly recommended_channel: CanonicalChannel
   readonly payload: { readonly message_body: string }
+  readonly inferenceProvenance: InferenceProvenance
 }
 
 type UnknownRecord = Record<string, unknown>
@@ -61,7 +73,26 @@ function parseProviderResponse(value: unknown): GroundedAiResponse {
   if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 1) throw new Error(`VALIDATION_ERR: score fora do intervalo 0..1: ${String(score)}`)
   if (typeof rationale !== 'string' || !rationale.trim() || rationale.length > 4000) throw new Error('VALIDATION_ERR: rationale ausente ou inválido.')
   if (!isRecord(payload)) throw new Error('VALIDATION_ERR: payload ausente ou inválido.')
-  return { action_type: actionType, score, rationale: rationale.trim(), recommended_channel: channel, payload: { message_body: safeMessage(payload.message_body) } }
+  return { action_type: actionType, score, rationale: rationale.trim(), recommended_channel: channel, payload: { message_body: safeMessage(payload.message_body) }, inferenceProvenance: parseInferenceProvenance(value) }
+}
+
+function parseInferenceProvenance(value: UnknownRecord): InferenceProvenance {
+  const provenance = isRecord(value.inference_provenance) ? value.inference_provenance : {}
+  const usage = isRecord(value.usage) ? value.usage : {}
+  const integerOrNull = (candidate: unknown): number | null => Number.isInteger(candidate) && Number(candidate) >= 0 ? Number(candidate) : null
+  const startedAt = typeof provenance.started_at === 'string' ? provenance.started_at : ''
+  const completedAt = typeof provenance.completed_at === 'string' ? provenance.completed_at : ''
+  if (!startedAt || !completedAt) throw new Error('AI_INFERENCE_ERR: provenance temporal ausente.')
+  return {
+    endpointHost: typeof provenance.endpoint_host === 'string' ? provenance.endpoint_host : null,
+    model: typeof provenance.model === 'string' ? provenance.model : null,
+    responseId: typeof provenance.response_id === 'string' ? provenance.response_id : null,
+    inputTokens: integerOrNull(usage.prompt_tokens ?? usage.input_tokens),
+    outputTokens: integerOrNull(usage.completion_tokens ?? usage.output_tokens),
+    totalTokens: integerOrNull(usage.total_tokens),
+    startedAt,
+    completedAt,
+  }
 }
 
 function retryAfterMs(header: string | null): number | null {
@@ -93,6 +124,7 @@ export class AltheaAiInferenceProcessor {
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+      const startedAt = new Date().toISOString()
       try {
         const response = await fetch(this.llmEndpoint, {
           method: 'POST',
@@ -119,10 +151,11 @@ export class AltheaAiInferenceProcessor {
           throw new Error(`LLM_PROVIDER_HTTP_ERR_${response.status}`)
         }
         const data: unknown = await response.json()
+        const completedAt = new Date().toISOString()
         if (!isRecord(data) || !Array.isArray(data.choices) || data.choices.length === 0 || !isRecord(data.choices[0])) throw new Error('AI_INFERENCE_ERR: resposta sem choices.')
         const message = data.choices[0].message
         if (!isRecord(message) || typeof message.content !== 'string' || !message.content.trim()) throw new Error('AI_INFERENCE_ERR: conteúdo estruturado ausente.')
-        const result = parseProviderResponse(JSON.parse(message.content))
+        const result = parseProviderResponse({ ...JSON.parse(message.content), inference_provenance: { endpoint_host: safeEndpointHost(this.llmEndpoint), model: typeof data.model === 'string' ? data.model : this.aiModel, response_id: typeof data.id === 'string' ? data.id : null, started_at: startedAt, completed_at: completedAt }, usage: data.usage })
         if (result.action_type !== context.expectedActionType) throw new Error('VALIDATION_ERR: modelo tentou alterar a ação determinada pelo motor canônico.')
         return result
       } catch (error: unknown) {
@@ -153,4 +186,8 @@ export class AltheaAiInferenceProcessor {
       output_contract: { action_type: 'must equal expected_action_type', score: 'number 0..1', rationale: 'non-empty grounded string', recommended_channel: 'WHATSAPP | SMS | EMAIL', payload: { message_body: 'customer-facing draft only' } },
     })
   }
+}
+
+function safeEndpointHost(endpoint: string): string | null {
+  try { return new URL(endpoint).hostname || null } catch { return null }
 }
