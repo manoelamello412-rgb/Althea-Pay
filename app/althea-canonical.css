@@ -146,15 +146,24 @@ a { -webkit-user-select: none; user-select: none; }
 .althea-page-content [class*="bg-[#0a0a0c]"] { background: var(--althea-surface) !important; }
 .althea-page-content [class*="bg-[#0B0B0D]"] { background: var(--althea-bg) !important; }
 .althea-page-content [class*="bg-[#0F1A16]"] { background: var(--althea-surface) !important; }
+.althea-page-content [class*="bg-[#060608]"] { background: var(--althea-bg) !important; }
+.althea-page-content [class*="bg-[#070A09]"] { background: var(--althea-bg) !important; }
+.althea-page-content [class*="bg-[#0b0b0f]"] { background: var(--althea-surface) !important; }
+.althea-page-content [class*="border-[#191921]"] { border-color: var(--althea-border) !important; }
 .althea-page-content [class*="border-white/[0.12]"] { border-color: var(--althea-border) !important; }
+.althea-page-content [class*="border-white/10"] { border-color: var(--althea-border) !important; }
 .althea-page-content [class*="text-emerald-"] { color: var(--althea-brand) !important; }
 .althea-page-content [class*="bg-emerald-"] { background-color: var(--althea-brand) !important; }
 .althea-page-content [class*="border-emerald-"] { border-color: rgba(29, 184, 84, 0.25) !important; }
 .althea-page-content [class*="text-zinc-500"],
-.althea-page-content [class*="text-zinc-400"] { color: var(--althea-muted) !important; }
+.althea-page-content [class*="text-zinc-400"],
+.althea-page-content [class*="text-slate-600"],
+.althea-page-content [class*="text-slate-500"],
+.althea-page-content [class*="text-slate-400"] { color: var(--althea-muted) !important; }
 .althea-page-content [class*="text-zinc-300"],
 .althea-page-content [class*="text-zinc-200"],
-.althea-page-content [class*="text-zinc-100"] { color: #F5F7F6 !important; }
+.althea-page-content [class*="text-zinc-100"],
+.althea-page-content [class*="text-slate-100"] { color: #F5F7F6 !important; }
 .althea-page-content [class*="border-white/[0.08]"] { border-color: var(--althea-border) !important; }
 .althea-page-content [class*="divide-white/[0.08]"] > :not([hidden]) ~ :not([hidden]) { border-color: var(--althea-border) !important; }
 
