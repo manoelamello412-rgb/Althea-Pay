@@ -54,6 +54,15 @@ export interface IaraExecutionEvidenceAssessment {
     readonly causalConfidence: boolean
     readonly dataConfidence: boolean
   }
+  readonly provenance: {
+    readonly toolKey: string | null
+    readonly executor: string | null
+    readonly authorizationValid: boolean
+    readonly inputEvidenceValid: boolean
+    readonly outputEvidenceValid: boolean
+    readonly validationEvidenceValid: boolean
+    readonly messageId: string | null
+  }
   readonly persistable: boolean
   readonly blockers: readonly string[]
 }
@@ -61,10 +70,13 @@ export interface IaraExecutionEvidenceAssessment {
 interface ExecutionActionRow {
   readonly id: string
   readonly user_id: string
+  readonly action_type: string
   readonly status: string
-  readonly created_at: string
+  readonly executing_at: string | null
   readonly executed_at: string | null
   readonly execution_id: string | null
+  readonly execution_message_id: string | null
+  readonly execution_provenance: unknown
 }
 
 export class IaraIndependentEvaluator {
@@ -77,7 +89,7 @@ export class IaraIndependentEvaluator {
 
     const { data: action, error } = await this.supabase
       .from('crm_ai_actions')
-      .select('id,user_id,status,created_at,executed_at,execution_id')
+      .select('id,user_id,action_type,status,executing_at,executed_at,execution_id,execution_message_id,execution_provenance')
       .eq('execution_id', executionId)
       .eq('user_id', tenantId)
       .maybeSingle<ExecutionActionRow>()
@@ -88,15 +100,52 @@ export class IaraIndependentEvaluator {
     if (action.user_id !== tenantId) throw new IaraEvaluatorError('EVALUATION_TENANT_MISMATCH')
     if (action.status !== 'executed' || !action.executed_at) throw new IaraEvaluatorError('EXECUTION_NOT_COMPLETED')
 
-    const latencyMs = deterministicLatency(action.created_at, action.executed_at)
+    const provenance = isRecord(action.execution_provenance) ? action.execution_provenance : {}
+    const tool = isRecord(provenance.tool) ? provenance.tool : {}
+    const authorization = isRecord(provenance.authorization) ? provenance.authorization : {}
+    const input = isRecord(provenance.input) ? provenance.input : {}
+    const output = isRecord(provenance.output) ? provenance.output : {}
+    const validation = isRecord(provenance.validation) ? provenance.validation : {}
+    const execution = isRecord(provenance.execution) ? provenance.execution : {}
+
+    const toolKey = typeof tool.key === 'string' ? tool.key : null
+    const executor = typeof tool.executor === 'string' ? tool.executor : null
+    const authorizationValid = authorization.authenticated === true && authorization.owner_match === true
+    const inputEvidenceValid = typeof input.sha256 === 'string'
+      && /^[0-9a-f]{64}$/i.test(input.sha256)
+      && Number.isInteger(input.length)
+      && Number(input.length) >= 1
+      && input.secret_free === true
+    const outputMessageId = typeof output.message_id === 'string' ? output.message_id : null
+    const outputEvidenceValid = isUuid(outputMessageId ?? '')
+      && action.execution_message_id === outputMessageId
+      && output.message_persisted === true
+    const validationEvidenceValid = validation.input_non_empty === true
+      && validation.input_length_valid === true
+      && validation.action_type_registered === true
+      && validation.authorization_valid === true
+      && validation.result_valid === true
+    const executionIdentityValid = execution.execution_id === executionId
+      && execution.status === 'executed'
+      && typeof execution.started_at === 'string'
+      && typeof execution.completed_at === 'string'
+    const toolCallEvidenceValid = toolKey === action.action_type
+      && executor === 'crm_execute_ai_action'
+      && authorizationValid
+      && inputEvidenceValid
+      && outputEvidenceValid
+      && validationEvidenceValid
+      && executionIdentityValid
+
+    const latencyMs = deterministicLatency(action.executing_at, action.executed_at)
     const blockers: string[] = []
 
     if (latencyMs === null) blockers.push('LATENCY_EVIDENCE_UNAVAILABLE')
+    if (!toolCallEvidenceValid) blockers.push('TOOL_CALL_EVIDENCE_INVALID_OR_INCOMPLETE')
     blockers.push(
       'OVERALL_SCORE_EVIDENCE_UNAVAILABLE',
       'HALLUCINATION_RISK_EVIDENCE_UNAVAILABLE',
       'GROUNDING_SCORE_EVIDENCE_UNAVAILABLE',
-      'TOOL_CALL_ACCURACY_EVIDENCE_UNAVAILABLE',
       'EVIDENCE_COVERAGE_EVIDENCE_UNAVAILABLE',
       'CAUSAL_CONFIDENCE_EVIDENCE_UNAVAILABLE',
       'DATA_CONFIDENCE_EVIDENCE_UNAVAILABLE',
@@ -115,7 +164,7 @@ export class IaraIndependentEvaluator {
         overallScore: null,
         hallucinationRisk: null,
         groundingScore: null,
-        toolCallAccuracy: null,
+        toolCallAccuracy: toolCallEvidenceValid ? 1 : null,
         evidenceCoverage: null,
         causalConfidence: null,
         dataConfidence: null,
@@ -126,10 +175,19 @@ export class IaraIndependentEvaluator {
         overallScore: false,
         hallucinationRisk: false,
         groundingScore: false,
-        toolCallAccuracy: false,
+        toolCallAccuracy: toolCallEvidenceValid,
         evidenceCoverage: false,
         causalConfidence: false,
         dataConfidence: false,
+      },
+      provenance: {
+        toolKey,
+        executor,
+        authorizationValid,
+        inputEvidenceValid,
+        outputEvidenceValid,
+        validationEvidenceValid,
+        messageId: outputMessageId,
       },
       persistable: blockers.length === 0,
       blockers,
@@ -186,11 +244,16 @@ function validateInput(input: IaraEvaluationInput): void {
   if (!Number.isInteger(input.latencyMs) || input.latencyMs < 0) throw new IaraEvaluatorError('EVALUATION_LATENCY_INVALID')
 }
 
-function deterministicLatency(createdAt: string, executedAt: string): number | null {
-  const start = Date.parse(createdAt)
-  const end = Date.parse(executedAt)
+function deterministicLatency(startAt: string | null, endAt: string): number | null {
+  if (!startAt) return null
+  const start = Date.parse(startAt)
+  const end = Date.parse(endAt)
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null
   return end - start
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isUuid(value: string): boolean {
