@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Copy, CreditCard, Eye, Loader2, RefreshCw, Search, TriangleAlert, XCircle } from 'lucide-react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type JsonRecord = Record<string, unknown>
@@ -18,10 +18,11 @@ const customer=(s:Sale)=>{const c=rec(s.metadata?.customer);return Object.keys(c
 const statusMeta=(s:string)=>{const n=s.toLowerCase();if(APPROVED.has(n))return ['APROVADA','text-emerald-400',CheckCircle2] as const;if(n==='pending'||n==='created')return [n==='created'?'CRIADA':'PENDENTE','text-amber-400',Clock3] as const;if(n==='refunded')return ['ESTORNADA','text-sky-400',RefreshCw] as const;if(n==='chargeback')return ['CHARGEBACK','text-orange-400',TriangleAlert] as const;return [n?n.toUpperCase():'FALHA','text-rose-400',XCircle] as const}
 
 export default function SalesPage(){
- const router=useRouter(); const params=useSearchParams(); const supabase=useMemo(()=>createSupabaseBrowserClient(),[])
+ const router=useRouter(); const supabase=useMemo(()=>createSupabaseBrowserClient(),[])
  const [rows,setRows]=useState<Sale[]>([]); const [summary,setSummary]=useState<Summary>({total_count:0,approved_count:0,approved_volume:0,pending_count:0,failed_count:0,refunded_count:0,chargeback_count:0})
- const [search,setSearch]=useState(params.get('search')||''); const [status,setStatus]=useState<(typeof STATUSES)[number][0]>('all'); const [from,setFrom]=useState(''); const [to,setTo]=useState(''); const [funnel,setFunnel]=useState(''); const [gateway,setGateway]=useState(''); const [funnels,setFunnels]=useState<{id:string;nome:string}[]>([]); const [gateways,setGateways]=useState<{id:string;display_name:string;provider:string}[]>([])
+ const [search,setSearch]=useState(''); const [status,setStatus]=useState<(typeof STATUSES)[number][0]>('all'); const [from,setFrom]=useState(''); const [to,setTo]=useState(''); const [funnel,setFunnel]=useState(''); const [gateway,setGateway]=useState(''); const [funnels,setFunnels]=useState<{id:string;nome:string}[]>([]); const [gateways,setGateways]=useState<{id:string;display_name:string;provider:string}[]>([])
  const [page,setPage]=useState(0); const [loading,setLoading]=useState(true); const [refreshing,setRefreshing]=useState(false); const [error,setError]=useState(''); const [selected,setSelected]=useState<Sale|null>(null); const [copied,setCopied]=useState('')
+ useEffect(()=>{const value=new URLSearchParams(window.location.search).get('search');if(value)setSearch(value)},[])
  const loadFilters=useCallback(async()=>{const [{data:f},{data:g}]=await Promise.all([supabase.from('funnels').select('id,nome').order('created_at',{ascending:false}),supabase.from('gateways').select('id,display_name,provider').order('created_at',{ascending:false})]);setFunnels((f||[]) as {id:string;nome:string}[]);setGateways((g||[]) as {id:string;display_name:string;provider:string}[])},[supabase])
  const load=useCallback(async(silent=false)=>{if(silent)setRefreshing(true);else setLoading(true);setError('');try{const {data:auth,error:a}=await supabase.auth.getUser();if(a||!auth.user){router.replace('/login');return}const {data,error:e}=await supabase.rpc('sales_ledger_for_user',{p_search:search.trim()||null,p_status:status,p_from:from||null,p_to:to||null,p_funnel_id:funnel||null,p_gateway_id:gateway||null,p_limit:PAGE_SIZE,p_offset:page*PAGE_SIZE});if(e)throw e;const payload=rec(data);setRows(Array.isArray(payload.rows)?payload.rows as Sale[]:[]);setSummary(rec(payload.summary) as unknown as Summary)}catch(err){console.error('[ALTHEA-SALES]',err);setError('Não foi possível sincronizar o ledger de vendas.')}finally{setLoading(false);setRefreshing(false)}},[from,funnel,gateway,page,router,search,status,supabase,to])
  useEffect(()=>{void loadFilters()},[loadFilters]); useEffect(()=>{void load()},[load])
