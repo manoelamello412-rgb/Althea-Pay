@@ -24,8 +24,7 @@ export function MobileHeaderDashboard({ pageTitle, currentScreen }: HeaderProps)
           aria-label="Voltar ao Dashboard"
           className="flex min-w-0 items-center gap-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)]"
         >
-          <BrandLogo variant="mark" priority className="h-7 w-7 object-contain drop-shadow-[0_0_20px_rgba(29,187,84,0.2)]" />
-          <span className="font-mono text-[10px] font-semibold tracking-[0.14em] text-zinc-100">ALTHEA PAY</span>
+          <BrandLogo variant="inner" priority alt="ALTHEA PAY" className="h-7 w-auto max-w-[118px] object-contain drop-shadow-[0_0_20px_rgba(29,187,84,0.2)]" />
         </button>
 
         <div className="ml-auto flex min-w-0 items-center justify-end gap-2">
