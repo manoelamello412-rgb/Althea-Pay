@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import process from "node:process";
 
 const root = process.cwd();
@@ -35,6 +35,12 @@ function runStep(step) {
   }
 }
 
+function readConfiguredProjectId() {
+  const config = readFileSync(`${root}/supabase/config.toml`, "utf8");
+  const match = config.match(/^project_id\s*=\s*"([^"]+)"/m);
+  return match?.[1] ?? null;
+}
+
 function validateRepositoryLayout() {
   process.stdout.write("\n[GATEWAY] Validando estrutura do módulo\n");
 
@@ -61,12 +67,17 @@ function validateSupabaseConfiguration() {
     throw new Error("supabase/config.toml não encontrado; migrations não podem ser validadas com segurança.");
   }
 
-  const requiredEnv = ["SUPABASE_ACCESS_TOKEN", "SUPABASE_PROJECT_REF"];
+  const requiredEnv = ["SUPABASE_ACCESS_TOKEN", "SUPABASE_PROJECT_ID"];
   const missing = requiredEnv.filter((name) => !process.env[name]);
   if (missing.length > 0) {
     process.stdout.write(`[GATEWAY] Migrations remotas não serão aplicadas: variáveis ausentes (${missing.join(", ")}).\n`);
     process.stdout.write("[GATEWAY] As validações locais continuam; nenhuma credencial será solicitada ou impressa.\n");
     return false;
+  }
+
+  const configuredProjectId = readConfiguredProjectId();
+  if (!configuredProjectId || configuredProjectId !== process.env.SUPABASE_PROJECT_ID) {
+    throw new Error("SUPABASE_PROJECT_ID não corresponde ao project_id canônico de supabase/config.toml.");
   }
 
   return true;
