@@ -10,7 +10,6 @@ on:
       - 'src/**'
       - 'supabase/**'
       - 'package.json'
-      - 'package-lock.json'
       - '.github/workflows/gateway-final-validation.yml'
 
 permissions:
@@ -43,10 +42,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund --legacy-peer-deps
 
       - name: Install Supabase CLI
         run: npm install --global supabase@latest

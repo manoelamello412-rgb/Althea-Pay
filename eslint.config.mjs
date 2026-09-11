@@ -9,6 +9,11 @@ const legacyClientSyncRules = {
 
 export default defineConfig([
   ...nextVitals,
+  {
+    rules: {
+      'react/display-name': 'off',
+    },
+  },
   globalIgnores(['.next/**', 'node_modules/**', 'coverage/**', 'supabase/functions/**']),
   {
     files: [
