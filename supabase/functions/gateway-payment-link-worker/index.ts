@@ -36,10 +36,11 @@ Deno.serve(async (req) => {
     try {
       if (!commandId || !paymentLinkId || !gatewayId || !userId || !idempotencyKey) throw new Error("invalid_execution_command");
 
-      const link = await db.from("gateway_payment_links").select("id,user_id,funnel_id,checkout_id,transaction_id,gateway_id,provider,link_type,amount,currency,status,metadata").eq("id", paymentLinkId).eq("user_id", userId).maybeSingle();
+      const link = await db.from("gateway_payment_links").select("id,user_id,funnel_id,checkout_id,transaction_id,gateway_id,provider,link_type,amount,currency,status,external_id,payment_url,metadata").eq("id", paymentLinkId).eq("user_id", userId).maybeSingle();
       if (link.error || !link.data) throw new Error("payment_link_not_found");
-      if (String(link.data.status) === "active" || String(link.data.status) === "paid") {
-        await db.rpc("complete_gateway_payment_link_execution", { p_command_id: commandId, p_result_payload: { reused: true, payment_link_id: paymentLinkId, status: link.data.status, payment_url: link.data.payment_url ?? null } });
+      if (["active", "paid"].includes(String(link.data.status))) {
+        const done = await db.rpc("complete_gateway_payment_link_execution", { p_command_id: commandId, p_result_payload: { reused: true, payment_link_id: paymentLinkId, status: link.data.status, external_id: link.data.external_id ?? null, payment_url: link.data.payment_url ?? null } });
+        if (done.error) throw done.error;
         results.push({ id: commandId, status: "completed", reused: true });
         continue;
       }
@@ -50,12 +51,7 @@ Deno.serve(async (req) => {
 
       const response = await fetch(`${url}/functions/v1/gateway-provider-adapter`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Althea-Internal-Secret": expected,
-          "X-Althea-Gateway-Id": gatewayId,
-          "X-Althea-Idempotency-Key": idempotencyKey,
-        },
+        headers: { "Content-Type": "application/json", "X-Althea-Internal-Secret": expected, "X-Althea-Gateway-Id": gatewayId, "X-Althea-Idempotency-Key": idempotencyKey },
         body: JSON.stringify({
           operation: "create_payment_link",
           provider: String(gateway.data.provider).toLowerCase(),
@@ -66,19 +62,19 @@ Deno.serve(async (req) => {
           currency: String(link.data.currency).toUpperCase(),
           link_type: String(link.data.link_type),
           metadata: { ...((isObject(link.data.metadata) ? link.data.metadata : {})), ...payload, payment_link_id: paymentLinkId, transaction_id: link.data.transaction_id },
-        },
+        }),
       });
       const provider = await response.json().catch(() => ({}));
       if (!response.ok || !isObject(provider) || provider.ok !== true) {
-        const retryable = response.status === 429 || response.status >= 500;
+        const retryable = response.status === 408 || response.status === 409 || response.status === 429 || response.status >= 500;
         const failed = await db.rpc("fail_gateway_payment_link_execution", {
           p_command_id: commandId,
-          p_error_code: text(provider && provider.error) || `provider_http_${response.status}`,
-          p_error_message: text(provider && (provider.detail ?? provider.message ?? provider.error)) || "provider_payment_link_creation_failed",
+          p_error_code: text(isObject(provider) ? provider.error : "") || `provider_http_${response.status}`,
+          p_error_message: text(isObject(provider) ? (provider.detail ?? provider.message ?? provider.error) : "") || "provider_payment_link_creation_failed",
           p_retryable: retryable,
           p_retry_seconds: response.status === 429 ? 60 : 30,
         });
-        results.push({ id: commandId, status: failed.error ? "failed" : String(failed.data?.status ?? (retryable ? "queued" : "failed")), error: text(provider && provider.error) || `provider_http_${response.status}` });
+        results.push({ id: commandId, status: failed.error ? "failed" : String(failed.data?.status ?? (retryable ? "queued" : "failed")), error: text(isObject(provider) ? provider.error : "") || `provider_http_${response.status}` });
         continue;
       }
 
@@ -94,16 +90,17 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString(),
       }).eq("id", paymentLinkId).eq("user_id", userId).eq("status", "pending").select("id,status,external_id,payment_url").maybeSingle();
       if (updated.error) throw new Error(`payment_link_persistence_failed:${updated.error.message}`);
+      if (!updated.data) {
+        const current = await db.from("gateway_payment_links").select("id,status,external_id,payment_url").eq("id", paymentLinkId).eq("user_id", userId).maybeSingle();
+        if (current.error || !current.data || String(current.data.status) !== "active") throw new Error("payment_link_persistence_conflict");
+      }
 
-      const done = await db.rpc("complete_gateway_payment_link_execution", {
-        p_command_id: commandId,
-        p_result_payload: { payment_link_id: paymentLinkId, external_id: externalId, payment_url: paymentUrl, provider: String(gateway.data.provider).toLowerCase(), status: "active" },
-      });
+      const done = await db.rpc("complete_gateway_payment_link_execution", { p_command_id: commandId, p_result_payload: { payment_link_id: paymentLinkId, external_id: externalId, payment_url: paymentUrl, provider: String(gateway.data.provider).toLowerCase(), status: "active" } });
       if (done.error) throw done.error;
       results.push({ id: commandId, status: "completed", payment_link_id: paymentLinkId, external_id: externalId, payment_url: paymentUrl });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const retryable = /provider_payment_link_response_incomplete|payment_link_persistence_failed|fetch|timeout|temporar/i.test(message);
+      const retryable = /gateway_not_operational|payment_link_persistence|fetch|timeout|temporar/i.test(message);
       const failed = await db.rpc("fail_gateway_payment_link_execution", { p_command_id: commandId, p_error_code: "EXECUTION_FAILED", p_error_message: message, p_retryable: retryable, p_retry_seconds: 30 });
       results.push({ id: commandId, status: failed.error ? "failed" : String(failed.data?.status ?? (retryable ? "queued" : "failed")), error: message });
     }
