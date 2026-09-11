@@ -38,8 +38,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <style jsx global>{`
         .althea-page-content .al-chat-top,
         .althea-page-content .al-bottom-nav,
-        .althea-page-content .althea-legacy-bottom-nav,
-        .althea-page-content > div > header {
+        .althea-page-content .althea-legacy-bottom-nav {
           display: none !important;
         }
       `}</style>
