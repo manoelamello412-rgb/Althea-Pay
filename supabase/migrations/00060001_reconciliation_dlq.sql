@@ -29,7 +29,7 @@ create table if not exists public.reconciliation_items (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   run_id uuid not null references public.reconciliation_runs(id) on delete cascade,
-  transaction_id uuid references public.gateway_transactions(id) on delete set null,
+  transaction_id uuid,
   external_transaction_id text,
   status text not null default 'unmatched' check (status in ('matched','amount_mismatch','missing_internal','missing_gateway','duplicate','unmatched')),
   expected_amount numeric,
