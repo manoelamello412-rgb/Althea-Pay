@@ -1,3 +1,5 @@
+// Canonical AI inference processor for the CRM. Server-side only.
+
 export type CanonicalActionType =
   | 'payment_follow_up'
   | 'sales_follow_up'
