@@ -1,0 +1,36 @@
+name: Gateway — Payment Link Execution Worker
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/2 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gateway-payment-link-worker
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Execute queued payment links
+        env:
+          SUPABASE_URL: https://hkraryqoziravulvqkid.supabase.co
+          ALTHEA_INTERNAL_SECRET: ${{ secrets.ALTHEA_INTERNAL_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${ALTHEA_INTERNAL_SECRET:-}" ]]; then
+            echo "Missing required GitHub Actions secret: ALTHEA_INTERNAL_SECRET" >&2
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error \
+            --max-time 120 \
+            -X POST "${SUPABASE_URL}/functions/v1/gateway-payment-link-worker" \
+            -H 'content-type: application/json' \
+            -H "x-althea-internal-secret: ${ALTHEA_INTERNAL_SECRET}" \
+            --data '{"limit":25}'
