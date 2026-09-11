@@ -14,9 +14,11 @@ describe('Multi-CRM inbox operational contracts',()=>{
     expect(page).toContain("supabase.rpc('crm_customer_360'")
   })
 
-  it('preserves explicit unassignment semantics in the canonical RPC migration',()=>{
-    const migration=read('supabase/migrations/20260911152000_crm_assignment_unassign_semantics_v1.sql')
+  it('preserves explicit unassignment and concurrency semantics in the canonical RPC migration',()=>{
+    const migration=read('supabase/migrations/20260911190000_crm_assignment_concurrency_unassignment_sync_v1.sql')
     expect(migration).toContain('set assigned_to=p_agent_id')
+    expect(migration).toContain('pg_advisory_xact_lock')
+    expect(migration).toContain("when p_team_id is null then coalesce(metadata,'{}'::jsonb) - 'team_id'")
     expect(migration).toContain("'CONVERSATION_NOT_FOUND'")
     expect(migration).toContain("'AGENT_NOT_FOUND'")
     expect(migration).toContain("'TEAM_NOT_FOUND'")
