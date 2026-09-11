@@ -3,6 +3,7 @@ import {
   type CanonicalActionType,
   type CanonicalChannel,
   type CustomerContext,
+  type InferenceProvenance,
 } from '../ai-inference-processor'
 
 export type RevenueAgentContext = {
@@ -20,6 +21,7 @@ export type RevenueAgentDraft = {
   readonly mode: string
   readonly draft: string | null
   readonly confidence: number
+  readonly inferenceProvenance: InferenceProvenance | null
 }
 
 const CANONICAL_ACTIONS: readonly CanonicalActionType[] = [
@@ -66,6 +68,7 @@ export async function generateRevenueAgentDraft(ctx: RevenueAgentContext): Promi
       mode: 'grounded_behavioral_fallback',
       draft: null,
       confidence: 0,
+      inferenceProvenance: null,
     }
   }
 
@@ -82,6 +85,7 @@ export async function generateRevenueAgentDraft(ctx: RevenueAgentContext): Promi
       mode: `grounded_llm_draft_v3_${channel.toLowerCase()}`,
       draft: result.payload.message_body,
       confidence: Number((0.55 + 0.3 * evidenceCompleteness).toFixed(2)),
+      inferenceProvenance: result.inferenceProvenance,
     }
   } catch (error: unknown) {
     const reason = error instanceof Error ? error.message : 'unknown'
@@ -91,6 +95,7 @@ export async function generateRevenueAgentDraft(ctx: RevenueAgentContext): Promi
       mode: 'grounded_behavioral_fallback',
       draft: null,
       confidence: 0,
+      inferenceProvenance: null,
     }
   }
 }
