@@ -2,7 +2,7 @@
 create table if not exists public.reconciliation_runs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  gateway_id text references public.gateways(id) on delete set null,
+  gateway_id text,
   period_start timestamptz not null,
   period_end timestamptz not null,
   status text not null default 'pending' check (status in ('pending','running','completed','failed')),
