@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from 'react'
 
-type BrandLogoVariant = 'main' | 'mark' | 'wordmark'
+type BrandLogoVariant = 'main' | 'inner' | 'mark' | 'wordmark'
 
 type BrandLogoProps = {
   variant?: BrandLogoVariant
@@ -14,6 +14,7 @@ type BrandLogoProps = {
 
 const BRAND_ASSETS: Record<BrandLogoVariant, string> = {
   main: '/althea-logo.png',
+  inner: '/althea-logo-inner.PNG',
   mark: '/althea-mark.png',
   wordmark: '/althea-wordmark.png',
 }
