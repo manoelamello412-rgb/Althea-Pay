@@ -38,6 +38,7 @@
     "eslint": "9.39.1",
     "eslint-config-next": "latest",
     "tailwindcss": "latest",
+    "vite": "latest",
     "vitest": "latest"
   }
 }
