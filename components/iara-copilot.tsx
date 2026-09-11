@@ -5,7 +5,7 @@ import { Activity, AlertTriangle, ArrowRight, Bot, FileText, Network, RefreshCw,
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-type GatewayRow = { id: string; name: string; provider: string; status: string; updated_at: string }
+type GatewayRow = { id: string; display_name: string | null; provider: string; status: string; created_at: string }
 type SaleRow = { amount: number | string | null; status: string; created_at: string; occurred_at?: string | null }
 type EventRow = { id: string; event_type: string; status: string | null; created_at: string; processed_at: string | null; error_message: string | null }
 type AuditRow = { id: string; action: string; resource_type: string | null; metadata: Record<string, unknown> | null; created_at: string }
@@ -16,8 +16,6 @@ const EMPTY_METRICS: MetricState = { health: 0, approval: 0, latencyMs: null, in
 const formatPercent = (value: number) => `${value.toFixed(1).replace('.', ',')}%`
 const formatTime = (value: string) => new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 const formatLatency = (value: number | null) => value === null ? '—' : `${Math.round(value)} ms`
-const asObject = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
-const asText = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value.trim() : fallback
 
 export default function IaraCopilot() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
@@ -40,7 +38,7 @@ export default function IaraCopilot() {
     try {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
       const [gatewayResult, salesResult, eventsResult, auditResult] = await Promise.all([
-        db.from('gateways').select('id,data,created_at').eq('user_id', uid).order('created_at', { ascending: true }),
+        db.from('gateways').select('id,display_name,provider,status,created_at').eq('user_id', uid).order('created_at', { ascending: true }),
         db.from('sales').select('amount,status,created_at,occurred_at').eq('user_id', uid).gte('occurred_at', since).order('occurred_at', { ascending: false }).limit(1000),
         db.from('integration_events').select('id,event_type,status,created_at,processed_at,error_message').eq('user_id', uid).gte('created_at', since).order('created_at', { ascending: false }).limit(30),
         db.from('audit_logs').select('id,action,resource_type,metadata,created_at').eq('user_id', uid).gte('created_at', since).order('created_at', { ascending: false }).limit(30),
@@ -50,10 +48,13 @@ export default function IaraCopilot() {
       if (eventsResult.error) throw new Error('Não foi possível carregar a telemetria.')
       if (auditResult.error) throw new Error('Não foi possível carregar a trilha de atividades.')
 
-      const gatewayRows: GatewayRow[] = (gatewayResult.data ?? []).map((row) => {
-        const data = asObject(row.data)
-        return { id: String(row.id), name: asText(data.name, 'Gateway'), provider: asText(data.provider, 'Provider'), status: asText(data.status, 'pending'), updated_at: String(row.created_at) }
-      })
+      const gatewayRows: GatewayRow[] = (gatewayResult.data ?? []).map((row) => ({
+        id: String(row.id),
+        display_name: row.display_name ?? null,
+        provider: String(row.provider ?? ''),
+        status: String(row.status ?? 'inactive'),
+        created_at: String(row.created_at),
+      }))
       const salesRows = (salesResult.data ?? []) as SaleRow[]
       const eventRows = (eventsResult.data ?? []) as EventRow[]
       const auditRows = (auditResult.data ?? []) as AuditRow[]
@@ -137,7 +138,7 @@ export default function IaraCopilot() {
     <div className="space-y-3"><div><h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#1DBB54]">Ações Inteligentes</h2><p className="mt-1 text-[10px] text-zinc-600">Comandos executados pela IA com o contexto operacional atual.</p></div><div className="grid grid-cols-2 gap-3">{commands.map(({ icon: Icon, title, description, prompt }) => <button key={title} type="button" onClick={() => void askIara(prompt)} disabled={sending} className="group rounded-xl border border-white/[0.05] bg-[#0b0d0c] p-3.5 text-left disabled:opacity-60"><span className="grid h-8 w-8 place-items-center rounded-lg border border-[#1DBB54]/15 bg-[#1DBB54]/[0.06] text-[#1DBB54]"><Icon className="h-4 w-4"/></span><strong className="mt-3 block text-[11px] text-zinc-200">{title}</strong><span className="mt-1 block text-[9px] text-zinc-600">{description}</span></button>)}</div></div>
     {answer && <div className="rounded-2xl border border-[#1DBB54]/20 bg-[#0a110d] p-4"><div className="flex items-center gap-2"><Bot className="h-4 w-4 text-[#1DBB54]"/><span className="text-[10px] font-bold uppercase tracking-wider text-[#1DBB54]">Resposta da IA</span></div><p className="mt-3 whitespace-pre-wrap text-xs leading-relaxed text-zinc-300">{answer}</p></div>}
     <div className="space-y-3"><div><h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-300">Atividade da IA</h2><p className="mt-1 text-[10px] text-zinc-600">Eventos e alterações observados na operação.</p></div><div className="overflow-hidden rounded-xl border border-white/[0.05] bg-[#0b0d0c]">{activities.length === 0 ? <Empty icon={Activity} title="Nenhuma atividade recente" description="A trilha operacional aparecerá aqui quando houver eventos."/> : activities.map((activity) => <div key={activity.id} className="flex gap-3 border-b border-white/[0.04] p-3 last:border-b-0"><span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${activity.tone === 'warning' ? 'bg-amber-400' : activity.tone === 'success' ? 'bg-[#1DBB54]' : 'bg-zinc-600'}`}/><div className="min-w-0 flex-1"><div className="flex items-baseline justify-between gap-2"><strong className="truncate text-[10px] text-zinc-300">{activity.title}</strong><time className="shrink-0 text-[9px] font-mono text-zinc-700">{activity.time}</time></div><p className="mt-0.5 text-[9px] text-zinc-600">{activity.description}</p></div></div>)}</div></div>
-    <div className="space-y-3"><div><h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-300">Status dos Gateways</h2><p className="mt-1 text-[10px] text-zinc-600">Disponibilidade real das conexões configuradas.</p></div><div className="overflow-hidden rounded-xl border border-white/[0.05] bg-[#0b0d0c]">{gateways.length === 0 ? <Empty icon={Network} title="Nenhum gateway configurado" description="Conecte um gateway para iniciar o monitoramento."/> : gateways.map((gateway) => { const online = ['connected','active','online'].includes(gateway.status.toLowerCase()); return <div key={gateway.id} className="flex items-center gap-3 border-b border-white/[0.04] p-3.5 last:border-b-0"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#0D362D] text-[9px] font-bold text-[#1DBB54]">{gateway.provider.slice(0,2).toUpperCase()}</span><div className="min-w-0 flex-1"><strong className="block truncate text-[11px] text-zinc-200">{gateway.name}</strong><span className="mt-0.5 block truncate text-[9px] text-zinc-600">{gateway.provider}</span></div><span className={`text-[9px] font-mono font-bold ${online ? 'text-[#1DBB54]' : gateway.status === 'error' ? 'text-rose-400' : 'text-zinc-500'}`}>{online ? 'ONLINE' : gateway.status.toUpperCase()}</span></div> })}</div></div>
+    <div className="space-y-3"><div><h2 className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-300">Status dos Gateways</h2><p className="mt-1 text-[10px] text-zinc-600">Disponibilidade real das conexões configuradas.</p></div><div className="overflow-hidden rounded-xl border border-white/[0.05] bg-[#0b0d0c]">{gateways.length === 0 ? <Empty icon={Network} title="Nenhum gateway configurado" description="Conecte um gateway para iniciar o monitoramento."/> : gateways.map((gateway) => { const online = ['connected','active','online'].includes(gateway.status.toLowerCase()); return <div key={gateway.id} className="flex items-center gap-3 border-b border-white/[0.04] p-3.5 last:border-b-0"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#0D362D] text-[9px] font-bold text-[#1DBB54]">{gateway.provider.slice(0,2).toUpperCase()}</span><div className="min-w-0 flex-1"><strong className="block truncate text-[11px] text-zinc-200">{gateway.display_name || gateway.provider}</strong><span className="mt-0.5 block truncate text-[9px] text-zinc-600">{gateway.provider}</span></div><span className={`text-[9px] font-mono font-bold ${online ? 'text-[#1DBB54]' : gateway.status === 'error' ? 'text-rose-400' : 'text-zinc-500'}`}>{online ? 'ONLINE' : gateway.status.toUpperCase()}</span></div> })}</div></div>
     <form onSubmit={(event) => { event.preventDefault(); void askIara() }} className="sticky bottom-24 z-20 flex items-center gap-2 rounded-2xl border border-white/[0.07] bg-[#0a0d0b]/95 p-2 backdrop-blur-xl shadow-2xl"><Bot className="ml-2 h-4 w-4 shrink-0 text-[#1DBB54]"/><input value={command} onChange={(event) => setCommand(event.target.value)} disabled={sending} placeholder="Pergunte algo para a IA..." className="min-w-0 flex-1 bg-transparent px-1 py-3 text-xs text-white outline-none placeholder:text-zinc-700"/><button type="submit" disabled={!command.trim() || sending} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#1DBB54] text-black disabled:opacity-30" aria-label="Enviar para a IA"><Send className="h-4 w-4"/></button></form>
   </div></section>
 }
