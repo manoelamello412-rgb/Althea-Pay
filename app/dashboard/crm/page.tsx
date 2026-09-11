@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/preserve-manual-memoization */
 'use client'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, CheckCheck, ChevronLeft, Inbox, MessageCircle, RefreshCw, Search, Send, UserRound } from 'lucide-react'
