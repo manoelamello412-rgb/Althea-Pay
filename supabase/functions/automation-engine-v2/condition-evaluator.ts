@@ -60,6 +60,7 @@ function asDate(value: unknown): number | null {
 }
 
 function sameValue(actual: unknown, expected: unknown): boolean {
+  if (actual === undefined || actual === null || expected === undefined || expected === null) return actual === expected;
   if (typeof actual === "number" || typeof expected === "number") {
     const a = asNumber(actual);
     const e = asNumber(expected);
@@ -94,13 +95,13 @@ function evaluateOperator(actual: unknown, operator: string, expected: unknown):
     case "is_true": return actual === true;
     case "is_false": return actual === false;
     case "eq": return sameValue(actual, expected);
-    case "neq": return !sameValue(actual, expected);
+    case "neq": return actual !== undefined && actual !== null && expected !== undefined && expected !== null && !sameValue(actual, expected);
     case "ieq": return typeof actual === "string" && typeof expected === "string" && actual.toLocaleLowerCase() === expected.toLocaleLowerCase();
-    case "in": return Array.isArray(expected) && expected.some((candidate) => sameValue(actual, candidate));
-    case "not_in": return Array.isArray(expected) && !expected.some((candidate) => sameValue(actual, candidate));
+    case "in": return actual !== undefined && actual !== null && Array.isArray(expected) && expected.some((candidate) => sameValue(actual, candidate));
+    case "not_in": return actual !== undefined && actual !== null && Array.isArray(expected) && !expected.some((candidate) => sameValue(actual, candidate));
     case "contains": return Array.isArray(actual) ? actual.some((candidate) => sameValue(candidate, expected)) : typeof actual === "string" && typeof expected === "string" && actual.includes(expected);
     case "icontains": return typeof actual === "string" && typeof expected === "string" && actual.toLocaleLowerCase().includes(expected.toLocaleLowerCase());
-    case "not_contains": return !evaluateOperator(actual, "contains", expected);
+    case "not_contains": return actual !== undefined && actual !== null && !evaluateOperator(actual, "contains", expected);
     case "starts_with": return typeof actual === "string" && typeof expected === "string" && actual.startsWith(expected);
     case "ends_with": return typeof actual === "string" && typeof expected === "string" && actual.endsWith(expected);
     case "gt": return compareOrdered(actual, expected, "gt");
