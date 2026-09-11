@@ -23,19 +23,15 @@ type TenantDetails = {
   updated_at: string
 }
 
-const EMPTY_METRICS: FinancialMetrics = {
-  monthly_billing_cents: 0,
-  tax_withheld_cents: 0,
-  current_tier: 'Standard',
-}
+const EMPTY_METRICS: FinancialMetrics = {}
 
 function asMetrics(value: unknown): FinancialMetrics {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return EMPTY_METRICS
   const raw = value as Record<string, unknown>
   return {
-    monthly_billing_cents: typeof raw.monthly_billing_cents === 'number' ? raw.monthly_billing_cents : 0,
-    tax_withheld_cents: typeof raw.tax_withheld_cents === 'number' ? raw.tax_withheld_cents : 0,
-    current_tier: typeof raw.current_tier === 'string' && raw.current_tier.trim() ? raw.current_tier : 'Standard',
+    monthly_billing_cents: typeof raw.monthly_billing_cents === 'number' ? raw.monthly_billing_cents : undefined,
+    tax_withheld_cents: typeof raw.tax_withheld_cents === 'number' ? raw.tax_withheld_cents : undefined,
+    current_tier: typeof raw.current_tier === 'string' && raw.current_tier.trim() ? raw.current_tier : undefined,
   }
 }
 
@@ -53,7 +49,8 @@ function normalizeTenant(row: Record<string, unknown>): TenantDetails {
   }
 }
 
-function formatCurrency(cents: number): string {
+function formatCurrency(cents: number | undefined): string {
+  if (typeof cents !== 'number' || !Number.isFinite(cents)) return '—'
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
 }
 
@@ -229,7 +226,7 @@ export default function EmpresaSettingsPage() {
 
         <section className="rounded-2xl border border-[#191921] bg-[#0b0b0f] p-4 sm:p-5">
           <SectionHeading eyebrow="Ledger operacional" title="Faturamento & retenções" description="Indicadores consolidados pelas engines financeiras. Somente leitura." />
-          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3"><Metric label="Faturamento mensal" value={formatCurrency(metrics.monthly_billing_cents ?? 0)} /><Metric label="Impostos retidos" value={formatCurrency(metrics.tax_withheld_cents ?? 0)} /><Metric label="Categoria operacional" value={metrics.current_tier ?? 'Standard'} /></div>
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3"><Metric label="Faturamento mensal" value={formatCurrency(metrics.monthly_billing_cents)} /><Metric label="Impostos retidos" value={formatCurrency(metrics.tax_withheld_cents)} /><Metric label="Categoria operacional" value={metrics.current_tier ?? '—'} /></div>
           <div className="mt-4 flex items-start gap-3 rounded-xl border border-[#191921] bg-[#060608] p-3 text-[11px] leading-5 text-zinc-500"><ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#1DB854]" /><p>Os indicadores são somente leitura. Alterações de enquadramento fiscal ou identidade homologada exigem revisão documental e não podem ser realizadas por este painel.</p></div>
         </section>
 
