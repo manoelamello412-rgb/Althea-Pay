@@ -1,0 +1,37 @@
+name: Gateway — Webhook Event Processor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/2 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gateway-webhook-processor
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Process accepted gateway webhooks
+        env:
+          SUPABASE_URL: https://hkraryqoziravulvqkid.supabase.co
+          ALTHEA_INTERNAL_SECRET: ${{ secrets.ALTHEA_INTERNAL_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${ALTHEA_INTERNAL_SECRET:-}" ]]; then
+            echo "Missing required GitHub Actions secret: ALTHEA_INTERNAL_SECRET" >&2
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error \
+            --retry 2 \
+            --max-time 120 \
+            -X POST "${SUPABASE_URL}/functions/v1/gateway-webhook-processor" \
+            -H 'content-type: application/json' \
+            -H "x-internal-secret: ${ALTHEA_INTERNAL_SECRET}" \
+            --data '{"limit":50}'
