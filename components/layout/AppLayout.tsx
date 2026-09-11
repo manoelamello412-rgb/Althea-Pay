@@ -41,8 +41,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between border-r border-white/[0.04] bg-[var(--althea-surface)]/80 p-5 backdrop-blur-xl md:flex">
         <div className="space-y-6">
           <Link href="/dashboard" aria-label="ALTHEA PAY — Dashboard" className="flex items-center gap-3 px-1 py-1">
-            <BrandLogo variant="mark" priority className="h-8 w-8 object-contain drop-shadow-[0_0_20px_rgba(29,187,84,0.2)]" />
-            <span className="font-mono text-xs font-bold tracking-widest text-zinc-100">ALTHEA PAY</span>
+            <BrandLogo variant="inner" priority alt="ALTHEA PAY" className="h-8 w-auto object-contain drop-shadow-[0_0_20px_rgba(29,187,84,0.2)]" />
           </Link>
 
           <nav aria-label="Navegação principal" className="space-y-1">
@@ -76,8 +75,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-white/[0.04] bg-[var(--althea-bg)]/90 px-4 backdrop-blur-xl md:hidden">
           <Link href="/dashboard" aria-label="Voltar ao Dashboard" className="flex min-w-0 items-center gap-2">
-            <BrandLogo variant="mark" priority className="h-6 w-6 object-contain" />
-            <span className="font-mono text-[10px] font-semibold tracking-[0.14em] text-zinc-100">ALTHEA PAY</span>
+            <BrandLogo variant="inner" priority alt="ALTHEA PAY" className="h-6 w-auto max-w-[132px] object-contain" />
           </Link>
           <span className="truncate pl-3 font-mono text-[10px] uppercase tracking-wider text-[var(--althea-muted)]">
             {activeRoute.label}
