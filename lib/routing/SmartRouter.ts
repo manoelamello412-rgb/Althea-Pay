@@ -62,7 +62,7 @@ const DEFAULTS = {
   maxRetriesPerProvider: 1,
   baseBackoffMs: 150,
   maxBackoffMs: 1_500,
-  jitterRatio: 0.25,
+  jitterRatio: 0,
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -168,7 +168,7 @@ export class SmartRouter {
           if (!this.isRetryable(failure)) return { status: 'CRITICAL_FAILURE', providerUsed: provider, error: lastError, attemptsCount: totalAttempts, providerAttempts: attempts }
           await this.circuitStore.recordFailure(payload.tenantId, provider, failure, decision.probeToken)
           if (attempt < maxAttempts) await this.options.sleep(this.backoff(attempt))
-        } catch (error) {
+        } catch (error: unknown) {
           const failure = this.classifyFailure(undefined, error instanceof Error ? error.message : String(error))
           lastFailure = failure
           lastError = error instanceof Error ? error.message : String(error)
@@ -208,8 +208,6 @@ export class SmartRouter {
   }
 
   private backoff(attempt: number): number {
-    const exponential = Math.min(this.options.maxBackoffMs, this.options.baseBackoffMs * 2 ** Math.max(0, attempt - 1))
-    const jitter = exponential * this.options.jitterRatio * (Math.random() * 2 - 1)
-    return Math.max(0, Math.round(exponential + jitter))
+    return Math.min(this.options.maxBackoffMs, this.options.baseBackoffMs * 2 ** Math.max(0, attempt - 1))
   }
 }
