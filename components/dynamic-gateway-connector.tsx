@@ -41,6 +41,9 @@ export const DynamicGatewayConnector: React.FC = () => {
   const [formValues, setFormValues] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [createdGatewayId, setCreatedGatewayId] = useState<string | null>(null)
+  const [connectionMessage, setConnectionMessage] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -76,7 +79,30 @@ export const DynamicGatewayConnector: React.FC = () => {
     const values: Record<string, string> = {}
     for (const field of activeProvider.credential_schema.fields) values[field.name] = ''
     setFormValues(values)
+    setCreatedGatewayId(null)
+    setConnectionMessage(null)
   }, [activeProvider])
+
+  const testConnection = async (gatewayId: string): Promise<void> => {
+    if (testing) return
+    setTesting(true)
+    setConnectionMessage(null)
+    try {
+      const { data, error } = await db.functions.invoke('gateway-connection-test', {
+        body: { gateway_id: gatewayId },
+      })
+      if (error) throw new Error(error.message)
+      const result = data && typeof data === 'object' ? data as Record<string, unknown> : {}
+      if (result.ok !== true) throw new Error(typeof result.error === 'string' ? result.error : 'Falha ao validar a conexão.')
+      const latency = typeof result.latency_ms === 'number' ? ` ${result.latency_ms}ms` : ''
+      setConnectionMessage(`Conexão validada com sucesso.${latency}`)
+      setMessage('Gateway conectado e validado pelo painel.')
+    } catch (error) {
+      setConnectionMessage(error instanceof Error ? `Conexão não validada: ${error.message}` : 'Conexão não validada.')
+    } finally {
+      setTesting(false)
+    }
+  }
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -84,6 +110,7 @@ export const DynamicGatewayConnector: React.FC = () => {
     setSubmitting(true)
     setMessage(null)
     setErrorMessage(null)
+    setConnectionMessage(null)
     try {
       if (!displayName.trim()) throw new Error('Informe um nome para o gateway.')
       for (const field of activeProvider.credential_schema.fields) {
@@ -98,15 +125,15 @@ export const DynamicGatewayConnector: React.FC = () => {
       })
       if (error) throw new Error(error.message)
       const result = data && typeof data === 'object' ? data as Record<string, unknown> : {}
-      setMessage(
-        result.operational === true
-          ? 'Gateway conectado e registrado no Core.'
-          : 'Credenciais armazenadas com segurança. Este provider ainda não possui adapter operacional homologado.',
-      )
+      const gatewayId = typeof result.gateway_id === 'string' ? result.gateway_id : null
+      if (!gatewayId) throw new Error('O gateway foi registrado sem um identificador operacional.')
+      setCreatedGatewayId(gatewayId)
+      setMessage(result.operational === true ? 'Gateway registrado. Validando conexão...' : 'Gateway registrado. O provider ainda não possui adapter operacional homologado.')
       setSelectedProviderKey('')
       setDisplayName('')
       setFormValues({})
       await loadRegistry()
+      if (result.operational === true) await testConnection(gatewayId)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Falha ao registrar o gateway.')
     } finally {
@@ -130,7 +157,15 @@ export const DynamicGatewayConnector: React.FC = () => {
       </header>
 
       {message && <div className="flex items-center gap-2 rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 text-xs text-emerald-400"><CheckCircle2 className="h-4 w-4" />{message}</div>}
+      {connectionMessage && <div className={`flex items-center gap-2 rounded-lg border p-3 text-xs ${connectionMessage.startsWith('Conexão validada') ? 'border-emerald-900/50 bg-emerald-950/20 text-emerald-400' : 'border-amber-900/50 bg-amber-950/20 text-amber-300'}`}><CheckCircle2 className="h-4 w-4" />{connectionMessage}</div>}
       {errorMessage && <div className="flex items-center gap-2 rounded-lg border border-rose-900/50 bg-rose-950/20 p-3 text-xs text-rose-400"><AlertCircle className="h-4 w-4" />{errorMessage}</div>}
+
+      {createdGatewayId && (
+        <button type="button" onClick={() => void testConnection(createdGatewayId)} disabled={testing} className="flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 py-2.5 text-xs font-bold font-mono text-white hover:bg-neutral-800 disabled:opacity-40">
+          {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {testing ? 'VALIDANDO CONEXÃO...' : 'TESTAR CONEXÃO NOVAMENTE'}
+        </button>
+      )}
 
       {loading ? <div className="h-11 animate-pulse rounded-lg border border-neutral-800 bg-neutral-900" /> : (
         <form onSubmit={submit} className="space-y-4">
