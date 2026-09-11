@@ -67,12 +67,10 @@ function validateSupabaseConfiguration() {
     throw new Error("supabase/config.toml não encontrado; migrations não podem ser validadas com segurança.");
   }
 
-  const requiredEnv = ["SUPABASE_ACCESS_TOKEN", "SUPABASE_PROJECT_ID"];
+  const requiredEnv = ["SUPABASE_ACCESS_TOKEN", "SUPABASE_PROJECT_ID", "SUPABASE_DB_PASSWORD"];
   const missing = requiredEnv.filter((name) => !process.env[name]);
   if (missing.length > 0) {
-    process.stdout.write(`[GATEWAY] Migrations remotas não serão aplicadas: variáveis ausentes (${missing.join(", ")}).\n`);
-    process.stdout.write("[GATEWAY] As validações locais continuam; nenhuma credencial será solicitada ou impressa.\n");
-    return false;
+    throw new Error(`Configuração de CI incompleta para migrations remotas: ${missing.join(", ")}`);
   }
 
   const configuredProjectId = readConfiguredProjectId();
@@ -83,14 +81,9 @@ function validateSupabaseConfiguration() {
   return true;
 }
 
-function applyMigrations() {
-  const configured = validateSupabaseConfiguration();
-  if (!configured) return;
-
+function runSupabaseCommand(args) {
   const supabaseCommand = process.platform === "win32" ? "supabase.exe" : "supabase";
-  process.stdout.write("\n[GATEWAY] Aplicando migrations Supabase\n");
-
-  const result = spawnSync(supabaseCommand, ["db", "push", "--linked"], {
+  const result = spawnSync(supabaseCommand, args, {
     cwd: root,
     stdio: "inherit",
     shell: false,
@@ -102,8 +95,30 @@ function applyMigrations() {
   }
 
   if (result.status !== 0) {
-    throw new Error(`supabase db push falhou com código ${result.status ?? "desconhecido"}`);
+    throw new Error(`supabase ${args.join(" ")} falhou com código ${result.status ?? "desconhecido"}`);
   }
+}
+
+function applyMigrations() {
+  validateSupabaseConfiguration();
+
+  process.stdout.write("\n[GATEWAY] Vinculando projeto Supabase canônico\n");
+  runSupabaseCommand([
+    "link",
+    "--project-ref",
+    process.env.SUPABASE_PROJECT_ID,
+    "--password",
+    process.env.SUPABASE_DB_PASSWORD,
+  ]);
+
+  process.stdout.write("\n[GATEWAY] Aplicando migrations Supabase\n");
+  runSupabaseCommand([
+    "db",
+    "push",
+    "--linked",
+    "--password",
+    process.env.SUPABASE_DB_PASSWORD,
+  ]);
 }
 
 function main() {
