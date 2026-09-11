@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowRight, CalendarDays, Clock3, Eye, EyeOff, Network, ShoppingBag, Wifi, WifiOff } from 'lucide-react'
+import { ArrowRight, CalendarDays, Clock3, Eye, EyeOff, Network, ShoppingBag, Wifi } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -18,14 +18,14 @@ const today = () => dateFormatter.format(new Date())
 const parseLocalDate = (value: string) => { const [y, m, d] = value.split('-').map(Number); return new Date(y, m - 1, d) }
 const isoDate = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
 const minDate = () => { const date = parseLocalDate(today()); date.setDate(date.getDate() - 90); return isoDate(date) }
-const firstName = (value: string) => value.trim().split(/\s+/)[0] || 'Usuário'
+const firstName = (value: string) => value.trim().split(/\s+/)[0] || ''
 
 export default function AltheaDashboardControl() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
   const router = useRouter()
   const [selectedDate, setSelectedDate] = useState(today)
   const [metrics, setMetrics] = useState<Metrics | null>(null)
-  const [name, setName] = useState('Usuário')
+  const [name, setName] = useState<string | null>(null)
   const [gender, setGender] = useState<Gender>('outro')
   const [muted, setMuted] = useState(false)
   const [sync, setSync] = useState<SyncState>('loading')
@@ -33,14 +33,16 @@ export default function AltheaDashboardControl() {
   const [retrying, setRetrying] = useState(false)
 
   const loadProfile = useCallback(async () => {
+    setName(null)
     const { data: auth, error } = await supabase.auth.getUser()
     if (error) throw error
     if (!auth.user) return false
     const { data: profile, error: profileError } = await supabase.from('profiles').select('display_name,full_name,gender').eq('id', auth.user.id).maybeSingle()
     if (profileError) throw profileError
     const metadata = auth.user.user_metadata as Record<string, unknown>
-    const profileName = profile?.display_name || profile?.full_name || metadata.display_name || metadata.name || auth.user.email || 'Usuário'
-    setName(firstName(String(profileName)))
+    const profileName = profile?.display_name || profile?.full_name || metadata.display_name || metadata.name || auth.user.email || ''
+    const resolvedName = firstName(String(profileName))
+    if (resolvedName) setName(resolvedName)
     const value = profile?.gender ?? metadata.gender
     setGender(value === 'M' || value === 'F' ? value : 'outro')
     return true
@@ -96,7 +98,9 @@ export default function AltheaDashboardControl() {
     <main className="min-h-screen bg-[var(--althea-bg)] pb-28 text-white antialiased">
       <div className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6 lg:p-8">
         <section>
-          <h1 className="text-[30px] font-bold tracking-tight sm:text-[34px]">Olá, {name} <span className="inline-block origin-[70%_70%] animate-[althea-wave_2.5s_ease-in-out_infinite]" aria-hidden="true">👋</span></h1>
+          <h1 className="text-[30px] font-bold tracking-tight sm:text-[34px]">
+            Olá, {name ? name : <span className="inline-block h-[1.15em] w-24 animate-pulse rounded-md bg-white/[0.06] align-middle" aria-label="Carregando nome" />} <span className="inline-block origin-[70%_70%] animate-[althea-wave_2.5s_ease-in-out_infinite]" aria-hidden="true">👋</span>
+          </h1>
           <p className="mt-2 text-sm text-[var(--althea-muted)]">{greeting}</p>
           <p className="mt-2 text-xs text-[#69736e]">Veja o resumo do seu desempenho!</p>
           <p className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-mono text-[#77817c]"><Clock3 size={12} aria-hidden="true" />Última atualização: {formattedLastUpdated}</p>
