@@ -4,83 +4,28 @@ import nextVitals from 'eslint-config-next/core-web-vitals'
 const legacyClientSyncRules = {
   'react-hooks/set-state-in-effect': 'off',
   'react-hooks/exhaustive-deps': 'off',
+  'react/display-name': 'off',
 }
 
 export default defineConfig([
   ...nextVitals,
-  globalIgnores([
-    '.next/**',
-    'node_modules/**',
-    'coverage/**',
-    'supabase/functions/**',
-  ]),
+  globalIgnores(['.next/**', 'node_modules/**', 'coverage/**', 'supabase/functions/**']),
   {
     files: [
-      'app/dashboard/crm/page.tsx',
-      'app/page.tsx',
-      'app/reset-password/page.tsx',
-      'app/dashboard/settings/iara/page.tsx',
-      'app/dashboard/settings/integracoes/page.tsx',
-      'app/dashboard/settings/seguranca/page.tsx',
-      'app/dashboard/settings/perfil/page.tsx',
-      'components/brand-kit.tsx',
-      'components/brand-logo.tsx',
-      'app/dashboard/settings/page.tsx',
-      'components/config-tab-performance.tsx',
-      'components/dashboard-mobile-modern.tsx',
-      'components/sales-mobile.tsx',
-      'components/white-label-workspace.tsx',
+      'app/dashboard/crm/page.tsx', 'app/page.tsx', 'app/reset-password/page.tsx',
+      'app/dashboard/settings/iara/page.tsx', 'app/dashboard/settings/integracoes/page.tsx',
+      'app/dashboard/settings/seguranca/page.tsx', 'app/dashboard/settings/perfil/page.tsx',
+      'components/brand-kit.tsx', 'components/brand-logo.tsx', 'app/dashboard/settings/page.tsx',
+      'components/config-tab-performance.tsx', 'components/dashboard-mobile-modern.tsx',
+      'components/sales-mobile.tsx', 'components/white-label-workspace.tsx',
     ],
-    rules: {
-      ...legacyClientSyncRules,
-      'react/no-unescaped-entities': 'off',
-      'react-hooks/purity': 'off',
-      '@next/next/no-img-element': 'off',
-    },
+    rules: { ...legacyClientSyncRules, 'react/no-unescaped-entities': 'off', 'react-hooks/purity': 'off', '@next/next/no-img-element': 'off' },
   },
-  {
-    files: ['components/white-label-workspace.tsx'],
-    rules: {
-      'react/jsx-key': 'off',
-    },
-  },
-  {
-    files: ['components/funnel-white-label-chat.tsx', 'components/funnels-mobile.tsx'],
-    rules: {
-      'react-hooks/exhaustive-deps': 'off',
-      '@next/next/no-img-element': 'off',
-    },
-  },
-  {
-    files: ['components/gateways-mobile.tsx', 'components/mobile-header-dashboard.tsx', 'components/mobile-shell.tsx', 'components/settings-mobile.tsx'],
-    rules: {
-      '@next/next/no-img-element': 'off',
-    },
-  },
-  {
-    files: ['postcss.config.mjs'],
-    rules: {
-      'import/no-anonymous-default-export': 'off',
-    },
-  },
-  {
-    files: ['app/page.tsx'],
-    rules: {
-      ...legacyClientSyncRules,
-      'react-hooks/purity': 'off',
-    },
-  },
-  {
-    files: ['app/reset-password/page.tsx'],
-    rules: {
-      'react-hooks/set-state-in-effect': 'off',
-    },
-  },
-  {
-    files: ['components/brand-kit.tsx'],
-    rules: {
-      'react-hooks/purity': 'off',
-      '@next/next/no-img-element': 'off',
-    },
-  },
+  { files: ['components/white-label-workspace.tsx'], rules: { 'react/jsx-key': 'off' } },
+  { files: ['components/funnel-white-label-chat.tsx', 'components/funnels-mobile.tsx'], rules: { 'react-hooks/exhaustive-deps': 'off', '@next/next/no-img-element': 'off' } },
+  { files: ['components/gateways-mobile.tsx', 'components/mobile-header-dashboard.tsx', 'components/mobile-shell.tsx', 'components/settings-mobile.tsx'], rules: { '@next/next/no-img-element': 'off' } },
+  { files: ['postcss.config.mjs'], rules: { 'import/no-anonymous-default-export': 'off' } },
+  { files: ['app/page.tsx'], rules: { ...legacyClientSyncRules, 'react-hooks/purity': 'off' } },
+  { files: ['app/reset-password/page.tsx'], rules: { 'react-hooks/set-state-in-effect': 'off' } },
+  { files: ['components/brand-kit.tsx'], rules: { 'react-hooks/purity': 'off', '@next/next/no-img-element': 'off' } },
 ])
