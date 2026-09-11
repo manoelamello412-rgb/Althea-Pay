@@ -47,8 +47,8 @@ function normalizeProvider(value: string | null | undefined): GatewayProvider | 
 function normalizeStatus(value: string | null | undefined): GatewayStatus {
   const normalized = value?.trim().toUpperCase();
   if (normalized === 'FAILOVER_ATIVO' || normalized === 'FAILOVER ATIVO') return 'FAILOVER_ATIVO';
-  if (normalized === 'INDISPONÍVEL' || normalized === 'INDISPONIVEL' || normalized === 'OFFLINE' || normalized === 'DISABLED' || normalized === 'INACTIVE' || normalized === 'ERROR') return 'INDISPONÍVEL';
-  return 'OPERACIONAL';
+  if (normalized === 'OPERACIONAL' || normalized === 'CONNECTED' || normalized === 'ACTIVE') return 'OPERACIONAL';
+  return 'INDISPONÍVEL';
 }
 
 function formatTime(value: string | Date): string {
@@ -65,7 +65,6 @@ export default function GatewaysManagementPage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [gateways, setGateways] = useState<GatewayState[]>(INITIAL_GATEWAYS);
   const [logs, setLogs] = useState<NetworkLogEvent[]>(INITIAL_LOGS);
-  const [recoveredCount] = useState<number>(0);
   const [successRate, setSuccessRate] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -78,7 +77,11 @@ export default function GatewaysManagementPage() {
     try {
       const { data: authData } = await supabase.auth.getUser();
       const userId = authData.user?.id;
-      if (!userId) return;
+      if (!userId) {
+        setGateways([]);
+        setSuccessRate(null);
+        return;
+      }
 
       const { data, error } = await supabase.from('gateways').select('id,name,provider,status,priority').eq('user_id', userId).order('priority', { ascending: true });
       if (error) throw error;
@@ -87,11 +90,12 @@ export default function GatewaysManagementPage() {
       const mapped = rows.map((row, index): GatewayState | null => {
         const provider = normalizeProvider(row.provider ?? row.name);
         if (!provider) return null;
+        const priority = Number.isFinite(row.priority) ? Number(row.priority) : index + 1;
         return {
           id: row.id,
           provider,
-          priority: Number.isFinite(row.priority) ? Number(row.priority) : index + 1,
-          roleDescription: index === 0 ? '[PROVEDOR PRIMÁRIO]' : index === 1 ? '[FAILOVER ATIVO]' : '[CIRCUIT BREAKER]',
+          priority,
+          roleDescription: `[PRIORIDADE ${priority}]`,
           status: normalizeStatus(row.status),
         };
       }).filter((item): item is GatewayState => item !== null).sort((a, b) => a.priority - b.priority);
@@ -125,7 +129,7 @@ export default function GatewaysManagementPage() {
         setGateways((current) => {
           const next = current.some((item) => item.id === row.id)
             ? current.map((item) => item.id === row.id ? { ...item, status: nextStatus, priority: Number.isFinite(row.priority) ? Number(row.priority) : item.priority } : item)
-            : [...current, { id: row.id, provider, priority: Number.isFinite(row.priority) ? Number(row.priority) : current.length + 1, roleDescription: '[CIRCUIT BREAKER]', status: nextStatus }];
+            : [...current, { id: row.id, provider, priority: Number.isFinite(row.priority) ? Number(row.priority) : current.length + 1, roleDescription: `[PRIORIDADE ${Number.isFinite(row.priority) ? Number(row.priority) : current.length + 1}]`, status: nextStatus }];
           return next.sort((a, b) => a.priority - b.priority);
         });
         appendLog({ id: `gateway-${row.id}-${Date.now()}`, timestamp: formatTime(new Date()), provider, message: `STATUS -> ${statusLabel(nextStatus)}`, type: nextStatus === 'INDISPONÍVEL' ? 'CRITICAL' : nextStatus === 'FAILOVER_ATIVO' ? 'WARNING' : 'SUCCESS' });
@@ -134,9 +138,6 @@ export default function GatewaysManagementPage() {
     void subscribe();
     return () => { active = false; if (channel) void supabase.removeChannel(channel); };
   }, [appendLog, supabase]);
-
-  const successfulFallbacks = recoveredCount;
-  const displayedSuccessRate = successRate;
 
   return (
     <div className="min-h-screen bg-[#020203] text-white font-sans antialiased selection:bg-emerald-500 selection:text-black">
@@ -164,8 +165,8 @@ export default function GatewaysManagementPage() {
         <section className="space-y-3">
           <h2 className="text-[11px] font-medium uppercase tracking-wide text-zinc-200">Métricas de resiliência <span className="text-emerald-400">(Base operacional)</span></h2>
           <div className="grid grid-cols-2 gap-3">
-            <div className="relative min-h-[150px] overflow-hidden rounded-xl border border-white/[0.12] bg-[#0a0a0c] p-5"><span className="text-[11px] uppercase text-zinc-300">Disponibilidade configurada</span><div className="mt-3 text-3xl font-semibold tracking-tight text-emerald-400">{loading || displayedSuccessRate === null ? '—' : `${displayedSuccessRate.toLocaleString('pt-BR')}%`}</div><div className="absolute bottom-5 left-5 flex items-center gap-1.5 text-xs text-zinc-400"><Activity className="h-4 w-4" /> {displayedSuccessRate === null ? 'Aguardando dados' : 'Calculada'}</div><TrendingUp className="absolute bottom-7 right-7 h-9 w-9 text-emerald-400 opacity-20" /></div>
-            <div className="relative min-h-[150px] overflow-hidden rounded-xl border border-white/[0.12] bg-[#0a0a0c] p-5"><span className="text-[11px] uppercase text-zinc-300">Conversão fallback</span><div className="mt-3 text-3xl font-semibold tracking-tight text-emerald-400">{successfulFallbacks > 0 ? '100%' : '—'}</div><div className="absolute bottom-5 left-5 text-xs text-zinc-300"><span className="font-semibold text-emerald-400">{successfulFallbacks}</span> Recuperadas</div><RefreshCw className="absolute bottom-7 right-7 h-8 w-8 text-emerald-400 opacity-20" /></div>
+            <div className="relative min-h-[150px] overflow-hidden rounded-xl border border-white/[0.12] bg-[#0a0a0c] p-5"><span className="text-[11px] uppercase text-zinc-300">Disponibilidade configurada</span><div className="mt-3 text-3xl font-semibold tracking-tight text-emerald-400">{loading || successRate === null ? '—' : `${successRate.toLocaleString('pt-BR')}%`}</div><div className="absolute bottom-5 left-5 flex items-center gap-1.5 text-xs text-zinc-400"><Activity className="h-4 w-4" /> {successRate === null ? 'Aguardando dados' : 'Calculada'}</div><TrendingUp className="absolute bottom-7 right-7 h-9 w-9 text-emerald-400 opacity-20" /></div>
+            <div className="relative min-h-[150px] overflow-hidden rounded-xl border border-white/[0.12] bg-[#0a0a0c] p-5"><span className="text-[11px] uppercase text-zinc-300">Recuperações de fallback</span><div className="mt-3 text-3xl font-semibold tracking-tight text-emerald-400">—</div><div className="absolute bottom-5 left-5 text-xs text-zinc-300">Sem telemetria de fallback disponível</div><RefreshCw className="absolute bottom-7 right-7 h-8 w-8 text-emerald-400 opacity-20" /></div>
           </div>
         </section>
 
