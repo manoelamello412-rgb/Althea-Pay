@@ -7,8 +7,8 @@ describe('automation transaction RPC contract', () => {
   it('uses the canonical transaction state transition parameters', async () => {
     const source = await readFile(path, 'utf8')
     expect(source).toMatch(/p_next_status\s*:\s*String\(cfg\.status\)/)
-    expect(source).toContain('p_failure_code: cfg.error_message ? String(cfg.error_message) : null')
-    expect(source).toContain('p_external_id: null')
+    expect(source).toMatch(/p_failure_code\s*:\s*cfg\.error_message\s*\?\s*String\(cfg\.error_message\)\s*:\s*null/)
+    expect(source).toMatch(/p_external_id\s*:\s*null/)
     expect(source).not.toContain('p_new_status')
     expect(source).not.toContain('p_error_message')
     expect(source).not.toContain('p_external_status')
