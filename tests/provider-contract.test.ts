@@ -7,16 +7,18 @@ import {
 describe('Gateway provider contract', () => {
   it('normalizes declined and pending failures without enabling failover for business states', () => {
     expect(normalizeGatewayResponse({
-      id: 'gw_declined_1',
+      success: false,
+      providerTransactionId: 'gw_declined_1',
       status: 'declined',
-      amount: 100,
+      amountMinor: 100,
       currency: 'BRL',
     }).failureClass).toBe('declined')
 
     expect(normalizeGatewayResponse({
-      id: 'gw_pending_1',
+      success: true,
+      providerTransactionId: 'gw_pending_1',
       status: 'pending',
-      amount: 100,
+      amountMinor: 100,
       currency: 'BRL',
     }).failureClass).toBe('pending')
 
@@ -35,23 +37,26 @@ describe('Gateway provider contract', () => {
 
   it('rejects malformed provider responses before they reach the financial core', () => {
     expect(() => normalizeGatewayResponse({
-      id: '',
+      success: true,
+      providerTransactionId: '',
       status: 'approved',
-      amount: 100,
+      amountMinor: 100,
       currency: 'BRL',
-    })).toThrow('gateway_response_missing_id')
+    })).toThrow('gateway_response_missing_provider_transaction_id')
 
     expect(() => normalizeGatewayResponse({
-      id: 'bad_amount',
+      success: true,
+      providerTransactionId: 'bad_amount',
       status: 'approved',
-      amount: -1,
+      amountMinor: -1,
       currency: 'BRL',
     })).toThrow('gateway_response_invalid_amount')
 
     expect(() => normalizeGatewayResponse({
-      id: 'bad_currency',
+      success: true,
+      providerTransactionId: 'bad_currency',
       status: 'approved',
-      amount: 100,
+      amountMinor: 100,
       currency: 'brl',
     })).toThrow('gateway_response_invalid_currency')
   })
