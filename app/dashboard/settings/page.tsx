@@ -6,17 +6,9 @@ import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Tab = 'profile' | 'security' | 'business'
-type GatewayName = 'stripe' | 'asaas' | 'mercado_pago'
-type Credential = { id: string; gateway_name: string; is_active: boolean; priority_order: number; metadata: Record<string, unknown> }
 type BusinessProfile = { document_type: 'CNPJ' | 'CPF'; document_number: string; legal_name: string; operation_metadata: string }
 type PasswordStrength = { score: number; label: string; requirements: { length: boolean; upper: boolean; lower: boolean; number: boolean; symbol: boolean } }
 type MfaFactor = { id: string; friendly_name: string | null; status: string }
-
-const GATEWAYS: Array<{ value: GatewayName; label: string }> = [
-  { value: 'stripe', label: 'Stripe' },
-  { value: 'asaas', label: 'Asaas' },
-  { value: 'mercado_pago', label: 'Mercado Pago' },
-]
 
 function getStrength(value: string): PasswordStrength {
   const requirements = {
@@ -79,11 +71,6 @@ export default function SettingsPage() {
   const [enrollingFactor, setEnrollingFactor] = useState<{ id: string; qr: string; secret: string; challengeId: string } | null>(null)
   const [mfaCode, setMfaCode] = useState('')
   const [business, setBusiness] = useState<BusinessProfile>({ document_type: 'CNPJ', document_number: '', legal_name: '', operation_metadata: '{}' })
-  const [credentials, setCredentials] = useState<Credential[]>([])
-  const [credentialGateway, setCredentialGateway] = useState<GatewayName>('stripe')
-  const [credentialKey, setCredentialKey] = useState('')
-  const [credentialActive, setCredentialActive] = useState(true)
-  const [credentialPriority, setCredentialPriority] = useState('1')
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   const strength = useMemo(() => getStrength(newPassword), [newPassword])
@@ -104,9 +91,8 @@ export default function SettingsPage() {
       setDisplayName(typeof metadata.display_name === 'string' ? metadata.display_name : typeof metadata.name === 'string' ? metadata.name : '')
       setEmail(user.email ?? '')
       setAvatarUrl(typeof metadata.avatar_url === 'string' ? metadata.avatar_url : '')
-      const [businessResult, credentialsResult, factorsResult] = await Promise.all([
+      const [businessResult, factorsResult] = await Promise.all([
         supabase.from('merchant_business_profiles').select('document_type,document_number,legal_name,operation_metadata').eq('user_id', user.id).maybeSingle(),
-        supabase.rpc('list_gateway_credentials'),
         supabase.auth.mfa.listFactors(),
       ])
       if (cancelled) return
@@ -118,7 +104,6 @@ export default function SettingsPage() {
           operation_metadata: JSON.stringify(businessResult.data.operation_metadata ?? {}, null, 2),
         })
       }
-      if (!credentialsResult.error && credentialsResult.data) setCredentials(credentialsResult.data as Credential[])
       if (!factorsResult.error) setFactors((factorsResult.data.totp ?? []).map((factor) => ({ id: factor.id, friendly_name: factor.friendly_name ?? null, status: factor.status })))
       if (businessResult.error && businessResult.error.code !== 'PGRST116') setError(`Negócio: ${businessResult.error.message}`)
       setLoading(false)
@@ -238,31 +223,6 @@ export default function SettingsPage() {
     } finally { setSaving(false) }
   }
 
-  async function saveCredential(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault(); setSaving(true); setError(''); setMessage('')
-    try {
-      if (credentialKey.trim().length < 8) throw new Error('A chave de API precisa ter pelo menos 8 caracteres.')
-      const priority = Number(credentialPriority)
-      if (!Number.isInteger(priority) || priority < 1) throw new Error('A prioridade precisa ser um inteiro positivo.')
-      const result = await supabase.rpc('upsert_gateway_credential', { p_gateway_name: credentialGateway, p_api_key: credentialKey.trim(), p_metadata: { source: 'settings', configured_at: new Date().toISOString() }, p_is_active: credentialActive, p_priority_order: priority })
-      if (result.error) throw result.error
-      setCredentialKey('')
-      const refreshed = await supabase.rpc('list_gateway_credentials')
-      if (refreshed.error) throw refreshed.error
-      setCredentials((refreshed.data ?? []) as Credential[])
-      setMessage(`${GATEWAYS.find((gateway) => gateway.value === credentialGateway)?.label ?? credentialGateway} configurado sem expor a chave ao navegador.`)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Não foi possível salvar a credencial.')
-    } finally { setSaving(false) }
-  }
-
-  async function toggleCredential(credential: Credential): Promise<void> {
-    setError(''); setMessage('')
-    const result = await supabase.rpc('set_gateway_credential_status', { p_credential_id: credential.id, p_is_active: !credential.is_active })
-    if (result.error) setError(result.error.message)
-    else setCredentials((current) => current.map((item) => item.id === credential.id ? { ...item, is_active: !item.is_active } : item))
-  }
-
   async function logout(): Promise<void> {
     setError(''); setMessage('')
     try {
@@ -305,7 +265,7 @@ export default function SettingsPage() {
           <label>Avatar URL<input value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} placeholder="https://…" /></label>
           <button className="settings-primary-button" type="submit" disabled={saving}>{saving ? 'Salvando…' : 'Salvar perfil'}</button>
         </form>
-        <aside className="settings-card settings-side-card"><span>STATUS DA CONTA</span><div className="status-dot"><i /> Sessão autenticada</div><p>As alterações de perfil são aplicadas pelo Supabase Auth. Credenciais nunca são armazenadas no frontend.</p><div className="settings-mini-stat"><strong>AUTH</strong><span>Supabase Auth</span></div><div className="settings-mini-stat"><strong>MFA</strong><span>{factors.length ? 'Protegido' : 'Não configurado'}</span></div></aside>
+        <aside className="settings-card settings-side-card"><span>STATUS DA CONTA</span><div className="status-dot"><i /> Sessão autenticada</div><p>As alterações de perfil são aplicadas pelo Supabase Auth. Credenciais de pagamento são administradas exclusivamente pela Central de Gateways.</p><div className="settings-mini-stat"><strong>AUTH</strong><span>Supabase Auth</span></div><div className="settings-mini-stat"><strong>MFA</strong><span>{factors.length ? 'Protegido' : 'Não configurado'}</span></div></aside>
       </section>}
 
       {tab === 'security' && <section className="settings-grid">
@@ -333,11 +293,7 @@ export default function SettingsPage() {
           <label>Metadados da operação<textarea rows={9} value={business.operation_metadata} onChange={(event) => setBusiness((current) => ({ ...current, operation_metadata: event.target.value }))} spellCheck={false} /></label>
           <button className="settings-primary-button" type="submit" disabled={saving}>Salvar operação</button>
         </form>
-        <section className="settings-card settings-main-card">
-          <div className="settings-card-heading"><div><span>PROVIDER VAULT</span><h2>Credenciais externas</h2></div><KeyRound size={20} /></div>
-          <form className="credential-form" onSubmit={(event) => void saveCredential(event)}><label>Provedor<select value={credentialGateway} onChange={(event) => setCredentialGateway(event.target.value as GatewayName)}>{GATEWAYS.map((gateway) => <option key={gateway.value} value={gateway.value}>{gateway.label}</option>)}</select></label><label>Chave de API<input type="password" value={credentialKey} onChange={(event) => setCredentialKey(event.target.value)} placeholder="Nunca exibida depois de salvar" autoComplete="new-password" /></label><div className="settings-two-columns"><label>Prioridade<input type="number" min="1" step="1" value={credentialPriority} onChange={(event) => setCredentialPriority(event.target.value)} /></label><label className="toggle-field">Ativo<input type="checkbox" checked={credentialActive} onChange={(event) => setCredentialActive(event.target.checked)} /></label></div><button className="settings-primary-button" type="submit" disabled={saving}><KeyRound size={16} />Criptografar e salvar</button></form>
-          <div className="credential-list">{credentials.map((credential) => <div className="credential-item" key={credential.id}><div><strong>{GATEWAYS.find((gateway) => gateway.value === credential.gateway_name)?.label ?? credential.gateway_name}</strong><span>Prioridade {credential.priority_order} · segredo protegido</span></div><button className={credential.is_active ? 'credential-active' : 'credential-inactive'} type="button" onClick={() => void toggleCredential(credential)}>{credential.is_active ? 'Ativo' : 'Inativo'}</button></div>)}{!credentials.length && <p className="settings-empty">Nenhum provedor configurado.</p>}</div>
-        </section>
+        <aside className="settings-card settings-side-card"><span>INFRAESTRUTURA DE PAGAMENTO</span><p>A configuração de gateways, credenciais, ambientes, testes, ativação, monitoramento e desconexão pertence exclusivamente à Central de Gateways.</p><button className="settings-secondary-button" type="button" onClick={() => router.push('/dashboard/gateways')}>Abrir Central de Gateways</button></aside>
       </section>}
     </main>
   )
