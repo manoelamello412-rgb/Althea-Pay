@@ -41,6 +41,20 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         .althea-page-content .althea-legacy-bottom-nav {
           display: none !important;
         }
+
+        /* Legacy dashboard pages may still render their own shell while being
+           migrated. Keep the dashboard layout as the single visual shell. */
+        .althea-page-content > div.min-h-screen > header {
+          display: none !important;
+        }
+
+        .althea-page-content > div.min-h-screen > main.max-w-md,
+        .althea-page-content > div.min-h-screen > main[class*="max-w-md"] {
+          width: 100% !important;
+          max-width: min(1440px, calc(100vw - 32px)) !important;
+          margin-left: auto !important;
+          margin-right: auto !important;
+        }
       `}</style>
     </MobileShell>
   )
