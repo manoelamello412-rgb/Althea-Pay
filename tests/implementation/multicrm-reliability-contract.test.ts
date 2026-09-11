@@ -78,7 +78,7 @@ describe('Multi-CRM reliability contracts',()=>{
  })
  it('keeps automation governance on the physical execution graph',()=>{
   const attempts=read('supabase/migrations/20260910006000_crm_automation_attempt_audit_v5.sql')
-  const retry=read('supabase/migrations/20260910021700_crm_automation_attempts_rls_cleanup_v4.sql')
+  const retry=read('supabase/migrations/20260910003000_crm_automation_attempts_rls_cleanup_v4.sql')
   const worker=read('supabase/functions/automation-retry-worker/index.ts')
   expect(attempts).toContain('automation_execution_attempts')
   expect(retry).toContain('automation_execution_attempts')
