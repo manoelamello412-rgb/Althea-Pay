@@ -1,6 +1,7 @@
 'use client'
 
-import { FormEvent, useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
 import { AlertTriangle, Bot, Send } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
