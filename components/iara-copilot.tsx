@@ -43,10 +43,29 @@ export default function IaraCopilot() {
     try {
       const activeSessionId = await createIaraSession()
       if (!activeSessionId) throw new Error('Não foi possível iniciar a conversa com a IARA.')
+      const { data: sessionState, error: sessionError } = await db.auth.getSession()
+      if (sessionError || !sessionState.session?.access_token) {
+        router.replace('/login')
+        throw new Error('Sessão de autenticação indisponível. Faça login novamente.')
+      }
       const { data, error: invokeError } = await db.functions.invoke<IaraResponse>('iara-ai-core', {
         body: { sessionId: activeSessionId, message: text, clientRequestId: localId },
+        headers: { Authorization: `Bearer ${sessionState.session.access_token}` },
       })
-      if (invokeError) throw new Error(invokeError.message || 'A IARA não conseguiu processar sua mensagem.')
+      if (invokeError) {
+        const context = 'context' in invokeError ? (invokeError as { context?: unknown }).context : undefined
+        if (context instanceof Response) {
+          let detail = ''
+          try {
+            const payload = await context.clone().json() as { error?: unknown }
+            detail = typeof payload?.error === 'string' ? payload.error : ''
+          } catch {
+            detail = ''
+          }
+          if (detail) throw new Error(detail)
+        }
+        throw new Error(invokeError.message || 'A IARA não conseguiu processar sua mensagem.')
+      }
       if (data?.error) throw new Error(data.error)
       if (!data?.content || data.sender !== 'iara') throw new Error('A IARA retornou uma resposta inválida.')
       setMessages((current) => [...current, { id: data.id || `iara-${crypto.randomUUID()}`, sender: 'iara', content: data.content }])
@@ -55,7 +74,7 @@ export default function IaraCopilot() {
     } finally {
       setSending(false)
     }
-  }, [command, createIaraSession, db, sending])
+  }, [command, createIaraSession, db, router, sending])
 
   return (
     <section className="min-h-[calc(100dvh-5rem)] bg-[var(--althea-bg)] px-4 pb-36 pt-4 text-[var(--althea-white)] sm:px-6">
