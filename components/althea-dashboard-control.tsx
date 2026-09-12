@@ -59,7 +59,7 @@ export default function AltheaDashboardControl() {
       setMetrics(value)
       setLastUpdated(value.measuredAt || null)
       const gateways = Array.isArray(value.gateways) ? value.gateways : []
-      const hasRealData = gateways.length > 0 && (value.revenue > 0 || value.paidSales > 0 || value.waitingPix > 0 || value.checkoutHits > 0)
+      const hasRealData = value.revenue > 0 || value.paidSales > 0 || value.waitingPix > 0 || value.checkoutHits > 0
       setSync(hasRealData || gateways.length > 0 ? 'synchronized' : 'empty')
     } catch (cause) {
       console.error('[ALTHEA-DASHBOARD]', cause)
@@ -86,12 +86,12 @@ export default function AltheaDashboardControl() {
   }, [loadMetrics, supabase])
 
   const greeting = gender === 'F' ? 'Seja bem-vinda' : gender === 'M' ? 'Seja bem-vindo' : 'Acompanhe sua operação em tempo real.'
-  const noGateway = !metrics?.gateways?.length
-  const hasRealFinancialData = !noGateway && ((metrics?.revenue ?? 0) > 0 || (metrics?.paidSales ?? 0) > 0 || (metrics?.waitingPix ?? 0) > 0 || (metrics?.checkoutHits ?? 0) > 0)
+  const hasGatewayHealth = Boolean(metrics?.gateways?.length)
+  const hasRealFinancialData = (metrics?.revenue ?? 0) > 0 || (metrics?.paidSales ?? 0) > 0 || (metrics?.waitingPix ?? 0) > 0 || (metrics?.checkoutHits ?? 0) > 0
   const syncLabel: Record<SyncState, string> = { loading: 'Sincronizando', synchronized: 'Sincronizado', empty: 'Aguardando conexão', error: 'Sincronização indisponível', reconnecting: 'Reconectando', unauthorized: 'Sessão não autorizada' }
-  const displayRevenue = noGateway || !hasRealFinancialData ? '—' : muted ? 'R$ ••••••' : money(metrics?.revenue ?? 0)
-  const displayNumber = (value: number | undefined) => noGateway || !hasRealFinancialData ? '—' : muted ? '••••' : String(value ?? 0)
-  const displayConversion = noGateway || !hasRealFinancialData ? '—' : muted ? '••••' : `${(metrics?.conversionRate ?? 0).toFixed(1).replace('.', ',')}%`
+  const displayRevenue = !hasRealFinancialData ? '—' : muted ? 'R$ ••••••' : money(metrics?.revenue ?? 0)
+  const displayNumber = (value: number | undefined) => !hasRealFinancialData ? '—' : muted ? '••••' : String(value ?? 0)
+  const displayConversion = !hasRealFinancialData ? '—' : muted ? '••••' : `${(metrics?.conversionRate ?? 0).toFixed(1).replace('.', ',')}%`
   const formattedLastUpdated = lastUpdated ? timeFormatter.format(new Date(lastUpdated)) : sync === 'loading' || sync === 'reconnecting' ? 'Sincronizando...' : '—'
 
   return (
@@ -120,9 +120,9 @@ export default function AltheaDashboardControl() {
           <Metric label="Aprovação" value={displayConversion} icon={<ArrowRight size={15} />} />
         </section>
 
-        {noGateway ? <section className="rounded-3xl border border-[#0D362D] bg-[linear-gradient(135deg,#0F1A16,#0B0B0D)] p-6 sm:p-8"><div className="mx-auto max-w-2xl text-center"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/[0.06] text-[#D4AF37]"><Network size={24} /></div><p className="mt-5 text-xs font-black uppercase tracking-[0.22em] text-[#A6A6A6]">Dados de pagamento</p><h2 className="mt-2 text-2xl font-bold">Nenhum Gateway conectado</h2><p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#77817c]">Conecte um Gateway para configurar credenciais, validar o ambiente e iniciar a sincronização dos dados reais do provider.</p><button type="button" onClick={() => router.push('/dashboard/gateways')} className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#1DB854] px-6 text-sm font-bold text-[#07110c] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]">CONECTAR GATEWAY <ArrowRight size={16} /></button></div></section> : null}
+        {!hasGatewayHealth ? <section className="rounded-3xl border border-[#0D362D] bg-[linear-gradient(135deg,#0F1A16,#0B0B0D)] p-6 sm:p-8"><div className="mx-auto max-w-2xl text-center"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/[0.06] text-[#D4AF37]"><Network size={24} /></div><p className="mt-5 text-xs font-black uppercase tracking-[0.22em] text-[#A6A6A6]">Dados de pagamento</p><h2 className="mt-2 text-2xl font-bold">Nenhum dado de saúde do Gateway disponível</h2><p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#77817c]">Ainda não há snapshots de saúde disponíveis para exibição. A ausência deste dado não é tratada como prova de que o Gateway esteja desconectado.</p><button type="button" onClick={() => router.push('/dashboard/gateways')} className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#1DB854] px-6 text-sm font-bold text-[#07110c] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]">IR PARA GATEWAYS <ArrowRight size={16} /></button></div></section> : null}
 
-        {!noGateway ? <section className="rounded-2xl border border-[#0D362D] bg-[#0F1A16] p-5"><div className="flex items-center justify-between"><div><h2 className="text-xs font-black uppercase tracking-[0.15em] text-[#A6A6A6]">Dados de pagamento</h2><p className="mt-1 text-[10px] text-[#59645e]">Dados sincronizados a partir das integrações reais.</p></div><Wifi size={15} className="text-[#1DB854]" /></div><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{metrics?.gateways.map((gateway) => <div key={`${gateway.gateway_code}-${gateway.gateway_name}`} className="rounded-xl border border-white/[0.05] bg-[#0B0B0D] p-4"><div className="flex items-center justify-between"><span className="text-sm font-semibold">{gateway.gateway_name || gateway.gateway_code}</span><span className={`h-2 w-2 rounded-full ${gateway.is_operational ? 'bg-[#1DB854]' : 'bg-red-500'}`} /></div><p className="mt-2 text-[10px] font-mono text-[#707b75]">{gateway.is_operational ? `Operacional · ${gateway.latency_ms == null ? '—' : `${gateway.latency_ms}ms`}` : `Indisponível · ${gateway.circuit_state}`}</p></div>)}</div></section> : null}
+        {hasGatewayHealth ? <section className="rounded-2xl border border-[#0D362D] bg-[#0F1A16] p-5"><div className="flex items-center justify-between"><div><h2 className="text-xs font-black uppercase tracking-[0.15em] text-[#A6A6A6]">Dados de pagamento</h2><p className="mt-1 text-[10px] text-[#59645e]">Dados sincronizados a partir das integrações reais.</p></div><Wifi size={15} className="text-[#1DB854]" /></div><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{metrics?.gateways.map((gateway) => <div key={`${gateway.gateway_code}-${gateway.gateway_name}`} className="rounded-xl border border-white/[0.05] bg-[#0B0B0D] p-4"><div className="flex items-center justify-between"><span className="text-sm font-semibold">{gateway.gateway_name || gateway.gateway_code}</span><span className={`h-2 w-2 rounded-full ${gateway.is_operational ? 'bg-[#1DB854]' : 'bg-red-500'}`} /></div><p className="mt-2 text-[10px] font-mono text-[#707b75]">{gateway.is_operational ? `Operacional · ${gateway.latency_ms == null ? '—' : `${gateway.latency_ms}ms`}` : `Indisponível · ${gateway.circuit_state}`}</p></div>)}</div></section> : null}
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-3"><Metric label="Vendas pagas" value={displayNumber(metrics?.paidSales)} icon={<ShoppingBag size={15} />} /><Metric label="Pix pendentes" value={displayNumber(metrics?.waitingPix)} icon={<Clock3 size={15} />} /><Metric label="Checkout → venda" value={displayConversion} icon={<ArrowRight size={15} />} /></section>
       </div>
