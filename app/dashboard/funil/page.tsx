@@ -115,6 +115,7 @@ export default function FunilDominioPage() {
 
   const [funnels, setFunnels] = useState<Funnel[]>([])
   const [selectedFunnelId, setSelectedFunnelId] = useState('')
+  const [creatingNewFunnel, setCreatingNewFunnel] = useState(false)
   const [funnel, setFunnel] = useState<Funnel | null>(null)
   const [connection, setConnection] = useState<FunnelConnection | null>(null)
   const [events, setEvents] = useState<IntegrationEvent[]>([])
@@ -157,9 +158,11 @@ export default function FunilDominioPage() {
     const list = (funnelRows ?? []) as Funnel[]
     setFunnels(list)
 
-    const activeId = selectedFunnelId && list.some((item) => item.id === selectedFunnelId)
-      ? selectedFunnelId
-      : list[0]?.id ?? ''
+    const activeId = creatingNewFunnel
+      ? ''
+      : selectedFunnelId && list.some((item) => item.id === selectedFunnelId)
+        ? selectedFunnelId
+        : list[0]?.id ?? ''
 
     setSelectedFunnelId(activeId)
     const selected = list.find((item) => item.id === activeId) ?? null
@@ -200,7 +203,7 @@ export default function FunilDominioPage() {
     setPixelId(stringValue(config.pixel_id))
     setChatEnabled(booleanValue(config.chat_enabled, true))
     setMethod(stringValue(config.connection_method) === 'webhook' ? 'webhook' : 'script')
-  }, [selectedFunnelId, supabase])
+  }, [creatingNewFunnel, selectedFunnelId, supabase])
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -249,6 +252,7 @@ export default function FunilDominioPage() {
   }, [selectedFunnelId, supabase])
 
   function resetForNewFunnel() {
+    setCreatingNewFunnel(true)
     setSelectedFunnelId('')
     setFunnel(null)
     setConnection(null)
@@ -368,6 +372,7 @@ export default function FunilDominioPage() {
         funnelId = stringValue(provisionedFunnel.id)
         if (!funnelId) throw new Error('O provisionamento não retornou o ID do funil.')
 
+        setCreatingNewFunnel(false)
         setSelectedFunnelId(funnelId)
         setOneTimeToken(stringValue(ingestion.token))
         setOneTimeEndpoint(stringValue(ingestion.event_endpoint || ingestion.endpoint || provisionedFunnel.endpoint))
@@ -467,7 +472,7 @@ export default function FunilDominioPage() {
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            <button type="button" onClick={resetForNewFunnel} className="flex h-9 items-center gap-1.5 rounded-lg border border-white/[0.06] bg-[#0c0c0e] px-3 text-[10px] font-bold text-emerald-400 transition hover:border-emerald-500/20">
+            <button type="button" onClick={resetForNewFunnel} disabled={creatingNewFunnel} className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.06] bg-[#0c0c0e] px-3 text-[10px] font-bold text-emerald-400 transition hover:border-emerald-500/20 disabled:cursor-default disabled:opacity-70">
               <Plus className="h-3 w-3" /> NOVO FUNIL
             </button>
             <button type="button" onClick={() => void refresh()} disabled={refreshing} aria-label="Atualizar" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.06] bg-[#0c0c0e] text-zinc-400 transition hover:text-white disabled:opacity-50">
