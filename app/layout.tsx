@@ -1,6 +1,13 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
+import { Space_Grotesk } from 'next/font/google'
 import './althea-styles.css'
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-space-grotesk',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'ALTHEA PAY — Control Center',
@@ -15,7 +22,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body className={spaceGrotesk.variable}>{children}</body>
     </html>
   )
 }
