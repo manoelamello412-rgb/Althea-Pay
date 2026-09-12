@@ -149,6 +149,10 @@ a { -webkit-user-select: none; user-select: none; }
 .althea-page-content [class*="bg-[#060608]"] { background: var(--althea-bg) !important; }
 .althea-page-content [class*="bg-[#070A09]"] { background: var(--althea-bg) !important; }
 .althea-page-content [class*="bg-[#0b0b0f]"] { background: var(--althea-surface) !important; }
+.althea-page-content [class*="bg-[#0c0c0e]"] { background: var(--althea-surface) !important; }
+.althea-page-content [class*="bg-[#121214]"] { background: var(--althea-inner) !important; }
+.althea-page-content [class~="bg-neutral-950"] { background: var(--althea-surface) !important; }
+.althea-page-content [class~="bg-neutral-900"] { background: var(--althea-inner) !important; }
 .althea-page-content [class*="border-[#191921]"] { border-color: var(--althea-border) !important; }
 .althea-page-content [class*="border-white/[0.12]"] { border-color: var(--althea-border) !important; }
 .althea-page-content [class*="border-white/10"] { border-color: var(--althea-border) !important; }
