@@ -16,7 +16,6 @@ import {
   Plus,
   Radio,
   RefreshCw,
-  Search,
   Send,
   Settings,
   ShieldCheck,
@@ -450,10 +449,7 @@ export default function FunilDominioPage() {
             <span className="truncate text-[12px] font-semibold tracking-tight text-zinc-100">ALTHEA PAY <span className="text-zinc-600">//</span> FUNIL</span>
           </div>
           <div className="flex items-center gap-1">
-            <button type="button" aria-label="Buscar" className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.04] hover:text-white">
-              <Search className="h-[18px] w-[18px]" />
-            </button>
-            <button type="button" aria-label="Configurações" className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.04] hover:text-white">
+            <button type="button" aria-label="Configurações" title="Configurações" onClick={() => { window.location.assign('/dashboard/settings') }} className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
               <Settings className="h-[18px] w-[18px]" />
             </button>
           </div>
