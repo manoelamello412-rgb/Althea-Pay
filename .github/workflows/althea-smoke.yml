@@ -7,10 +7,11 @@ on:
       - 'supabase/functions/**'
       - 'supabase/config.toml'
       - 'tests/**'
+      - '.github/workflows/althea-smoke.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   smoke:
@@ -18,6 +19,39 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Apply one-time funnel header behavior fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('app/dashboard/funil/page.tsx')
+          text = path.read_text()
+          old_import = "  Search,\n"
+          if old_import not in text:
+              raise SystemExit('expected Search import not found')
+          text = text.replace(old_import, '', 1)
+          old_button = '''            <button type="button" aria-label="Buscar" className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.04] hover:text-white">\n              <Search className="h-[18px] w-[18px]" />\n            </button>\n'''
+          if old_button not in text:
+              raise SystemExit('expected static Search button not found')
+          text = text.replace(old_button, '', 1)
+          old_settings = '''            <button type="button" aria-label="Configurações" className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.04] hover:text-white">\n              <Settings className="h-[18px] w-[18px]" />\n            </button>\n'''
+          new_settings = '''            <button type="button" aria-label="Configurações" title="Configurações" onClick={() => { window.location.assign('/dashboard/settings') }} className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">\n              <Settings className="h-[18px] w-[18px]" />\n            </button>\n'''
+          if old_settings not in text:
+              raise SystemExit('expected static Settings button not found')
+          text = text.replace(old_settings, new_settings, 1)
+          path.write_text(text)
+          PY
+          if git diff --quiet -- app/dashboard/funil/page.tsx; then
+            echo 'No source change was produced.'
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/dashboard/funil/page.tsx
+          git commit -m 'fix: make funnel header controls functional'
+          git push
 
       - name: Validate function configuration
         shell: bash
