@@ -36,6 +36,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         {children}
       </div>
       <style jsx global>{`
+        .althea-page-content {
+          background: var(--althea-bg, #0B0B0D) !important;
+        }
+
+        /* Every dashboard route inherits the same canvas used by the canonical
+           Dashboard. Individual cards/panels keep their own surface colors. */
+        .althea-page-content > * {
+          background-color: var(--althea-bg, #0B0B0D) !important;
+        }
+
         .althea-page-content .al-chat-top,
         .althea-page-content .al-bottom-nav,
         .althea-page-content .althea-legacy-bottom-nav {
