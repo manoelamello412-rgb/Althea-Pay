@@ -1,0 +1,10 @@
+grant select, insert, update on table public.chat_sessions to service_role;
+grant select, insert, update on table public.chat_messages to service_role;
+grant select, insert, update on table public.iara_runs to service_role;
+grant select on table public.sales to service_role;
+grant select on table public.gateway_transactions to service_role;
+grant select on table public.checkout_sessions to service_role;
+grant select on table public.crm_conversations to service_role;
+grant select on table public.funnels to service_role;
+grant select on table public.gateways to service_role;
+grant select on table public.gateway_health_snapshots to service_role;
