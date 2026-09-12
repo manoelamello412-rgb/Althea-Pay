@@ -1,0 +1,39 @@
+name: One-time fix — Novo Funil
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'fix: make novo funil creation real'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply targeted fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/dashboard/funil/page.tsx')
+          s = p.read_text()
+          s = s.replace("  const [selectedFunnelId, setSelectedFunnelId] = useState('')\n", "  const [selectedFunnelId, setSelectedFunnelId] = useState('')\n  const [creatingNewFunnel, setCreatingNewFunnel] = useState(false)\n")
+          s = s.replace("    const activeId = selectedFunnelId && list.some((item) => item.id === selectedFunnelId)\n      ? selectedFunnelId\n      : list[0]?.id ?? ''\n", "    const activeId = creatingNewFunnel\n      ? ''\n      : selectedFunnelId && list.some((item) => item.id === selectedFunnelId)\n        ? selectedFunnelId\n        : list[0]?.id ?? ''\n")
+          s = s.replace("  }, [selectedFunnelId, supabase])\n", "  }, [creatingNewFunnel, selectedFunnelId, supabase])\n", 1)
+          s = s.replace("  function resetForNewFunnel() {\n    setSelectedFunnelId('')\n", "  function resetForNewFunnel() {\n    setCreatingNewFunnel(true)\n    setSelectedFunnelId('')\n", 1)
+          s = s.replace("        setSelectedFunnelId(funnelId)\n        setOneTimeToken", "        setCreatingNewFunnel(false)\n        setSelectedFunnelId(funnelId)\n        setOneTimeToken", 1)
+          s = s.replace("          <div className=\"flex items-center gap-1.5\">\n            <button type=\"button\" onClick={resetForNewFunnel} className=\"flex h-9 items-center gap-1.5 rounded-lg border border-white/[0.06] bg-[#0c0c0e] px-3 text-[10px] font-bold text-emerald-400 transition hover:border-emerald-500/20\">\n              <Plus className=\"h-3 w-3\" /> NOVO FUNIL\n", "          <div className=\"flex items-center gap-1.5\">\n            <button type=\"button\" onClick={resetForNewFunnel} disabled={creatingNewFunnel} className=\"flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.06] bg-[#0c0c0e] px-3 text-[10px] font-bold text-emerald-400 transition hover:border-emerald-500/20 disabled:cursor-default disabled:opacity-70\">\n              <Plus className=\"h-3 w-3\" /> NOVO FUNIL\n", 1)
+          if "const [creatingNewFunnel" not in s: raise SystemExit('state insertion failed')
+          if "const activeId = creatingNewFunnel" not in s: raise SystemExit('selection guard insertion failed')
+          p.write_text(s)
+          PY
+      - name: Commit targeted fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/dashboard/funil/page.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: make novo funil creation real'
+          git push origin HEAD:main
