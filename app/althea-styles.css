@@ -23,3 +23,9 @@
 @import './mobile-shell-global.css';
 @import './althea-design-system-v2.css';
 @import './althea-canonical.css';
+
+/* Keep the Dashboard palette consistent across legacy modules. */
+.althea-page-content [class~="bg-emerald-500"] { background-color: var(--althea-brand) !important; }
+.althea-page-content [class~="bg-emerald-500\/10"] { background-color: rgba(29,184,84,.10) !important; }
+.althea-page-content [class~="bg-emerald-500\/20"] { background-color: rgba(29,184,84,.20) !important; }
+.althea-page-content [class~="bg-emerald-950\/20"] { background-color: rgba(13,54,45,.20) !important; }
