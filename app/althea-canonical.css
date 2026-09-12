@@ -140,7 +140,7 @@ a { -webkit-user-select: none; user-select: none; }
 .brand-lockup-tag b { color: var(--althea-brand); }
 
 /* Compatibility normalization for older dashboard modules.
- * These selectors intentionally reuse the canonical tokens instead of creating another theme.
+ * Reuse the Dashboard tokens without destroying Tailwind opacity semantics.
  */
 .althea-page-content [class*="bg-[#020203]"] { background: var(--althea-bg) !important; }
 .althea-page-content [class*="bg-[#0a0a0c]"] { background: var(--althea-surface) !important; }
@@ -153,7 +153,12 @@ a { -webkit-user-select: none; user-select: none; }
 .althea-page-content [class*="border-white/[0.12]"] { border-color: var(--althea-border) !important; }
 .althea-page-content [class*="border-white/10"] { border-color: var(--althea-border) !important; }
 .althea-page-content [class*="text-emerald-"] { color: var(--althea-brand) !important; }
-.althea-page-content [class*="bg-emerald-"] { background-color: var(--althea-brand) !important; }
+.althea-page-content [class~="bg-emerald-500"] { background-color: var(--althea-brand) !important; }
+.althea-page-content [class~="bg-emerald-500/5"] { background-color: rgba(29,184,84,.05) !important; }
+.althea-page-content [class~="bg-emerald-500/10"] { background-color: rgba(29,184,84,.10) !important; }
+.althea-page-content [class~="bg-emerald-500/20"] { background-color: rgba(29,184,84,.20) !important; }
+.althea-page-content [class~="bg-emerald-900/20"],
+.althea-page-content [class~="bg-emerald-950/20"] { background-color: rgba(13,54,45,.20) !important; }
 .althea-page-content [class*="border-emerald-"] { border-color: rgba(29, 184, 84, 0.25) !important; }
 .althea-page-content [class*="text-zinc-500"],
 .althea-page-content [class*="text-zinc-400"],
@@ -177,14 +182,5 @@ a { -webkit-user-select: none; user-select: none; }
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .althea-ds-mobile-safe {
     padding-bottom: calc(var(--althea-content-bottom) + env(safe-area-inset-bottom));
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
   }
 }
