@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.0'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? serviceRoleKey
 const aiEngineUrl = (Deno.env.get('ALTHEA_AI_ENGINE_URL') ?? '').replace(/\/$/, '')
 const aiEngineKey = Deno.env.get('ALTHEA_AI_ENGINE_KEY') ?? ''
 const aiEngineModel = Deno.env.get('ALTHEA_AI_ENGINE_MODEL') ?? 'althea-reasoning'
