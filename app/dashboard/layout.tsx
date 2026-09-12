@@ -40,10 +40,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           background: var(--althea-bg, #0B0B0D) !important;
         }
 
-        /* Every dashboard route inherits the same canvas used by the canonical
-           Dashboard. Individual cards/panels keep their own surface colors. */
-        .althea-page-content > * {
-          background-color: var(--althea-bg, #0B0B0D) !important;
+        /* The Dashboard is the single visual source of truth for the page
+           canvas. Only legacy page roots are normalized here; cards, panels,
+           inputs and other nested surfaces retain their intended palette. */
+        .althea-page-content > div.min-h-screen {
+          background: var(--althea-bg, #0B0B0D) !important;
         }
 
         .althea-page-content .al-chat-top,
