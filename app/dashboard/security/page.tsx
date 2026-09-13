@@ -41,3 +41,4 @@ export default function SecurityPage() {
       <div className="mt-5 flex flex-wrap gap-3"><a href="/dashboard/settings" className="inline-flex rounded-xl border border-white/10 bg-white/[.03] px-4 py-3 text-sm font-semibold transition hover:bg-white/[.06]">Abrir Configurações de Segurança</a><a href="/dashboard/security/audit" className="inline-flex rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] px-4 py-3 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-400/[.1]">Abrir Trilha de Auditoria</a></div>
     </div>
   </main>
+}
