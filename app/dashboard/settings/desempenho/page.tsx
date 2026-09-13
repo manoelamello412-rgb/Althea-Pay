@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, CheckCircle2, Clock3, Loader2, Radio, RefreshCw, ServerCog, TriangleAlert, XCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import MobileShell from '@/components/mobile-shell'
+import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type HealthState = 'collecting' | 'operational' | 'degraded' | 'unstable'
@@ -120,12 +120,16 @@ export default function PerformanceSettingsPage() {
   const meta = statusMeta(health)
   const StatusIcon = meta.icon
   const lastCheck = telemetry.lastChecked ? new Date(telemetry.lastChecked).toLocaleTimeString('pt-BR') : '—'
+  const routes: Record<MobileShellTab, string> = {
+    dashboard: '/dashboard',
+    vendas: '/dashboard/vendas',
+    chat: '/dashboard/crm',
+    ia: '/dashboard/ia',
+    funil: '/dashboard/funil',
+  }
 
   return (
-    <MobileShell activeTab="dashboard" onTabChange={(tab) => {
-      const routes = { dashboard: '/dashboard', gateways: '/dashboard/gateways', chat: '/dashboard/crm', ia: '/dashboard/ia', funil: '/dashboard/funil' } as const
-      router.push(routes[tab])
-    }}>
+    <MobileShell activeTab="dashboard" onTabChange={(tab) => router.push(routes[tab])}>
       <div className="mx-auto w-full max-w-4xl space-y-4 pb-16">
         <div className="flex items-center gap-3 border-b border-white/[0.06] pb-4">
           <button type="button" onClick={() => router.push('/dashboard/settings')} className="min-h-11 rounded-lg px-1 text-xs font-mono text-[#A6A6A6] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1DB854]/40">← VOLTAR</button>
@@ -157,6 +161,5 @@ export default function PerformanceSettingsPage() {
   )
 }
 
-function Metric({ label, value, suffix, description }: { label: string; value: number | null; suffix: string; description: string }) { return <div className="rounded-xl border border-white/[0.06] bg-[#0B0B0D] p-4"><span className="text-[10px] font-mono uppercase tracking-wider text-[#A6A6A6]">{label}</span><div className="mt-2 flex items-baseline gap-1.5"><span className="text-3xl font-bold tracking-tight text-white">{value === null ? '—' : value}</span><span className="text-xs font-mono text-[#A6A6A6]">{suffix}</span></div><p className="mt-2 text-[10px] leading-relaxed text-[#A6A6A6]">{description}</p></div> }
-
-function MetricCard({ label, value, icon, description }: { label: string; value: string; icon: React.ReactNode; description: string }) { return <div className="rounded-2xl border border-white/[0.06] bg-[#0F1A16] p-5"><div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-[#A6A6A6]">{icon}{label}</div><div className="mt-2 text-2xl font-bold tracking-tight text-white">{value}</div><p className="mt-1 text-[10px] leading-relaxed text-[#A6A6A6]">{description}</p></div> }
+function Metric({ label, value, suffix, description }: { label: string; value: number | null; suffix: string; description: string }) { return <div className="rounded-xl border border-white/[0.06] bg-[#0B0B0D] p-4"><span className="text-[10px] font-mono uppercase tracking-wider text-[#A6A6A6]">{label}</span><div className="mt-2 flex items-baseline gap-1.5"><span className="text-3xl font-bold tracking-tight text-white">{value === null ? '—' : value}</span><span className="text-xs font-mono text-[#A6A6A6]">{value === null ? '' : suffix}</span></div><p className="mt-2 text-[10px] leading-4 text-[#A6A6A6]">{description}</p></div> }
+function MetricCard({ label, value, icon, description }: { label: string; value: string; icon: React.ReactNode; description: string }) { return <div className="rounded-2xl border border-white/[0.06] bg-[#0F1A16] p-4"><div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-[#A6A6A6]">{icon}{label}</div><p className="mt-2 text-2xl font-bold tracking-tight text-white">{value}</p><p className="mt-1 text-[10px] leading-4 text-[#A6A6A6]">{description}</p></div> }
