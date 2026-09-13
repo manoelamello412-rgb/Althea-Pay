@@ -6,14 +6,13 @@ import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
 
 const routes: Record<MobileShellTab, string> = {
   dashboard: '/dashboard',
-  gateways: '/dashboard/gateways',
+  vendas: '/dashboard',
   chat: '/dashboard/crm',
   ia: '/dashboard/ia',
   funil: '/dashboard/funil',
 }
 
 function tabFromPath(pathname: string): MobileShellTab {
-  if (pathname.startsWith('/dashboard/gateways')) return 'gateways'
   if (pathname.startsWith('/dashboard/crm')) return 'chat'
   if (pathname.startsWith('/dashboard/ia')) return 'ia'
   if (pathname.startsWith('/dashboard/funil')) return 'funil'
@@ -27,6 +26,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   const selectTab = useCallback((tab: MobileShellTab) => {
     const route = routes[tab]
+    if (tab === 'vendas') {
+      window.dispatchEvent(new CustomEvent('althea-mobile-page', { detail: 'vendas' }))
+      if (pathname !== '/dashboard') router.push('/dashboard')
+      return
+    }
     if (route !== pathname) router.push(route)
   }, [pathname, router])
 
