@@ -1,46 +1,5 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { WhiteLabelWorkspace } from '@/components/white-label-workspace'
-import MobileBottomNav from '@/components/mobile-bottom-nav'
-import MobileHeaderDashboard from '@/components/mobile-header-dashboard'
-import AltheaDashboardControl from '@/components/althea-dashboard-control'
-import SalesMobile from '@/components/sales-mobile'
-import GatewaysMobile from '@/components/gateways-mobile'
-import FunnelsMobile from '@/components/funnels-mobile'
-import SettingsMobile from '@/components/settings-mobile'
-import { hydrateAltheaBrand } from '@/components/brand-kit'
-import { useEffect, useState } from 'react'
-
-export default function DashboardPage() {
-  const [mobilePage, setMobilePage] = useState('dashboard')
-
-  useEffect(() => {
-    hydrateAltheaBrand()
-    const handler = (event: Event) => setMobilePage((event as CustomEvent<string>).detail || 'dashboard')
-    window.addEventListener('althea-mobile-page', handler)
-    return () => window.removeEventListener('althea-mobile-page', handler)
-  }, [])
-
-  const mobile = ['dashboard', 'vendas', 'funis', 'gateways', 'configuracoes'].includes(mobilePage)
-
-  return <>
-    <div className="lg:hidden">
-      <MobileHeaderDashboard />
-    </div>
-    <div
-      className="althea-mobile-stage-host"
-      style={{
-        display: mobile ? 'block' : 'none',
-        paddingBottom: mobile ? '5.5rem' : undefined,
-      }}
-    >
-      <div style={{ display: mobilePage === 'dashboard' ? 'block' : 'none' }}><AltheaDashboardControl /></div>
-      <div style={{ display: mobilePage === 'vendas' ? 'block' : 'none' }}><SalesMobile /></div>
-      <div style={{ display: mobilePage === 'funis' ? 'block' : 'none' }}><FunnelsMobile /></div>
-      <div style={{ display: mobilePage === 'gateways' ? 'block' : 'none' }}><GatewaysMobile /></div>
-      <div style={{ display: mobilePage === 'configuracoes' ? 'block' : 'none' }}><SettingsMobile /></div>
-    </div>
-    <div style={{ display: mobile ? 'none' : 'block' }}><WhiteLabelWorkspace /></div>
-    <div style={{ display: mobile ? 'block' : 'none' }}><MobileBottomNav /></div>
-  </>
+export default function HomePage() {
+  redirect('/dashboard')
 }
