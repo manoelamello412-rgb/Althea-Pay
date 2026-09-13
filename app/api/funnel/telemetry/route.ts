@@ -4,8 +4,8 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/supabase/public-co
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? SUPABASE_PUBLISHABLE_KEY
-const SUPABASE_URL_VALUE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? SUPABASE_URL
+const SUPABASE_KEY = SUPABASE_PUBLISHABLE_KEY
+const SUPABASE_URL_VALUE = SUPABASE_URL
 const TARGET = `${SUPABASE_URL_VALUE}/functions/v1/funnel-events`
 
 const CORS_HEADERS = {
