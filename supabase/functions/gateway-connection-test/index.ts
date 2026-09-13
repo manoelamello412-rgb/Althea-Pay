@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
     const key = text(credential.api_key);
     if (!key) return response({ ok: false, error: "provider_api_key_missing" }, 422);
     checkUrl = `${environment === "sandbox" ? "https://api-sandbox.asaas.com/v3" : "https://api.asaas.com/v3"}/myAccount`;
-    headers = { Authorization: key };
+    headers = { access_token: key };
   } else if (provider === "mercado_pago") {
     const tokenValue = text(credential.access_token ?? credential.api_key);
     if (!tokenValue) return response({ ok: false, error: "provider_access_token_missing" }, 422);
