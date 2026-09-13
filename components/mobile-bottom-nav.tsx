@@ -1,6 +1,6 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
+import { useEffect, usePathname, useState } from 'react'
 import { CircleDollarSign, GitBranch, LayoutGrid, MessageCircle, Sparkles } from 'lucide-react'
 
 const navItems = [
@@ -13,18 +13,19 @@ const navItems = [
 
 type TabId = (typeof navItems)[number]['id']
 
-function isActivePath(pathname: string, path: string, mobilePage: string | null): boolean {
-  if (mobilePage === 'vendas') return pathname === '/dashboard/vendas'
-  if (mobilePage === 'funis') return pathname === '/dashboard/funil' || pathname.startsWith('/dashboard/funil/')
-  if (path === '/dashboard') return pathname === '/dashboard' || pathname === '/dashboard/'
-  return pathname === path || pathname.startsWith(`${path}/`)
-}
-
 export function MobileBottomNav() {
   const pathname = usePathname()
+  const [mobilePage, setMobilePage] = useState('dashboard')
+
+  useEffect(() => {
+    const handler = (event: Event) => setMobilePage((event as CustomEvent<string>).detail || 'dashboard')
+    window.addEventListener('althea-mobile-page', handler)
+    return () => window.removeEventListener('althea-mobile-page', handler)
+  }, [])
 
   const selectTab = (item: (typeof navItems)[number]) => {
     if (item.mobilePage) {
+      setMobilePage(item.mobilePage)
       window.dispatchEvent(new CustomEvent('althea-mobile-page', { detail: item.mobilePage }))
       return
     }
@@ -35,7 +36,7 @@ export function MobileBottomNav() {
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] px-3 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 sm:px-4 lg:hidden">
       <nav aria-label="Navegação principal" className="pointer-events-auto mx-auto grid h-[72px] w-full max-w-[760px] grid-cols-5 items-stretch gap-1 rounded-[36px] border border-white/[0.06] bg-[rgba(15,26,22,0.94)] p-1.5 shadow-[0_32px_64px_rgba(0,0,0,0.7)] backdrop-blur-xl">
         {navItems.map((item) => {
-          const isActive = isActivePath(pathname, item.path, item.mobilePage)
+          const isActive = item.mobilePage ? mobilePage === item.mobilePage : pathname === item.path || pathname.startsWith(`${item.path}/`)
           const Icon = item.icon
           return (
             <button key={item.id} type="button" onClick={() => selectTab(item)} aria-current={isActive ? 'page' : undefined} aria-label={item.label} className={`group relative flex min-w-0 flex-col items-center justify-center gap-1.5 rounded-[30px] px-1 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,187,84,0.4)] ${isActive ? 'text-[var(--althea-brand)]' : 'text-[var(--althea-muted)] hover:text-white'}`}>
