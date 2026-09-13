@@ -16,32 +16,65 @@ const timeout = 15_000;
 function deepGet(v: unknown, path: string): unknown { let cur: unknown = v; for (const part of path.split(".").filter(Boolean)) { if (!obj(cur)) return undefined; cur = cur[part]; } return cur; }
 function first(v: O, paths: string[], fallback = ""): string { for (const p of paths) { const x = deepGet(v, p); if (typeof x === "string" || typeof x === "number") return String(x); } return fallback; }
 async function publicUrl(raw: string): Promise<string> { const checked = await assertPublicHttpsUrl(raw); if (!checked.ok) throw new Error(`target_not_allowed:${checked.reason}`); return checked.url; }
+function jsonConfig(raw: unknown, name: string): O { if (!str(raw)) return {}; try { const parsed = JSON.parse(String(raw)); if (!obj(parsed)) throw new Error(`${name}_must_be_object`); return parsed; } catch (e) { throw new Error(e instanceof Error && e.message.startsWith(name) ? e.message : `${name}_invalid_json`); } }
+function method(raw: unknown, fallback: string): string { const m = (str(raw) || fallback).toUpperCase(); if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(m)) throw new Error("custom_rest_method_invalid"); return m; }
+function interpolate(value: unknown, root: O): unknown {
+  if (Array.isArray(value)) return value.map((x) => interpolate(x, root));
+  if (obj(value)) return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, interpolate(v, root)]));
+  if (typeof value !== "string") return value;
+  const exact = value.match(/^\{\{\s*([^}]+?)\s*\}\}$/);
+  if (exact) { const v = deepGet(root, exact[1].trim()); return v === undefined ? null : v; }
+  return value.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, p) => { const v = deepGet(root, String(p).trim()); return v === undefined || v === null ? "" : String(v); });
+}
+function customHeaders(raw: unknown, root: O): Record<string, string> {
+  const configured = jsonConfig(raw, "custom_headers");
+  const blocked = new Set(["host", "content-length", "connection", "transfer-encoding", "x-althea-internal-secret", "x-althea-gateway-id"]);
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(configured)) { const name = k.trim(); if (!name || blocked.has(name.toLowerCase()) || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) throw new Error("custom_rest_header_invalid"); if (typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean") throw new Error("custom_rest_header_value_invalid"); result[name] = String(interpolate(v, root)); }
+  return result;
+}
 
 async function customRest(operation: string, body: O, credential: O): Promise<Response> {
   const base = str(credential.base_url); if (!base) return json({ ok: false, error: "custom_rest_base_url_missing" }, 422);
   const baseUrl = await publicUrl(base);
-  const rawPath = operation === "health_check" ? str(credential.health_path) : operation === "refund" ? str(credential.refund_path) : ["payment_status", "retrieve_payment", "retrieve", "status"].includes(operation) ? str(credential.status_path) : str(credential.create_path);
-  const path = rawPath || (operation === "health_check" ? "/health" : "/payments");
+  const statusOps = ["payment_status", "retrieve_payment", "retrieve", "status"];
+  const path = operation === "health_check" ? str(credential.health_path) : operation === "refund" ? str(credential.refund_path) : statusOps.includes(operation) ? str(credential.status_path) : str(credential.create_path);
+  const endpoint = path || (operation === "health_check" ? "/health" : "/payments");
   const externalId = str(body.external_transaction_id ?? body.original_external_id ?? body.provider_transaction_id);
-  const resolvedPath = path.replaceAll("{id}", encodeURIComponent(externalId));
-  const target = new URL(resolvedPath, baseUrl).toString();
-  const url = await publicUrl(target);
+  const resolvedPath = endpoint.replaceAll("{id}", encodeURIComponent(externalId));
+  const url = await publicUrl(new URL(resolvedPath, baseUrl).toString());
   const apiKey = str(credential.api_key ?? credential.access_token ?? credential.secret_key ?? credential.token);
   const authHeader = str(credential.auth_header) || "Authorization";
   const authPrefix = credential.auth_prefix === "" ? "" : (str(credential.auth_prefix) || "Bearer");
-  const headers: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
+  const root: O = { amount: Number(body.amount ?? 0), currency: str(body.currency || "BRL").toUpperCase(), transaction_id: externalId || null, external_transaction_id: externalId || null, payment_token: str(body.payment_token) || null, customer: obj(body.customer) ? body.customer : {}, metadata: obj(body.metadata) ? body.metadata : {}, idempotency_key: str(body.idempotency_key) || null, product_id: body.product_id ?? null, funnel_id: body.funnel_id ?? null };
+  const headers: Record<string, string> = { Accept: "application/json" };
   if (apiKey) headers[authHeader] = authPrefix ? `${authPrefix} ${apiKey}` : apiKey;
+  Object.assign(headers, customHeaders(credential.custom_headers, root));
   const idem = str(body.idempotency_key);
-  if (idem) headers["Idempotency-Key"] = idem;
-  const method = operation === "health_check" || ["payment_status", "retrieve_payment", "retrieve", "status"].includes(operation) ? "GET" : "POST";
-  const amount = Number(body.amount ?? 0);
-  const payload: O = { amount, currency: str(body.currency || "BRL").toUpperCase(), transaction_id: externalId || undefined, payment_token: str(body.payment_token) || undefined, customer: obj(body.customer) ? body.customer : {}, metadata: obj(body.metadata) ? body.metadata : {} };
-  const r = await fetch(url, { method, headers, body: method === "GET" ? undefined : JSON.stringify(payload), signal: AbortSignal.timeout(timeout) });
+  const idemHeader = str(credential.idempotency_header) || "Idempotency-Key";
+  if (idem && idemHeader && !headers[idemHeader]) headers[idemHeader] = idem;
+  const defaultMethod = operation === "health_check" || statusOps.includes(operation) ? "GET" : "POST";
+  const m = method(operation === "health_check" ? credential.health_method : operation === "refund" ? credential.refund_method : statusOps.includes(operation) ? credential.status_method : credential.create_method, defaultMethod);
+  const requestTemplate = str(credential.request_template) ? jsonConfig(credential.request_template, "request_template") : null;
+  const payload = requestTemplate ? interpolate(requestTemplate, root) : { amount: root.amount, currency: root.currency, transaction_id: externalId || undefined, payment_token: root.payment_token || undefined, customer: root.customer, metadata: root.metadata };
+  const fetchOptions: RequestInit = { method: m, headers, signal: AbortSignal.timeout(timeout) };
+  if (!["GET", "DELETE"].includes(m)) { headers["Content-Type"] = "application/json"; fetchOptions.body = JSON.stringify(payload); }
+  const r = await fetch(url, fetchOptions);
   const p = await parse(r);
   if (!r.ok) return json({ ok: false, error: err(p, `custom_rest_http_${r.status}`), failure_code: `http_${r.status}` }, r.status >= 400 && r.status < 600 ? r.status : 502);
-  const id = first(p, ["id", "transaction_id", "transactionId", "payment_id", "paymentId", "data.id", "data.transaction_id"], externalId);
-  const providerStatus = first(p, ["status", "payment_status", "paymentStatus", "state", "data.status"], "");
-  return json({ ok: true, id, external_id: id, status: operation === "health_check" ? "approved" : norm("custom_rest", { ...p, status: providerStatus }), provider_status: providerStatus, amount: Number(first(p, ["amount", "value", "data.amount"], String(amount))), currency: str(first(p, ["currency", "data.currency"], str(body.currency || "BRL"))).toUpperCase(), response: p });
+  if (operation === "health_check") return json({ ok: true, status: "approved", provider_status: first(p, ["status", "state", "data.status"], "healthy"), response: p });
+  const responseMap = str(credential.response_mapping) ? jsonConfig(credential.response_mapping, "response_mapping") : {};
+  const idPath = str(responseMap.id) || "id";
+  const statusPath = str(responseMap.status) || "status";
+  const amountPath = str(responseMap.amount) || "amount";
+  const currencyPath = str(responseMap.currency) || "currency";
+  const idValue = deepGet(p, idPath) ?? first(p, ["id", "transaction_id", "transactionId", "payment_id", "paymentId", "data.id", "data.transaction_id"], externalId);
+  const providerStatus = String(deepGet(p, statusPath) ?? first(p, ["status", "payment_status", "paymentStatus", "state", "data.status"], ""));
+  const statusMap = jsonConfig(credential.status_mapping, "status_mapping");
+  const mapped = typeof statusMap[providerStatus.toLowerCase()] === "string" ? str(statusMap[providerStatus.toLowerCase()]) : norm("custom_rest", { ...p, status: providerStatus });
+  const amountValue = deepGet(p, amountPath) ?? first(p, ["amount", "value", "data.amount"], String(root.amount));
+  const currencyValue = deepGet(p, currencyPath) ?? first(p, ["currency", "data.currency"], root.currency);
+  return json({ ok: true, id: String(idValue ?? externalId), external_id: String(idValue ?? externalId), status: mapped, provider_status: providerStatus, amount: Number(amountValue), currency: String(currencyValue || root.currency).toUpperCase(), response: p });
 }
 
 Deno.serve(async req => {
@@ -67,7 +100,7 @@ Deno.serve(async req => {
   const cr = await db.rpc("resolve_gateway_credential_for_gateway", { p_gateway_id: gatewayId }); if (cr.error || !obj(cr.data)) return json({ ok: false, error: "provider_credential_missing" }, 422);
   const c = cr.data, credential = obj(c.credentials) ? c.credentials : c;
   if (!obj(credential)) return json({ ok: false, error: "provider_credential_invalid" }, 422);
-  if (provider === "custom_rest") { if (reg.data.operational !== true) return json({ ok: false, error: "provider_adapter_not_operational" }, 422); try { return await customRest(operation, b, credential); } catch (e) { const message = e instanceof Error ? e.message : "custom_rest_adapter_error"; return json({ ok: false, error: message.startsWith("target_not_allowed") ? "target_not_allowed" : "custom_rest_adapter_error" }, 502); } }
+  if (provider === "custom_rest") { if (reg.data.operational !== true) return json({ ok: false, error: "provider_adapter_not_operational" }, 422); try { return await customRest(operation, b, credential); } catch (e) { const message = e instanceof Error ? e.message : "custom_rest_adapter_error"; return json({ ok: false, error: message.startsWith("target_not_allowed") ? "target_not_allowed" : message }, 502); } }
   const apiCredential = str(c.api_key ?? credential.api_key ?? credential.access_token ?? credential.secret_key);
   const statusOps = ["payment_status", "retrieve_payment", "retrieve", "status"];
   if (!apiCredential && !statusOps.includes(operation)) return json({ ok: false, error: "provider_credential_missing" }, 422);
