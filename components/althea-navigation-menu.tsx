@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react'
 import { BarChart3, CircleDollarSign, GitBranch, KeyRound, LayoutDashboard, LifeBuoy, LockKeyhole, Menu, Network, Plug, Settings, ShieldCheck, Users, Webhook, X, MessageCircle, CreditCard } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-const sections = [
+type MenuItem = readonly [string, string, typeof LayoutDashboard]
+type MenuSection = { title: string; items: readonly MenuItem[] }
+
+const sections: readonly MenuSection[] = [
   { title: 'OPERAR', items: [['Dashboard', '/dashboard', LayoutDashboard], ['Vendas', 'vendas', CircleDollarSign]] },
   { title: 'RECEBER', items: [['Gateways', '/dashboard/gateways', Network], ['Pagamentos', '/dashboard/pagamentos', CreditCard]] },
   { title: 'VENDER', items: [['Funis', 'funis', GitBranch], ['Checkouts', '/dashboard/checkouts', CreditCard]] },
@@ -13,7 +16,7 @@ const sections = [
   { title: 'INTEGRAÇÕES', items: [['Integration Hub', '/dashboard/integration-hub', Plug], ['API', '/dashboard/api', KeyRound], ['Webhooks', '/dashboard/webhooks', Webhook]] },
   { title: 'ADMINISTRAÇÃO', items: [['Configurações', '/dashboard/settings', Settings], ['Membros e acessos', '/dashboard/members', Users], ['Segurança', '/dashboard/security', LockKeyhole]] },
   { title: 'SUPORTE', items: [['Central de ajuda', '/dashboard/help', LifeBuoy]] },
-] as const
+]
 
 export function AltheaNavigationMenu() {
   const router = useRouter()
@@ -37,12 +40,8 @@ export function AltheaNavigationMenu() {
 
   const navigate = (target: string) => {
     setOpen(false)
-    if (target === 'vendas') {
-      window.dispatchEvent(new CustomEvent('althea-mobile-page', { detail: 'vendas' }))
-      return
-    }
-    if (target === 'funis') {
-      window.dispatchEvent(new CustomEvent('althea-mobile-page', { detail: 'funis' }))
+    if (target === 'vendas' || target === 'funis') {
+      window.dispatchEvent(new CustomEvent('althea-mobile-page', { detail: target }))
       return
     }
     router.push(target)
