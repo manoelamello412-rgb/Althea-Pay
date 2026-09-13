@@ -11,7 +11,7 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST,OPTIONS",
 };
 const out = (x: unknown, s = 200) => new Response(JSON.stringify(x), { status: s, headers: { ...CORS, "Content-Type": "application/json" } });
-const allowed = (x: string) => ["page_view", "quiz_started", "quiz_answered", "lead_created", "chat_started", "chat_message", "checkout_started", "purchase", "upsell", "refund", "chargeback", "checkout_abandoned"].includes(x);
+const allowed = (x: string) => ["page_view", "quiz_started", "quiz_answered", "lead_created", "chat_started", "chat_message", "checkout_started", "purchase", "upsell", "refund", "chargeback", "checkout_abandoned", "payment_created", "payment_failed", "payment_approved"].includes(x);
 const sha256 = async (v: string) => { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)); return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, "0")).join(""); };
 const clean = (v: unknown, max = 500) => typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
 const object = (v: unknown): Record<string, unknown> => v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
