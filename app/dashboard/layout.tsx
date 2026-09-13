@@ -6,13 +6,14 @@ import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
 
 const routes: Record<MobileShellTab, string> = {
   dashboard: '/dashboard',
-  vendas: '/dashboard',
+  vendas: '/dashboard/vendas',
   chat: '/dashboard/crm',
   ia: '/dashboard/ia',
   funil: '/dashboard/funil',
 }
 
 function tabFromPath(pathname: string): MobileShellTab {
+  if (pathname.startsWith('/dashboard/vendas')) return 'vendas'
   if (pathname.startsWith('/dashboard/crm')) return 'chat'
   if (pathname.startsWith('/dashboard/ia')) return 'ia'
   if (pathname.startsWith('/dashboard/funil')) return 'funil'
@@ -26,11 +27,6 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   const selectTab = useCallback((tab: MobileShellTab) => {
     const route = routes[tab]
-    if (tab === 'vendas') {
-      window.dispatchEvent(new CustomEvent('althea-mobile-page', { detail: 'vendas' }))
-      if (pathname !== '/dashboard') router.push('/dashboard')
-      return
-    }
     if (route !== pathname) router.push(route)
   }, [pathname, router])
 
@@ -43,6 +39,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         .althea-page-content .al-chat-top,
         .althea-page-content .al-bottom-nav,
         .althea-page-content .althea-legacy-bottom-nav,
+        .althea-page-content .ams-header,
+        .althea-page-content .ams-bottom-nav,
         .althea-page-content > div > header {
           display: none !important;
         }
