@@ -20,11 +20,11 @@ type MenuSection = {
 }
 
 const bottomTabs = [
-  { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { id: 'dashboard', label: 'Dashboard', href: '/dashboard', mobilePage: null, icon: LayoutDashboard },
   { id: 'vendas', label: 'Vendas', href: '/dashboard', mobilePage: 'vendas', icon: CircleDollarSign },
-  { id: 'chat', label: 'Chat', href: '/dashboard/crm', icon: MessageCircle },
-  { id: 'ia', label: 'IA', href: '/dashboard/ia', icon: Sparkles },
-  { id: 'funil', label: 'Funil', href: '/dashboard/funil', icon: GitBranch },
+  { id: 'chat', label: 'Chat', href: '/dashboard/crm', mobilePage: null, icon: MessageCircle },
+  { id: 'ia', label: 'IA', href: '/dashboard/ia', mobilePage: null, icon: Sparkles },
+  { id: 'funil', label: 'Funil', href: '/dashboard/funil', mobilePage: null, icon: GitBranch },
 ] as const
 
 const menuSections: MenuSection[] = [
