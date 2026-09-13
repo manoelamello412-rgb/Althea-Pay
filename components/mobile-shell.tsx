@@ -21,7 +21,7 @@ type MenuSection = {
 
 const bottomTabs = [
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', mobilePage: null, icon: LayoutDashboard },
-  { id: 'vendas', label: 'Vendas', href: '/dashboard', mobilePage: 'vendas', icon: CircleDollarSign },
+  { id: 'vendas', label: 'Vendas', href: '/dashboard/vendas', mobilePage: null, icon: CircleDollarSign },
   { id: 'chat', label: 'Chat', href: '/dashboard/crm', mobilePage: null, icon: MessageCircle },
   { id: 'ia', label: 'IA', href: '/dashboard/ia', mobilePage: null, icon: Sparkles },
   { id: 'funil', label: 'Funil', href: '/dashboard/funil', mobilePage: null, icon: GitBranch },
@@ -30,7 +30,7 @@ const bottomTabs = [
 const menuSections: MenuSection[] = [
   { title: 'OPERAR', items: [
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { label: 'Vendas', href: '/dashboard', mobilePage: 'vendas', icon: CircleDollarSign },
+    { label: 'Vendas', href: '/dashboard/vendas', icon: CircleDollarSign },
   ] },
   { title: 'RECEBER', items: [
     { label: 'Gateways', href: '/dashboard/gateways', icon: Network },
@@ -167,7 +167,6 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
             </motion.div>
           )}
         </AnimatePresence>
-
       </header>
 
       <AnimatePresence>
