@@ -2,6 +2,7 @@
 
 import { WhiteLabelWorkspace } from '@/components/white-label-workspace'
 import MobileBottomNav from '@/components/mobile-bottom-nav'
+import MobileHeaderDashboard from '@/components/mobile-header-dashboard'
 import AltheaDashboardControl from '@/components/althea-dashboard-control'
 import SalesMobile from '@/components/sales-mobile'
 import GatewaysMobile from '@/components/gateways-mobile'
@@ -23,6 +24,9 @@ export default function DashboardPage() {
   const mobile = ['dashboard', 'vendas', 'funis', 'gateways', 'configuracoes'].includes(mobilePage)
 
   return <>
+    <div className="lg:hidden">
+      <MobileHeaderDashboard />
+    </div>
     <div
       className="althea-mobile-stage-host"
       style={{
