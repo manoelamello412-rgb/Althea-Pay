@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/supabase/public-config'
 
-const TARGET = `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? SUPABASE_URL}/functions/v1/funnel-events`
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? SUPABASE_PUBLISHABLE_KEY
+const TARGET = `${SUPABASE_URL}/functions/v1/funnel-events`
+const SUPABASE_KEY = SUPABASE_PUBLISHABLE_KEY
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type,x-funnel-event-token', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' }
-const publicClient = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL ?? SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
+const publicClient = () => createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
 
 export async function OPTIONS() { return new NextResponse(null, { status: 204, headers: cors }) }
 
@@ -38,7 +38,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(data, { status: 202, headers: cors })
     }
     const eventToken = req.headers.get('x-funnel-event-token')
-    const response = await fetch(TARGET, { method: 'POST', headers: { 'content-type': 'application/json', apikey: SUPABASE_KEY, ...(eventToken ? { 'x-funnel-event-token': eventToken } : {}) }, body, cache: 'no-store' })
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      apikey: SUPABASE_KEY,
+    }
+    if (eventToken) headers['x-funnel-event-token'] = eventToken
+    const response = await fetch(TARGET, { method: 'POST', headers, body, cache: 'no-store' })
     const responseBody = await response.text()
     return new NextResponse(responseBody, { status: response.status, headers: { 'content-type': response.headers.get('content-type') || 'application/json', ...cors } })
   } catch { return NextResponse.json({ error: 'chat_upstream_unavailable' }, { status: 502, headers: cors }) }
