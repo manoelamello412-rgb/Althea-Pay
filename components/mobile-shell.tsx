@@ -74,6 +74,44 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
   const [searchOpen, setSearchOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [user, setUser] = useState({ name: 'Usuário', email: '—' })
+
+  useEffect(() => {
+    let active = true
+    let unsubscribe: (() => void) | undefined
+
+    import('@/lib/supabase/client').then(({ createSupabaseBrowserClient }) => {
+      if (!active) return
+      const db = createSupabaseBrowserClient()
+      if (!db) return
+
+      db.auth.getUser().then(({ data }) => {
+        if (!active || !data.user) return
+        setUser({
+          name: data.user.user_metadata?.display_name || data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'Usuário',
+          email: data.user.email || '—',
+        })
+      })
+
+      const { data: auth } = db.auth.onAuthStateChange((_event, session) => {
+        if (!active) return
+        if (!session?.user) {
+          setUser({ name: 'Usuário', email: '—' })
+          return
+        }
+        setUser({
+          name: session.user.user_metadata?.display_name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuário',
+          email: session.user.email || '—',
+        })
+      })
+      unsubscribe = () => auth.subscription.unsubscribe()
+    })
+
+    return () => {
+      active = false
+      unsubscribe?.()
+    }
+  }, [])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -129,6 +167,7 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
             </motion.div>
           )}
         </AnimatePresence>
+
       </header>
 
       <AnimatePresence>
@@ -137,10 +176,10 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
             <motion.button aria-label="Fechar menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMenuOpen(false)} className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm" />
             <motion.aside initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', stiffness: 320, damping: 32 }} className="fixed right-0 top-0 z-[120] flex h-full w-[min(390px,92vw)] flex-col border-l border-white/[0.08] bg-[rgba(8,12,10,0.98)] shadow-[-30px_0_80px_rgba(0,0,0,0.6)]">
               <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-5">
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/[0.08] bg-white/[0.04] text-sm font-semibold text-white">U</div>
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/[0.08] bg-white/[0.04] text-sm font-semibold text-white">{user.name.slice(0, 1).toUpperCase()}</div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-white">Nome do usuário</p>
-                  <p className="truncate text-xs text-[var(--althea-muted)]">E-mail</p>
+                  <p className="truncate text-sm font-semibold text-white">{user.name}</p>
+                  <p className="truncate text-xs text-[var(--althea-muted)]">{user.email}</p>
                 </div>
                 <button type="button" aria-label="Fechar menu" onClick={() => setMenuOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl text-[var(--althea-muted)] hover:bg-white/[0.04] hover:text-white"><X size={20} /></button>
               </div>
