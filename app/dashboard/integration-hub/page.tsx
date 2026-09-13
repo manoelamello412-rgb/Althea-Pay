@@ -5,7 +5,7 @@ import { ArrowUpRight, Blocks, Bot, Cable, CreditCard, Database, Globe2, KeyRoun
 
 const integrations = [
   { title: 'Gateways', description: 'Conexões e contratos de provedores de pagamento.', href: '/dashboard/gateways', icon: CreditCard, tag: 'PAYMENTS' },
-  { title: 'Funis', description: 'Origens, conexões e ingestão de eventos dos funis.', href: '/dashboard/funis', icon: Globe2, tag: 'FUNNELS' },
+  { title: 'Funis', description: 'Origens, conexões e ingestão de eventos dos funis.', href: '/dashboard/funil', icon: Globe2, tag: 'FUNNELS' },
   { title: 'Webhooks', description: 'Entrada e saída de eventos para integrações externas.', href: '/dashboard/webhooks', icon: Webhook, tag: 'EVENTS' },
   { title: 'API', description: 'Superfície de integração programática da operação.', href: '/dashboard/api', icon: KeyRound, tag: 'API' },
   { title: 'CRM / Chat', description: 'Conversas, clientes e automações conectadas à operação.', href: '/dashboard/crm', icon: Cable, tag: 'CRM' },
