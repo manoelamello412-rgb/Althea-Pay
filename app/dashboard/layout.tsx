@@ -45,8 +45,19 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         .althea-page-content .althea-legacy-bottom-nav,
         .althea-page-content .ams-header,
         .althea-page-content .ams-bottom-nav,
-        .althea-page-content > div > header {
+        .althea-page-content > div > header,
+        .althea-page-content > main > header {
           display: none !important;
+        }
+        .althea-page-content > div.min-h-screen,
+        .althea-page-content > main.min-h-screen {
+          min-height: calc(100dvh - 82px) !important;
+          background: var(--althea-bg) !important;
+          color: var(--althea-white) !important;
+        }
+        .althea-page-content > div.min-h-screen > main,
+        .althea-page-content > main.min-h-screen > div {
+          color: var(--althea-white);
         }
         .althea-page-content .althea-mobile-sales {
           min-height: calc(100dvh - 110px) !important;
