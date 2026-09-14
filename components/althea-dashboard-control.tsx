@@ -38,7 +38,9 @@ export default function AltheaDashboardControl() {
     if (error) throw error
     if (!auth.user) return false
     const { data: profile, error: profileError } = await supabase.from('profiles').select('display_name,full_name,gender').eq('id', auth.user.id).maybeSingle()
-    if (profileError) throw profileError
+    if (profileError) {
+      console.warn('[ALTHEA-DASHBOARD] profile hydration unavailable; continuing with auth metadata', profileError)
+    }
     const metadata = auth.user.user_metadata as Record<string, unknown>
     const profileName = profile?.display_name || profile?.full_name || metadata.display_name || metadata.name || auth.user.email || ''
     const resolvedName = firstName(String(profileName))
