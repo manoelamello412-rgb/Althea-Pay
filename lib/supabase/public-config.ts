@@ -7,14 +7,12 @@ function requirePublicConfig(name: string, value: string | undefined): string {
   return value
 }
 
-const SUPABASE_URL = requirePublicConfig(
-  'NEXT_PUBLIC_SUPABASE_URL',
-  process.env.NEXT_PUBLIC_SUPABASE_URL
-)
-
-const SUPABASE_PUBLISHABLE_KEY = requirePublicConfig(
-  'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-)
-
-export { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY }
+export function getSupabasePublicConfig() {
+  return {
+    url: requirePublicConfig('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL),
+    publishableKey: requirePublicConfig(
+      'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ),
+  }
+}
