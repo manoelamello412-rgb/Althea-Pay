@@ -17,13 +17,14 @@ const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'curren
 const today = () => dateFormatter.format(new Date())
 const parseLocalDate = (value: string) => { const [y, m, d] = value.split('-').map(Number); return new Date(y, m - 1, d) }
 const isoDate = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
-const minDate = () => { const date = parseLocalDate(today()); date.setDate(date.getDate() - 90); return isoDate(date) }
+const minDate = () => { const date = parseLocalDate(today()); date.setDate(date.getDate() - 89); return isoDate(date) }
 const firstName = (value: string) => value.trim().split(/\s+/)[0] || ''
 
 export default function AltheaDashboardControl() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
   const router = useRouter()
-  const [selectedDate, setSelectedDate] = useState(today)
+  const [startDate, setStartDate] = useState(today)
+  const [endDate, setEndDate] = useState(today)
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [name, setName] = useState<string | null>(null)
   const [gender, setGender] = useState<Gender>('outro')
@@ -55,7 +56,7 @@ export default function AltheaDashboardControl() {
     try {
       const authenticated = await loadProfile()
       if (!authenticated) { setSync('unauthorized'); setMetrics(null); setLastUpdated(null); return }
-      const { data, error } = await supabase.rpc('dashboard_metrics_for_user', { p_start_date: selectedDate, p_end_date: selectedDate })
+      const { data, error } = await supabase.rpc('dashboard_metrics_for_user', { p_start_date: startDate, p_end_date: endDate })
       if (error) throw error
       const value = data as Metrics
       setMetrics(value)
@@ -67,7 +68,7 @@ export default function AltheaDashboardControl() {
       console.error('[ALTHEA-DASHBOARD]', cause)
       setSync('error')
     }
-  }, [loadProfile, selectedDate, supabase])
+  }, [endDate, loadProfile, startDate, supabase])
 
   useEffect(() => { void loadMetrics() }, [loadMetrics])
 
@@ -95,6 +96,13 @@ export default function AltheaDashboardControl() {
   const displayNumber = (value: number | undefined) => !hasRealFinancialData ? '—' : muted ? '••••' : String(value ?? 0)
   const displayConversion = !hasRealFinancialData ? '—' : muted ? '••••' : `${(metrics?.conversionRate ?? 0).toFixed(1).replace('.', ',')}%`
   const formattedLastUpdated = lastUpdated ? timeFormatter.format(new Date(lastUpdated)) : sync === 'loading' || sync === 'reconnecting' ? 'Sincronizando...' : '—'
+  const dateRangeValid = startDate <= endDate && startDate >= minDate() && endDate <= today()
+  const maxStartDate = endDate < today() ? endDate : today()
+
+  useEffect(() => {
+    if (startDate <= endDate) return
+    setEndDate(startDate > today() ? today() : startDate)
+  }, [startDate, endDate])
 
   return (
     <main className="min-h-screen bg-[var(--althea-bg)] pb-28 text-white antialiased">
@@ -108,13 +116,16 @@ export default function AltheaDashboardControl() {
           <p className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-mono text-[#77817c]"><Clock3 size={12} aria-hidden="true" />Última atualização: {formattedLastUpdated}</p>
         </section>
 
-        <section className="flex flex-wrap items-center gap-3">
+        <section className="flex flex-wrap items-end gap-3">
           <button type="button" onClick={() => setMuted((value) => !value)} aria-label={muted ? 'Mostrar valores' : 'Ocultar valores'} className="grid h-11 w-11 place-items-center rounded-xl border border-[#0D362D] bg-[#0F1A16] text-[#A6A6A6] hover:text-white">{muted ? <EyeOff size={18} /> : <Eye size={18} />}</button>
-          <label className="flex items-center gap-2 rounded-xl border border-[#0D362D] bg-[#0F1A16] px-3 py-2.5 text-xs font-bold"><CalendarDays size={16} className="text-[#A6A6A6]" /><input type="date" value={selectedDate} min={minDate()} max={today()} onChange={(event) => setSelectedDate(event.target.value)} className="bg-transparent outline-none [color-scheme:dark]" /></label>
+          <label className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-[#0D362D] bg-[#0F1A16] px-3 py-2.5 text-xs font-bold sm:flex-none"><CalendarDays size={16} className="text-[#A6A6A6]" /><span className="text-[9px] font-mono uppercase tracking-wider text-[#69736e]">De</span><input type="date" value={startDate} min={minDate()} max={maxStartDate} onChange={(event) => setStartDate(event.target.value)} className="min-w-0 flex-1 bg-transparent outline-none [color-scheme:dark]" aria-label="Data inicial" /></label>
+          <label className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-[#0D362D] bg-[#0F1A16] px-3 py-2.5 text-xs font-bold sm:flex-none"><CalendarDays size={16} className="text-[#A6A6A6]" /><span className="text-[9px] font-mono uppercase tracking-wider text-[#69736e]">Até</span><input type="date" value={endDate} min={startDate > minDate() ? startDate : minDate()} max={today()} onChange={(event) => setEndDate(event.target.value)} className="min-w-0 flex-1 bg-transparent outline-none [color-scheme:dark]" aria-label="Data final" /></label>
+          <div className="flex min-h-11 items-center gap-2 rounded-xl border border-[#0D362D] bg-[#0F1A16] px-3 text-[10px] font-mono text-[#77817c]">MÁX. 90 DIAS</div>
           <div className="ml-auto flex items-center gap-2 text-[10px] font-mono text-[#77817c]"><span className={`h-2 w-2 rounded-full ${sync === 'synchronized' ? 'bg-[#1DB854]' : sync === 'reconnecting' || sync === 'loading' ? 'animate-pulse bg-amber-400' : sync === 'error' ? 'bg-red-500' : 'bg-zinc-500'}`} />{syncLabel[sync]}</div>
         </section>
+        {!dateRangeValid ? <p className="-mt-3 text-[10px] font-mono text-amber-400">Selecione um intervalo válido de até 90 dias.</p> : null}
 
-        {sync === 'error' || sync === 'unauthorized' ? <section className="flex flex-col gap-4 rounded-2xl border border-red-900/40 bg-red-950/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-red-300">{sync === 'unauthorized' ? 'Sua sessão não está autorizada.' : 'Não foi possível sincronizar os dados reais.'}</p><p className="mt-1 text-xs text-red-300/70">Nenhum valor fictício será exibido enquanto a fonte real estiver indisponível.</p></div><button type="button" disabled={retrying} onClick={async () => { setRetrying(true); await loadMetrics(); setRetrying(false) }} className="rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-xs font-bold">{retrying ? 'Sincronizando...' : 'Tentar novamente'}</button></section> : null}
+        {sync === 'error' || sync === 'unauthorized' ? <section className="flex flex-col gap-4 rounded-2xl border border-red-900/40 bg-red-950/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-red-300">{sync === 'unauthorized' ? 'Sua sessão não está autorizada.' : 'Não foi possível sincronizar os dados reais.'}</p><p className="mt-1 text-xs text-red-300/70">Nenhum valor fictício será exibido enquanto a fonte real estiver indisponível.</p></div><button type="button" disabled={retrying || !dateRangeValid} onClick={async () => { setRetrying(true); await loadMetrics(); setRetrying(false) }} className="rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-xs font-bold disabled:opacity-50">{retrying ? 'Sincronizando...' : 'Tentar novamente'}</button></section> : null}
 
         <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <Metric label="Faturamento" value={displayRevenue} icon={<ShoppingBag size={15} />} />
