@@ -189,27 +189,6 @@ export default function FunilDominioPage() {
     return () => { active = false; void supabase.removeChannel(channel) }
   }, [selectedFunnelId, supabase])
 
-  function resetForNewFunnel() {
-    setCreatingNewFunnel(true)
-    setSelectedFunnelId('')
-    setFunnel(null)
-    setConnection(null)
-    setWebhook(null)
-    setEvents([])
-    setFunnelName('')
-    setPageLink('')
-    setExternalId('')
-    setPixelId('')
-    setChatEnabled(true)
-    setMethod('script')
-    setOneTimeToken('')
-    setOneTimeEndpoint('')
-    setWebhookSecret('')
-    setWebhookEndpoint('')
-    setError('')
-    setSuccess('')
-  }
-
   function cancelNewFunnel() {
     setCreatingNewFunnel(false)
     setOneTimeToken('')
@@ -307,7 +286,7 @@ export default function FunilDominioPage() {
       <main className="mx-auto w-full max-w-md space-y-5 px-4 py-5">
         <section className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2"><div className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10"><Layers className="h-4 w-4 text-emerald-400" /></div><div><h1 className="text-xl font-bold tracking-tight">Funis</h1><p className="text-[10px] text-zinc-600">Gestão e conexão operacional</p></div></div>
-          <div className="flex items-center gap-1.5"><button type="button" onClick={resetForNewFunnel} disabled={creatingNewFunnel} className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-500/25 bg-emerald-500/[0.07] px-3 text-[10px] font-bold text-emerald-400 transition hover:border-emerald-500/50 hover:bg-emerald-500/[0.12] disabled:cursor-default disabled:opacity-60"><Plus className="h-3 w-3" /> NOVO FUNIL</button><button type="button" onClick={() => void refresh()} disabled={refreshing} aria-label="Atualizar" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.06] bg-[#0c0c0e] text-zinc-400 transition hover:text-white disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} /></button></div>
+          <div className="flex items-center gap-1.5"><button type="button" onClick={() => router.push('/funnels/new')} className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-500/25 bg-emerald-500/[0.07] px-3 text-[10px] font-bold text-emerald-400 transition hover:border-emerald-500/50 hover:bg-emerald-500/[0.12]"><Plus className="h-3 w-3" /> NOVO FUNIL</button><button type="button" onClick={() => void refresh()} disabled={refreshing} aria-label="Atualizar" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.06] bg-[#0c0c0e] text-zinc-400 transition hover:text-white disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} /></button></div>
         </section>
 
         {!creatingNewFunnel && funnels.length > 0 && <section className="rounded-2xl border border-white/[0.05] bg-[#0c0c0e] p-3"><div className="mb-2 flex items-center justify-between"><span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-500">Meus funis</span><span className="text-[9px] font-mono text-zinc-600">{funnels.length} total</span></div><div className="relative"><select value={selectedFunnelId} onChange={(event) => { setSelectedFunnelId(event.target.value); setError(''); setSuccess('') }} className="h-10 w-full appearance-none rounded-xl border border-white/[0.05] bg-[#121214] px-3 pr-9 text-xs text-zinc-200 outline-none focus:border-emerald-500/40">{funnels.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-zinc-600" /></div></section>}
