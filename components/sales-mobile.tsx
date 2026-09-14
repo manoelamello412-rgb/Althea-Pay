@@ -15,10 +15,12 @@ const fmtDateTime = (value: string) => value ? new Intl.DateTimeFormat('pt-BR', 
 const isApproved = (status: string | null) => normalizeStatus(status) === 'approved'
 const isPending = (status: string | null) => normalizeStatus(status) === 'pending'
 const isCancelled = (status: string | null) => ['failed', 'cancelled'].includes(normalizeStatus(status))
+const shiftDays = (value: string, days: number) => { const date = new Date(`${value}T12:00:00-03:00`); date.setDate(date.getDate() + days); return date.toISOString().slice(0, 10) }
 
 export default function SalesMobile() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
   const today = todayInSaoPaulo()
+  const minDate = shiftDays(today, -89)
   const [active, setActive] = useState('vendas')
   const [sales, setSales] = useState<Sale[]>([])
   const [query, setQuery] = useState('')
@@ -31,6 +33,14 @@ export default function SalesMobile() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Sale | null>(null)
+
+  const setRange = (start: string, end: string) => {
+    const safeStart = start < minDate ? minDate : start
+    const safeEnd = end > today ? today : end
+    const normalizedStart = safeStart > safeEnd ? safeEnd : safeStart
+    setStartDate(normalizedStart)
+    setEndDate(safeEnd < normalizedStart ? normalizedStart : safeEnd)
+  }
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -69,11 +79,10 @@ export default function SalesMobile() {
   if (active !== 'vendas') return null
 
   return <section className="althea-mobile-sales" aria-label="Vendas mobile">
-    <header className="ams-header"><button type="button" className="ams-brand" aria-label="Voltar ao Dashboard" onClick={() => go('dashboard')}><img src="/althea-logo.png" alt="ALTHEA PAY" /></button><button className="ams-menu" type="button" aria-label="Sincronizar vendas" onClick={() => void load()}><RefreshCw size={16} /></button></header>
-    <main className="ams-content"><h1>Vendas</h1><p className="ams-subtitle">Transações</p>
+    <main className="ams-content"><div className="mb-5"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#1DBB54]">Operação</p><h1 className="mt-2 text-[30px] font-semibold tracking-[-0.045em] text-white">Vendas</h1><p className="mt-1 text-sm text-[#7f8b85]">Transações reais da sua operação.</p></div>
       <label className="ams-search"><Search size={15} /><input value={query} onChange={(e) => setQuery(e.target.value)} type="search" placeholder="Buscar transações..." aria-label="Buscar transações" /></label>
-      <div className="ams-filters"><div className="ams-date-range"><div><span>De</span><input type="date" value={startDate} max={endDate || undefined} onChange={(e) => setStartDate(e.target.value)} /></div><i>|</i><div><span>Até</span><input type="date" value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} /></div></div><button className="ams-filter" type="button" onClick={() => { setDraftStatus(status); setFilterOpen(true) }}><Filter size={13} /><span>Filtros{status !== 'Todas' ? ` · ${status}` : ''}</span></button></div>
-      <div className="ams-period-line"><button type="button" onClick={() => setPeriodOpen((value) => !value)}>{startDate === today && endDate === today ? 'Hoje' : startDate || endDate ? `${fmtDate(startDate || endDate)} — ${fmtDate(endDate || startDate)}` : 'Todo o período'} <span>⌄</span></button>{periodOpen && <div className="ams-inline-menu"><button type="button" onClick={() => { setStartDate(today); setEndDate(today); setPeriodOpen(false) }}>Hoje</button><button type="button" onClick={() => { const d = new Date(`${today}T12:00:00-03:00`); d.setDate(d.getDate() - 6); setStartDate(d.toISOString().slice(0, 10)); setEndDate(today); setPeriodOpen(false) }}>Últimos 7 dias</button><button type="button" onClick={() => { const d = new Date(`${today}T12:00:00-03:00`); d.setDate(d.getDate() - 29); setStartDate(d.toISOString().slice(0, 10)); setEndDate(today); setPeriodOpen(false) }}>Últimos 30 dias</button><button type="button" onClick={() => { setStartDate(''); setEndDate(''); setPeriodOpen(false) }}>Todo o período</button></div>}</div>
+      <div className="ams-filters"><div className="ams-date-range"><div><span>De</span><input type="date" value={startDate} min={minDate} max={endDate || today} onChange={(e) => setRange(e.target.value, endDate || today)} /></div><i>|</i><div><span>Até</span><input type="date" value={endDate} min={startDate || minDate} max={today} onChange={(e) => setRange(startDate || minDate, e.target.value)} /></div></div><button className="ams-filter" type="button" onClick={() => { setDraftStatus(status); setFilterOpen(true) }}><Filter size={13} /><span>Filtros{status !== 'Todas' ? ` · ${status}` : ''}</span></button></div>
+      <div className="ams-period-line"><button type="button" onClick={() => setPeriodOpen((value) => !value)}>Calendário · {startDate === today && endDate === today ? 'Hoje' : `${fmtDate(startDate || minDate)} — ${fmtDate(endDate || today)}`} <span>⌄</span></button>{periodOpen && <div className="ams-inline-menu"><button type="button" onClick={() => { setRange(today, today); setPeriodOpen(false) }}>Hoje</button><button type="button" onClick={() => { setRange(shiftDays(today, -6), today); setPeriodOpen(false) }}>Últimos 7 dias</button><button type="button" onClick={() => { setRange(shiftDays(today, -29), today); setPeriodOpen(false) }}>Últimos 30 dias</button><button type="button" onClick={() => { setRange(minDate, today); setPeriodOpen(false) }}>Últimos 90 dias</button></div>}</div>
       <section className="ams-transactions"><div className="ams-table-head"><span>Cliente</span><span>Valor</span><span>Status</span></div>{loading ? <div className="ams-empty"><div className="ams-empty-icon" /><strong>Carregando vendas</strong><p>Sincronizando dados reais.</p></div> : error ? <div className="ams-empty"><div className="ams-empty-icon"><X size={21} /></div><strong>Falha na sincronização</strong><p>{error}</p><button type="button" onClick={() => void load()}>Tentar novamente</button></div> : filtered.length ? <div className="ams-list">{filtered.map((sale) => { const customer = obj(obj(sale.data).customer); return <button key={sale.id} type="button" className="ams-sale-row" onClick={() => setSelected(sale)}><span className="ams-sale-client"><b>{text(customer.name) || text(customer.full_name) || text(customer.email) || sale.external_id || sale.customer_id || sale.id}</b><small>{fmtDate(dateOf(sale))} · {sale.gateway_id || 'Gateway não informado'}</small></span><span className="ams-sale-value">{fmtMoney(amountOf(sale))}</span><span className={`ams-sale-status ${isApproved(sale.status) ? 'paid' : isPending(sale.status) ? 'pending' : 'other'}`}>{label(sale)}</span></button> })}</div> : <div className="ams-empty"><div className="ams-empty-icon"><CreditCard size={21} /></div><strong>Nenhuma transação encontrada</strong><p>Tente ajustar os filtros ou o período selecionado.</p><button type="button" onClick={clear}>Limpar filtros</button></div>}</section>
       <section className="ams-summary"><article><span>Volume</span><strong>{fmtMoney(totals.total)}</strong></article><article><span>Aprovadas</span><strong>{totals.paid}</strong></article><article><span>Pend.</span><strong>{totals.pending}</strong></article></section>
     </main>
