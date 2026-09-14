@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { Activity, Check, ChevronDown, Copy, Eye, ExternalLink, KeyRound, Layers, Link2, Loader2, Plus, Radio, RefreshCw, Send, Settings, ShieldCheck, Webhook, X, Zap } from 'lucide-react'
 import MobileBottomNav from '@/components/mobile-bottom-nav'
@@ -90,6 +91,7 @@ function statusMeta(connection: FunnelConnection | null): { label: string; tone:
 }
 
 export default function FunilDominioPage() {
+  const router = useRouter()
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
   const [funnels, setFunnels] = useState<Funnel[]>([])
   const [selectedFunnelId, setSelectedFunnelId] = useState('')
@@ -298,7 +300,7 @@ export default function FunilDominioPage() {
       <header className="sticky top-0 z-50 h-14 border-b border-white/[0.05] bg-[#020203]/90 px-4 backdrop-blur-xl">
         <div className="mx-auto flex h-full max-w-md items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5"><img src="/althea-mark.png" alt="Althea Pay" className="h-6 w-6 shrink-0 object-contain" /><div className="h-4 w-px bg-white/[0.08]" /><span className="truncate text-[12px] font-semibold tracking-tight text-zinc-100">ALTHEA PAY <span className="text-zinc-600">//</span> FUNIS</span></div>
-          <button type="button" aria-label="Configurações" title="Configurações" onClick={() => window.location.assign('/dashboard/settings')} className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"><Settings className="h-[18px] w-[18px]" /></button>
+          <button type="button" aria-label="Configurações" title="Configurações" onClick={() => router.push('/dashboard/settings')} className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition hover:bg-white/[0.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"><Settings className="h-[18px] w-[18px]" /></button>
         </div>
       </header>
 
