@@ -122,7 +122,7 @@ export default function PerformanceSettingsPage() {
   const lastCheck = telemetry.lastChecked ? new Date(telemetry.lastChecked).toLocaleTimeString('pt-BR') : '—'
   const routes: Record<MobileShellTab, string> = {
     dashboard: '/dashboard',
-    vendas: '/dashboard/vendas',
+    gateway: '/dashboard/gateways',
     chat: '/dashboard/crm',
     ia: '/dashboard/ia',
     funil: '/dashboard/funil',
