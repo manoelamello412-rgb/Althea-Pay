@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCircle2, CreditCard, Filter, RefreshCw, Search, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, CreditCard, Filter, RefreshCw, Search, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { amountOf, dateOf, normalizeStatus, todayInSaoPaulo, type AnalyticsSale } from '@/lib/analytics/sales'
@@ -29,17 +29,15 @@ export default function SalesMobile() {
   const [endDate, setEndDate] = useState(today)
   const [status, setStatus] = useState('Todas')
   const [draftStatus, setDraftStatus] = useState('Todas')
+  const [draftStartDate, setDraftStartDate] = useState(today)
+  const [draftEndDate, setDraftEndDate] = useState(today)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Sale | null>(null)
 
-  const setRange = (start: string, end: string) => {
-    const safeStart = start < minDate ? minDate : start
-    const safeEnd = end > today ? today : end
-    const normalizedStart = safeStart > safeEnd ? safeEnd : safeStart
-    setStartDate(normalizedStart)
-    setEndDate(safeEnd < normalizedStart ? normalizedStart : safeEnd)
-  }
+  const dateRangeValid = startDate >= minDate && startDate <= endDate && endDate <= today
+  const draftDateRangeValid = draftStartDate >= minDate && draftStartDate <= draftEndDate && draftEndDate <= today
+  const periodLabel = startDate === today && endDate === today ? 'Hoje' : `${fmtDate(startDate)} — ${fmtDate(endDate)}`
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -81,15 +79,38 @@ export default function SalesMobile() {
   }), [sales, query, startDate, endDate, status])
 
   const totals = useMemo(() => ({ total: filtered.reduce((sum, sale) => sum + amountOf(sale), 0), paid: filtered.filter((sale) => isApproved(sale.status)).length, pending: filtered.filter((sale) => isPending(sale.status)).length }), [filtered])
-  const clear = () => { setQuery(''); setStartDate(today); setEndDate(today); setStatus('Todas'); setDraftStatus('Todas') }
+  const clear = () => { setQuery(''); setStartDate(today); setEndDate(today); setStatus('Todas'); setDraftStatus('Todas'); setDraftStartDate(today); setDraftEndDate(today) }
   const label = (sale: Sale) => ({ approved: 'Aprovada', pending: 'Pendente', failed: 'Falhou', cancelled: 'Cancelada', refunded: 'Reembolsada', chargeback: 'Chargeback' } as Record<string, string>)[normalizeStatus(sale.status)] ?? 'Outro'
+  const openPeriod = () => { setDraftStartDate(startDate); setDraftEndDate(endDate); setPeriodOpen(true) }
+  const applyPeriod = () => { if (!draftDateRangeValid) return; setStartDate(draftStartDate); setEndDate(draftEndDate); setPeriodOpen(false) }
 
   return <section className="althea-mobile-sales" aria-label="Vendas mobile">
     <main className="ams-content">
       <div className="mb-5"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#1DBB54]">Operação</p><h1 className="mt-2 text-[30px] font-semibold tracking-[-0.045em] text-white">Vendas</h1><p className="mt-1 text-sm text-[#7f8b85]">Transações reais da sua operação.</p></div>
       <label className="ams-search"><Search size={15} /><input value={query} onChange={(e) => setQuery(e.target.value)} type="search" placeholder="Buscar transações..." aria-label="Buscar transações" /></label>
-      <div className="ams-filters"><div className="ams-date-range"><div><span>De</span><input type="date" value={startDate} min={minDate} max={endDate || today} onChange={(e) => setRange(e.target.value, endDate || today)} /></div><i>|</i><div><span>Até</span><input type="date" value={endDate} min={startDate || minDate} max={today} onChange={(e) => setRange(startDate || minDate, e.target.value)} /></div></div><button className="ams-filter" type="button" onClick={() => { setDraftStatus(status); setFilterOpen(true) }}><Filter size={13} /><span>Filtros{status !== 'Todas' ? ` · ${status}` : ''}</span></button></div>
-      <div className="ams-period-line"><button type="button" onClick={() => setPeriodOpen((value) => !value)}>Calendário · {startDate === today && endDate === today ? 'Hoje' : `${fmtDate(startDate || minDate)} — ${fmtDate(endDate || today)}`} <span>⌄</span></button>{periodOpen && <div className="ams-inline-menu"><button type="button" onClick={() => { setRange(today, today); setPeriodOpen(false) }}>Hoje</button><button type="button" onClick={() => { setRange(shiftDays(today, -6), today); setPeriodOpen(false) }}>Últimos 7 dias</button><button type="button" onClick={() => { setRange(shiftDays(today, -29), today); setPeriodOpen(false) }}>Últimos 30 dias</button><button type="button" onClick={() => { setRange(minDate, today); setPeriodOpen(false) }}>Últimos 90 dias</button></div>}</div>
+
+      <section className="mt-4 flex flex-wrap items-end gap-3">
+        <div className="relative">
+          <button type="button" onClick={openPeriod} aria-expanded={periodOpen} aria-haspopup="dialog" className="flex min-h-11 max-w-full items-center gap-2 rounded-xl border border-[#0D362D] bg-[#0F1A16] px-3 py-2.5 text-left text-xs font-bold text-white transition hover:border-[#1DB854]/40">
+            <CalendarDays size={16} className="shrink-0 text-[#A6A6A6]" />
+            <span className="text-[9px] font-mono uppercase tracking-wider text-[#69736e]">Período</span>
+            <span className="max-w-[210px] truncate">{periodLabel}</span>
+          </button>
+          {periodOpen ? <div role="dialog" aria-label="Selecionar período" className="absolute left-0 top-[calc(100%+8px)] z-50 w-[min(340px,calc(100vw-2rem))] rounded-2xl border border-white/[0.08] bg-[#0B1210] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.6)]">
+            <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-white">Período de vendas</p><p className="mt-1 text-[10px] text-[#69736e]">Selecione até 90 dias de dados reais.</p></div><button type="button" onClick={() => setPeriodOpen(false)} className="rounded-lg px-2 py-1 text-xs text-[#77817c] hover:bg-white/[0.04] hover:text-white">Fechar</button></div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block rounded-xl border border-[#0D362D] bg-[#0F1A16] p-3"><span className="block text-[9px] font-mono uppercase tracking-wider text-[#69736e]">De</span><input type="date" value={draftStartDate} min={minDate} max={draftEndDate} onChange={(event) => setDraftStartDate(event.target.value)} className="mt-2 w-full bg-transparent text-sm font-semibold outline-none [color-scheme:dark]" aria-label="Data inicial" /></label>
+              <label className="block rounded-xl border border-[#0D362D] bg-[#0F1A16] p-3"><span className="block text-[9px] font-mono uppercase tracking-wider text-[#69736e]">Até</span><input type="date" value={draftEndDate} min={draftStartDate} max={today} onChange={(event) => setDraftEndDate(event.target.value)} className="mt-2 w-full bg-transparent text-sm font-semibold outline-none [color-scheme:dark]" aria-label="Data final" /></label>
+            </div>
+            {!draftDateRangeValid ? <p className="mt-3 text-[10px] font-mono text-amber-400">Selecione um intervalo válido de até 90 dias.</p> : null}
+            <div className="mt-4 flex justify-end"><button type="button" onClick={applyPeriod} disabled={!draftDateRangeValid} className="rounded-xl bg-[#1DB854] px-4 py-2.5 text-xs font-bold text-[#07110c] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">Aplicar período</button></div>
+          </div> : null}
+        </div>
+
+        <button className="ams-filter" type="button" onClick={() => { setDraftStatus(status); setFilterOpen(true) }}><Filter size={13} /><span>Filtros{status !== 'Todas' ? ` · ${status}` : ''}</span></button>
+      </section>
+      {!dateRangeValid ? <p className="mt-2 text-[10px] font-mono text-amber-400">Selecione um intervalo válido de até 90 dias.</p> : null}
+
       <section className="ams-transactions"><div className="ams-table-head"><span>Cliente</span><span>Valor</span><span>Status</span></div>{loading ? <div className="ams-empty"><div className="ams-empty-icon" /><strong>Carregando vendas</strong><p>Sincronizando dados reais.</p></div> : error ? <div className="ams-empty"><div className="ams-empty-icon"><X size={21} /></div><strong>Falha na sincronização</strong><p>{error}</p><button type="button" onClick={() => void load()}>Tentar novamente</button></div> : filtered.length ? <div className="ams-list">{filtered.map((sale) => { const customer = obj(obj(sale.data).customer); return <button key={sale.id} type="button" className="ams-sale-row" onClick={() => setSelected(sale)}><span className="ams-sale-client"><b>{text(customer.name) || text(customer.full_name) || text(customer.email) || sale.external_id || sale.customer_id || sale.id}</b><small>{fmtDate(dateOf(sale))} · {sale.gateway_id || 'Gateway não informado'}</small></span><span className="ams-sale-value">{fmtMoney(amountOf(sale))}</span><span className={`ams-sale-status ${isApproved(sale.status) ? 'paid' : isPending(sale.status) ? 'pending' : 'other'}`}>{label(sale)}</span></button> })}</div> : <div className="ams-empty"><div className="ams-empty-icon"><CreditCard size={21} /></div><strong>Nenhuma transação encontrada</strong><p>Tente ajustar os filtros ou o período selecionado.</p><button type="button" onClick={clear}>Limpar filtros</button></div>}</section>
       <section className="ams-summary"><article><span>Volume</span><strong>{fmtMoney(totals.total)}</strong></article><article><span>Aprovadas</span><strong>{totals.paid}</strong></article><article><span>Pend.</span><strong>{totals.pending}</strong></article></section>
     </main>
