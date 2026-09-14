@@ -1,7 +1,11 @@
-'use client'
-
-import DashboardComplete from '@/components/dashboard-complete'
+import AltheaDashboardControl from '@/components/althea-dashboard-control'
+import DashboardOperationalMap from '@/components/dashboard-operational-map'
 
 export default function DashboardPage() {
-  return <DashboardComplete />
+  return (
+    <>
+      <AltheaDashboardControl />
+      <DashboardOperationalMap />
+    </>
+  )
 }
