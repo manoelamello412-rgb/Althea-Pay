@@ -1,6 +1,6 @@
 import { createServerClient as createSSRServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './public-config'
+import { getSupabasePublicConfig } from './public-config'
 
 type ServerCookie = {
   name: string
@@ -10,8 +10,9 @@ type ServerCookie = {
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies()
+  const { url, publishableKey } = getSupabasePublicConfig()
 
-  return createSSRServerClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  return createSSRServerClient(url, publishableKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll()
