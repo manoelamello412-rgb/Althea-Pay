@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowRight, CalendarDays, Clock3, Eye, EyeOff, Filter, Network, ShoppingBag, Wifi } from 'lucide-react'
+import { ArrowRight, Clock3, Eye, EyeOff, Filter, Network, ShoppingBag, Wifi } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -30,7 +30,7 @@ export default function AltheaDashboardControl() {
   const [name, setName] = useState<string | null>(null)
   const [muted, setMuted] = useState(false)
   const [sync, setSync] = useState<SyncState>('loading')
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<string | null>(() => new Date().toISOString())
   const [retrying, setRetrying] = useState(false)
 
   const loadProfile = useCallback(async () => {
@@ -39,9 +39,7 @@ export default function AltheaDashboardControl() {
     if (error) throw error
     if (!auth.user) return false
     const { data: profile, error: profileError } = await supabase.from('profiles').select('display_name,full_name').eq('id', auth.user.id).maybeSingle()
-    if (profileError) {
-      console.warn('[ALTHEA-DASHBOARD] profile hydration unavailable; continuing with auth metadata', profileError)
-    }
+    if (profileError) console.warn('[ALTHEA-DASHBOARD] profile hydration unavailable; continuing with auth metadata', profileError)
     const metadata = auth.user.user_metadata as Record<string, unknown>
     const profileName = profile?.display_name || profile?.full_name || metadata.display_name || metadata.name || auth.user.email || ''
     const resolvedName = firstName(String(profileName))
@@ -53,7 +51,7 @@ export default function AltheaDashboardControl() {
     setSync(silent ? 'reconnecting' : 'loading')
     try {
       const authenticated = await loadProfile()
-      if (!authenticated) { setSync('unauthorized'); setMetrics(null); setLastUpdated(null); return }
+      if (!authenticated) { setSync('unauthorized'); setMetrics(null); return }
       const { data, error } = await supabase.rpc('dashboard_metrics_for_user', { p_start_date: startDate, p_end_date: endDate })
       if (error) throw error
       const value = data as Metrics
@@ -92,7 +90,7 @@ export default function AltheaDashboardControl() {
   const displayRevenue = !hasRealFinancialData ? '—' : muted ? 'R$ ••••••' : money(metrics?.revenue ?? 0)
   const displayNumber = (value: number | undefined) => !hasRealFinancialData ? '—' : muted ? '••••' : String(value ?? 0)
   const displayConversion = !hasRealFinancialData ? '—' : muted ? '••••' : `${(metrics?.conversionRate ?? 0).toFixed(1).replace('.', ',')}%`
-  const formattedLastUpdated = lastUpdated ? timeFormatter.format(new Date(lastUpdated)) : sync === 'loading' || sync === 'reconnecting' ? 'Sincronizando...' : '—'
+  const formattedLastUpdated = lastUpdated ? timeFormatter.format(new Date(lastUpdated)) : '—'
   const dateRangeValid = startDate <= endDate && startDate >= minDate() && endDate <= today()
   const maxStartDate = endDate < today() ? endDate : today()
   const periodLabel = startDate === today() && endDate === today() ? 'Hoje' : `${periodDateFormatter.format(parseLocalDate(startDate))} — ${periodDateFormatter.format(parseLocalDate(endDate))}`
@@ -111,18 +109,18 @@ export default function AltheaDashboardControl() {
           </h1>
           <p className="mt-2 text-sm text-[var(--althea-muted)]">Acompanhe o desempenho da sua raiz em um só lugar.</p>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-mono text-[#77817c]">
-            <span className="inline-flex items-center gap-1.5"><Clock3 size={12} aria-hidden="true" />Última atualização: {formattedLastUpdated}</span>
-            <button type="button" onClick={() => setMuted((value) => !value)} aria-label={muted ? 'Mostrar valores' : 'Ocultar valores'} className="grid h-9 w-9 place-items-center rounded-xl border border-[#0D362D] bg-[#0F1A16] text-[#A6A6A6] transition hover:border-[#1DB854]/40 hover:text-white">{muted ? <EyeOff size={17} /> : <Eye size={17} />}</button>
-            <div className="relative">
+            <span className="inline-flex min-h-9 items-center gap-1.5"><Clock3 size={12} aria-hidden="true" />Última atualização: {formattedLastUpdated}</span>
+            <button type="button" onClick={() => setMuted((value) => !value)} aria-label={muted ? 'Mostrar valores' : 'Ocultar valores'} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#0D362D] bg-[#0F1A16] text-[#A6A6A6] transition hover:border-[#1DB854]/40 hover:text-white">{muted ? <EyeOff size={17} /> : <Eye size={17} />}</button>
+            <div className="relative shrink-0">
               <button type="button" onClick={() => setPeriodOpen((value) => !value)} aria-expanded={periodOpen} aria-haspopup="dialog" aria-label={`Filtro de data: ${periodLabel}`} className="inline-flex min-h-9 max-w-full items-center gap-2 rounded-xl border border-[#0D362D] bg-[#0F1A16] px-3 text-xs font-bold text-white transition hover:border-[#1DB854]/40">
                 <Filter size={15} className="shrink-0 text-[#A6A6A6]" />
                 <span className="max-w-[210px] truncate">{periodLabel}</span>
               </button>
-              {periodOpen ? <div role="dialog" aria-label="Selecionar datas" className="absolute left-0 top-[calc(100%+8px)] z-50 w-[min(340px,calc(100vw-2rem))] rounded-2xl border border-white/[0.08] bg-[#0B1210] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.6)]">
-                <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-white">Filtro de datas</p><p className="mt-1 text-[10px] text-[#69736e]">Selecione até 90 dias de dados reais.</p></div><button type="button" onClick={() => setPeriodOpen(false)} className="rounded-lg px-2 py-1 text-xs text-[#77817c] hover:bg-white/[0.04] hover:text-white">Fechar</button></div>
+              {periodOpen ? <div role="dialog" aria-label="Selecionar datas" className="absolute right-0 top-[calc(100%+8px)] z-50 w-[min(360px,calc(100vw-2rem))] max-h-[min(70vh,520px)] overflow-y-auto rounded-2xl border border-white/[0.08] bg-[#0B1210] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.6)]">
+                <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-white">Filtro de datas</p><p className="mt-1 text-[10px] text-[#69736e]">Selecione até 90 dias de dados reais.</p></div><button type="button" onClick={() => setPeriodOpen(false)} className="shrink-0 rounded-lg px-2 py-1 text-xs text-[#77817c] hover:bg-white/[0.04] hover:text-white">Fechar</button></div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <label className="block rounded-xl border border-[#0D362D] bg-[#0F1A16] p-3"><span className="block text-[9px] font-mono uppercase tracking-wider text-[#69736e]">De</span><input type="date" value={startDate} min={minDate()} max={maxStartDate} onChange={(event) => setStartDate(event.target.value)} className="mt-2 w-full bg-transparent text-sm font-semibold outline-none [color-scheme:dark]" aria-label="Data inicial" /></label>
-                  <label className="block rounded-xl border border-[#0D362D] bg-[#0F1A16] p-3"><span className="block text-[9px] font-mono uppercase tracking-wider text-[#69736e]">Até</span><input type="date" value={endDate} min={startDate > minDate() ? startDate : minDate()} max={today()} onChange={(event) => setEndDate(event.target.value)} className="mt-2 w-full bg-transparent text-sm font-semibold outline-none [color-scheme:dark]" aria-label="Data final" /></label>
+                  <label className="block min-w-0 rounded-xl border border-[#0D362D] bg-[#0F1A16] p-3"><span className="block text-[9px] font-mono uppercase tracking-wider text-[#69736e]">De</span><input type="date" value={startDate} min={minDate()} max={maxStartDate} onChange={(event) => setStartDate(event.target.value)} className="mt-2 block w-full min-w-0 bg-transparent text-sm font-semibold outline-none [color-scheme:dark]" aria-label="Data inicial" /></label>
+                  <label className="block min-w-0 rounded-xl border border-[#0D362D] bg-[#0F1A16] p-3"><span className="block text-[9px] font-mono uppercase tracking-wider text-[#69736e]">Até</span><input type="date" value={endDate} min={startDate > minDate() ? startDate : minDate()} max={today()} onChange={(event) => setEndDate(event.target.value)} className="mt-2 block w-full min-w-0 bg-transparent text-sm font-semibold outline-none [color-scheme:dark]" aria-label="Data final" /></label>
                 </div>
                 {!dateRangeValid ? <p className="mt-3 text-[10px] font-mono text-amber-400">Selecione um intervalo válido de até 90 dias.</p> : null}
                 <div className="mt-4 flex justify-end"><button type="button" onClick={() => setPeriodOpen(false)} disabled={!dateRangeValid} className="rounded-xl bg-[#1DB854] px-4 py-2.5 text-xs font-bold text-[#07110c] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">Aplicar filtro</button></div>
