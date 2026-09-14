@@ -13,6 +13,7 @@ type SyncState = 'loading' | 'synchronized' | 'empty' | 'error' | 'reconnecting'
 const TZ = 'America/Sao_Paulo'
 const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
 const timeFormatter = new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, dateStyle: 'short', timeStyle: 'medium' })
+const periodDateFormatter = new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' })
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 }).format(value)
 const today = () => dateFormatter.format(new Date())
 const parseLocalDate = (value: string) => { const [y, m, d] = value.split('-').map(Number); return new Date(y, m - 1, d) }
@@ -25,6 +26,7 @@ export default function AltheaDashboardControl() {
   const router = useRouter()
   const [startDate, setStartDate] = useState(today)
   const [endDate, setEndDate] = useState(today)
+  const [periodOpen, setPeriodOpen] = useState(false)
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [name, setName] = useState<string | null>(null)
   const [gender, setGender] = useState<Gender>('outro')
@@ -98,6 +100,7 @@ export default function AltheaDashboardControl() {
   const formattedLastUpdated = lastUpdated ? timeFormatter.format(new Date(lastUpdated)) : sync === 'loading' || sync === 'reconnecting' ? 'Sincronizando...' : '—'
   const dateRangeValid = startDate <= endDate && startDate >= minDate() && endDate <= today()
   const maxStartDate = endDate < today() ? endDate : today()
+  const periodLabel = startDate === today() && endDate === today() ? 'Hoje' : `${periodDateFormatter.format(parseLocalDate(startDate))} — ${periodDateFormatter.format(parseLocalDate(endDate))}`
 
   useEffect(() => {
     if (startDate <= endDate) return
@@ -118,8 +121,22 @@ export default function AltheaDashboardControl() {
 
         <section className="flex flex-wrap items-end gap-3">
           <button type="button" onClick={() => setMuted((value) => !value)} aria-label={muted ? 'Mostrar valores' : 'Ocultar valores'} className="grid h-11 w-11 place-items-center rounded-xl border border-[#0D362D] bg-[#0F1A16] text-[#A6A6A6] hover:text-white">{muted ? <EyeOff size={18} /> : <Eye size={18} />}</button>
-          <label className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-[#0D362D] bg-[#0F1A16] px-3 py-2.5 text-xs font-bold sm:flex-none"><CalendarDays size={16} className="text-[#A6A6A6]" /><span className="text-[9px] font-mono uppercase tracking-wider text-[#69736e]">De</span><input type="date" value={startDate} min={minDate()} max={maxStartDate} onChange={(event) => setStartDate(event.target.value)} className="min-w-0 flex-1 bg-transparent outline-none [color-scheme:dark]" aria-label="Data inicial" /></label>
-          <label className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-[#0D362D] bg-[#0F1A16] px-3 py-2.5 text-xs font-bold sm:flex-none"><CalendarDays size={16} className="text-[#A6A6A6]" /><span className="text-[9px] font-mono uppercase tracking-wider text-[#69736e]">Até</span><input type="date" value={endDate} min={startDate > minDate() ? startDate : minDate()} max={today()} onChange={(event) => setEndDate(event.target.value)} className="min-w-0 flex-1 bg-transparent outline-none [color-scheme:dark]" aria-label="Data final" /></label>
+          <div className="relative">
+            <button type="button" onClick={() => setPeriodOpen((value) => !value)} aria-expanded={periodOpen} aria-haspopup="dialog" className="flex min-h-11 max-w-full items-center gap-2 rounded-xl border border-[#0D362D] bg-[#0F1A16] px-3 py-2.5 text-left text-xs font-bold text-white transition hover:border-[#1DB854]/40">
+              <CalendarDays size={16} className="shrink-0 text-[#A6A6A6]" />
+              <span className="text-[9px] font-mono uppercase tracking-wider text-[#69736e]">Período</span>
+              <span className="max-w-[210px] truncate">{periodLabel}</span>
+            </button>
+            {periodOpen ? <div role="dialog" aria-label="Selecionar período" className="absolute left-0 top-[calc(100%+8px)] z-50 w-[min(340px,calc(100vw-2rem))] rounded-2xl border border-white/[0.08] bg-[#0B1210] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.6)]">
+              <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-white">Período do dashboard</p><p className="mt-1 text-[10px] text-[#69736e]">Selecione até 90 dias de dados reais.</p></div><button type="button" onClick={() => setPeriodOpen(false)} className="rounded-lg px-2 py-1 text-xs text-[#77817c] hover:bg-white/[0.04] hover:text-white">Fechar</button></div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="block rounded-xl border border-[#0D362D] bg-[#0F1A16] p-3"><span className="block text-[9px] font-mono uppercase tracking-wider text-[#69736e]">De</span><input type="date" value={startDate} min={minDate()} max={maxStartDate} onChange={(event) => setStartDate(event.target.value)} className="mt-2 w-full bg-transparent text-sm font-semibold outline-none [color-scheme:dark]" aria-label="Data inicial" /></label>
+                <label className="block rounded-xl border border-[#0D362D] bg-[#0F1A16] p-3"><span className="block text-[9px] font-mono uppercase tracking-wider text-[#69736e]">Até</span><input type="date" value={endDate} min={startDate > minDate() ? startDate : minDate()} max={today()} onChange={(event) => setEndDate(event.target.value)} className="mt-2 w-full bg-transparent text-sm font-semibold outline-none [color-scheme:dark]" aria-label="Data final" /></label>
+              </div>
+              {!dateRangeValid ? <p className="mt-3 text-[10px] font-mono text-amber-400">Selecione um intervalo válido de até 90 dias.</p> : null}
+              <div className="mt-4 flex justify-end"><button type="button" onClick={() => setPeriodOpen(false)} disabled={!dateRangeValid} className="rounded-xl bg-[#1DB854] px-4 py-2.5 text-xs font-bold text-[#07110c] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">Aplicar período</button></div>
+            </div> : null}
+          </div>
           <div className="ml-auto flex items-center gap-2 text-[10px] font-mono text-[#77817c]"><span className={`h-2 w-2 rounded-full ${sync === 'synchronized' ? 'bg-[#1DB854]' : sync === 'reconnecting' || sync === 'loading' ? 'animate-pulse bg-amber-400' : sync === 'error' ? 'bg-red-500' : 'bg-zinc-500'}`} />{syncLabel[sync]}</div>
         </section>
         {!dateRangeValid ? <p className="-mt-3 text-[10px] font-mono text-amber-400">Selecione um intervalo válido de até 90 dias.</p> : null}
