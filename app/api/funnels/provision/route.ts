@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 const FUNNEL_TYPES = new Set(['sales', 'lead_capture', 'launch', 'product', 'upsell_downsell', 'subscription', 'custom'])
+const MAX_PROVISION_ATTEMPTS = 3
 
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
 
@@ -10,6 +11,12 @@ function normalizeUrl(value: string | null) {
   if (!clean) return null
   return /^https?:\/\//i.test(clean) ? clean : `https://${clean}`
 }
+
+function isUniqueViolation(error: { code?: string | null; message?: string | null }) {
+  return error.code === '23505' || /duplicate key|unique constraint/i.test(error.message ?? '')
+}
+
+const backoff = (attempt: number) => new Promise<void>((resolve) => setTimeout(resolve, 100 * 2 ** attempt))
 
 export async function POST(request: Request) {
   try {
@@ -38,16 +45,27 @@ export async function POST(request: Request) {
     if (!supabaseUrl) return json({ error: 'Supabase URL is not configured for this environment.' }, 500)
     const eventEndpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/funnel-events`
 
-    const { data, error } = await supabase.rpc('provision_funnel_atomic', {
-      p_name: name,
-      p_url: url,
-      p_connection_type: connectionType,
-      p_funnel_type: funnelType,
-      p_event_endpoint: eventEndpoint,
-    })
-    if (error) {
-      const status = error.message === 'unauthorized' ? 401 : error.message.startsWith('invalid ') || error.message.endsWith('is required') || error.message.endsWith('is too long') ? 400 : 500
-      return json({ error: status === 500 ? 'internal_error' : error.message }, status)
+    let data: unknown = null
+    let provisionError: { code?: string | null; message?: string | null } | null = null
+
+    for (let attempt = 0; attempt < MAX_PROVISION_ATTEMPTS; attempt += 1) {
+      const result = await supabase.rpc('provision_funnel_atomic', {
+        p_name: name,
+        p_url: url,
+        p_connection_type: connectionType,
+        p_funnel_type: funnelType,
+        p_event_endpoint: eventEndpoint,
+      })
+
+      data = result.data
+      provisionError = result.error
+      if (!provisionError || !isUniqueViolation(provisionError) || attempt === MAX_PROVISION_ATTEMPTS - 1) break
+      await backoff(attempt)
+    }
+
+    if (provisionError) {
+      const status = provisionError.message === 'unauthorized' ? 401 : provisionError.message?.startsWith('invalid ') || provisionError.message?.endsWith('is required') || provisionError.message?.endsWith('is too long') ? 400 : 500
+      return json({ error: status === 500 ? 'internal_error' : provisionError.message }, status)
     }
 
     return json(data, 201)
