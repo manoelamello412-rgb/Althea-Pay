@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function NewFunnelRedirect() {
-  redirect('/dashboard/funil?new=1')
+  redirect('/dashboard/funil')
 }
