@@ -1,0 +1,98 @@
+-- ALTHEA PAY
+-- Performance hardening for the commercial funnel model.
+-- Add missing FK covering indexes and cache auth.uid() evaluation in RLS policies.
+
+CREATE INDEX IF NOT EXISTS funnel_automation_rules_user_id_idx
+  ON public.funnel_automation_rules (user_id);
+
+CREATE INDEX IF NOT EXISTS funnel_offers_product_id_idx
+  ON public.funnel_offers (product_id);
+
+CREATE INDEX IF NOT EXISTS funnel_offers_step_id_idx
+  ON public.funnel_offers (step_id);
+
+CREATE INDEX IF NOT EXISTS funnel_offers_user_id_idx
+  ON public.funnel_offers (user_id);
+
+CREATE INDEX IF NOT EXISTS funnel_step_links_funnel_id_idx
+  ON public.funnel_step_links (funnel_id);
+
+CREATE INDEX IF NOT EXISTS funnel_step_links_to_step_id_idx
+  ON public.funnel_step_links (to_step_id);
+
+CREATE INDEX IF NOT EXISTS funnel_step_links_user_id_idx
+  ON public.funnel_step_links (user_id);
+
+CREATE INDEX IF NOT EXISTS funnel_steps_user_id_idx
+  ON public.funnel_steps (user_id);
+
+CREATE INDEX IF NOT EXISTS iara_evaluations_execution_id_idx
+  ON public.iara_evaluations (execution_id);
+
+ALTER POLICY funnel_steps_owner_delete ON public.funnel_steps
+  USING (user_id = (SELECT auth.uid()));
+ALTER POLICY funnel_steps_owner_insert ON public.funnel_steps
+  WITH CHECK (
+    user_id = (SELECT auth.uid())
+    AND EXISTS (
+      SELECT 1 FROM public.funnels f
+      WHERE f.id = funnel_steps.funnel_id
+        AND f.user_id = (SELECT auth.uid())
+    )
+  );
+ALTER POLICY funnel_steps_owner_select ON public.funnel_steps
+  USING (user_id = (SELECT auth.uid()));
+ALTER POLICY funnel_steps_owner_update ON public.funnel_steps
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+ALTER POLICY funnel_step_links_owner_delete ON public.funnel_step_links
+  USING (user_id = (SELECT auth.uid()));
+ALTER POLICY funnel_step_links_owner_insert ON public.funnel_step_links
+  WITH CHECK (
+    user_id = (SELECT auth.uid())
+    AND EXISTS (
+      SELECT 1 FROM public.funnels f
+      WHERE f.id = funnel_step_links.funnel_id
+        AND f.user_id = (SELECT auth.uid())
+    )
+  );
+ALTER POLICY funnel_step_links_owner_select ON public.funnel_step_links
+  USING (user_id = (SELECT auth.uid()));
+ALTER POLICY funnel_step_links_owner_update ON public.funnel_step_links
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+ALTER POLICY funnel_offers_owner_delete ON public.funnel_offers
+  USING (user_id = (SELECT auth.uid()));
+ALTER POLICY funnel_offers_owner_insert ON public.funnel_offers
+  WITH CHECK (
+    user_id = (SELECT auth.uid())
+    AND EXISTS (
+      SELECT 1 FROM public.funnels f
+      WHERE f.id = funnel_offers.funnel_id
+        AND f.user_id = (SELECT auth.uid())
+    )
+  );
+ALTER POLICY funnel_offers_owner_select ON public.funnel_offers
+  USING (user_id = (SELECT auth.uid()));
+ALTER POLICY funnel_offers_owner_update ON public.funnel_offers
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
+
+ALTER POLICY funnel_automation_rules_owner_delete ON public.funnel_automation_rules
+  USING (user_id = (SELECT auth.uid()));
+ALTER POLICY funnel_automation_rules_owner_insert ON public.funnel_automation_rules
+  WITH CHECK (
+    user_id = (SELECT auth.uid())
+    AND EXISTS (
+      SELECT 1 FROM public.funnels f
+      WHERE f.id = funnel_automation_rules.funnel_id
+        AND f.user_id = (SELECT auth.uid())
+    )
+  );
+ALTER POLICY funnel_automation_rules_owner_select ON public.funnel_automation_rules
+  USING (user_id = (SELECT auth.uid()));
+ALTER POLICY funnel_automation_rules_owner_update ON public.funnel_automation_rules
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (user_id = (SELECT auth.uid()));
