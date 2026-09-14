@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, Filter, LayoutGrid, RotateCcw, Search, Settings2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Filter, LayoutGrid, RotateCcw, Search, Settings2, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 type Module = { id: string; title: string; description: string; route?: string; functions: string[] }
@@ -13,7 +13,7 @@ const modules: Module[] = [
   { id: 'vendas', title: 'Vendas', description: 'Acompanhamento das vendas e seus estados operacionais.', route: '/dashboard/vendas', functions: ['Evolução', 'Ticket médio', 'Aprovação', 'Recusa', 'Cancelamento', 'Reembolso', 'Produtos'] },
   { id: 'funis', title: 'Funis', description: 'Performance comercial dos funis sem duplicar suas entidades.', route: '/dashboard/funil', functions: ['Visitas', 'Leads', 'Conversão', 'Abandono', 'Vendas', 'Receita', 'Performance por etapa'] },
   { id: 'checkouts', title: 'Checkouts', description: 'Indicadores da jornada de checkout.', route: '/dashboard/checkout', functions: ['Checkouts', 'Visitas', 'Inícios', 'Pagamentos iniciados', 'Aprovações', 'Abandonos', 'Conversão'] },
-  { id: 'produtos', title: 'Produtos', description: 'Desempenho do catálogo e das ofertas. O módulo próprio ainda não está exposto nesta árvore.', functions: ['Vendas', 'Receita', 'Ticket médio', 'Conversão', 'Reembolsos', 'Chargebacks', 'Crescimento'] },
+  { id: 'produtos', title: 'Produtos', description: 'Desempenho do catálogo e das ofertas. A gestão permanece no domínio de Produtos.', functions: ['Vendas', 'Receita', 'Ticket médio', 'Conversão', 'Reembolsos', 'Chargebacks', 'Crescimento'] },
   { id: 'clientes', title: 'Clientes', description: 'Resumo da base de clientes e comportamento de compra.', route: '/dashboard/clientes', functions: ['Total', 'Novos', 'Recorrentes', 'Ativos', 'Retenção', 'Recompra', 'LTV'] },
   { id: 'pagamentos', title: 'Pagamentos', description: 'Estado operacional das transações.', route: '/dashboard/pagamentos', functions: ['Aprovados', 'Recusados', 'Pendentes', 'Cancelados', 'Reembolsos', 'Chargebacks', 'Métodos'] },
   { id: 'gateways', title: 'Gateways', description: 'Saúde e distribuição do processamento, sem duplicar a Central de Gateways.', route: '/dashboard/gateways', functions: ['Volume', 'Aprovação', 'Recusa', 'Falhas', 'Erros', 'Latência', 'Distribuição'] },
@@ -29,6 +29,7 @@ const modules: Module[] = [
 ]
 
 const allIds = modules.map((module) => module.id)
+const filterLabels = ['Produto', 'Oferta', 'Funil', 'Checkout', 'Gateway', 'Método de pagamento', 'Afiliado', 'Campanha', 'Origem', 'Status', 'Moeda']
 
 export default function DashboardOperationalMap() {
   const router = useRouter()
@@ -82,27 +83,28 @@ export default function DashboardOperationalMap() {
             <p className="mt-1 text-xs text-[#69736e]">O Dashboard espelha os domínios do ALTHEA PAY. Nenhum indicador é inventado quando a fonte ainda não existe.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setFilterOpen((value) => !value)} className="inline-flex items-center gap-2 rounded-xl border border-white/[0.07] bg-[#101311] px-3 py-2 text-xs font-bold"><Filter size={14} /> Filtros</button>
-            <button type="button" onClick={() => setCustomizeOpen((value) => !value)} className="inline-flex items-center gap-2 rounded-xl border border-white/[0.07] bg-[#101311] px-3 py-2 text-xs font-bold"><Settings2 size={14} /> Personalizar</button>
+            <button type="button" onClick={() => setFilterOpen((value) => !value)} aria-expanded={filterOpen} className="inline-flex items-center gap-2 rounded-xl border border-white/[0.07] bg-[#101311] px-3 py-2 text-xs font-bold"><Filter size={14} /> Filtros</button>
+            <button type="button" onClick={() => setCustomizeOpen((value) => !value)} aria-expanded={customizeOpen} className="inline-flex items-center gap-2 rounded-xl border border-white/[0.07] bg-[#101311] px-3 py-2 text-xs font-bold"><Settings2 size={14} /> Personalizar</button>
           </div>
         </div>
 
         <div className="mt-4 flex items-center gap-2 rounded-xl border border-white/[0.06] bg-[#0b0d0c] px-3">
           <Search size={15} className="shrink-0 text-[#69736e]" />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar área ou função..." aria-label="Pesquisar área ou função" className="h-11 w-full bg-transparent text-xs outline-none" />
+          {query && <button type="button" onClick={() => setQuery('')} aria-label="Limpar pesquisa" className="rounded-lg p-1 text-[#69736e] hover:text-white"><X size={14} /></button>}
         </div>
 
         {filterOpen && (
           <div className="mt-3 rounded-2xl border border-white/[0.06] bg-[#0d100e] p-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {['Produto', 'Oferta', 'Funil', 'Checkout', 'Gateway', 'Método de pagamento', 'Afiliado', 'Campanha', 'Origem', 'Status', 'Moeda'].map((label) => (
+              {filterLabels.map((label) => (
                 <div key={label} className="rounded-xl border border-white/[0.05] bg-[#0a0c0b] px-3 py-3">
                   <p className="text-[9px] font-black uppercase tracking-[0.12em] text-[#69736e]">{label}</p>
-                  <p className="mt-1 text-[10px] text-[#858e89]">Sem fonte configurada</p>
+                  <p className="mt-1 text-[10px] text-[#858e89]">Aguardando fonte real</p>
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-[10px] leading-5 text-[#69736e]">Os valores dos filtros serão habilitados quando os respectivos contratos de dados estiverem disponíveis. O Dashboard não fabrica opções para preencher controles vazios.</p>
+            <p className="mt-3 text-[10px] leading-5 text-[#69736e]">Os filtros não são interativos enquanto não houver contrato de dados para suas opções. Isso evita filtros que aparentam funcionar mas não alteram as métricas.</p>
           </div>
         )}
 
@@ -142,14 +144,14 @@ export default function DashboardOperationalMap() {
                     {module.functions.map((item) => (
                       <div key={item} className="rounded-xl border border-white/[0.05] bg-[#0d100e] p-3">
                         <span className="block text-[10px] font-semibold text-[#aeb7b2]">{item}</span>
-                        <span className="mt-2 block text-[9px] text-[#69736e]">Indicador depende de fonte real</span>
+                        <span className="mt-2 block text-[9px] text-[#69736e]">Sem fonte conectada</span>
                       </div>
                     ))}
                   </div>
                   {module.route ? (
                     <button type="button" onClick={() => router.push(module.route!)} className="mt-3 rounded-xl bg-[#1DB854] px-4 py-2.5 text-[10px] font-black text-[#07110c]">Abrir módulo</button>
                   ) : (
-                    <div className="mt-3 rounded-xl border border-white/[0.05] bg-[#0b0d0c] px-4 py-3 text-[10px] text-[#69736e]">Módulo ainda sem rota operacional publicada. Nenhum botão é exibido até existir destino real.</div>
+                    <div className="mt-3 rounded-xl border border-white/[0.05] bg-[#0b0d0c] px-4 py-3 text-[10px] text-[#69736e]">Esta área é somente de observação até existir uma fonte e uma rota operacional canônica.</div>
                   )}
                 </div>
               )}
