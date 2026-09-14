@@ -58,7 +58,7 @@ export default function AltheaDashboardControl() {
       if (error) throw error
       const value = data as Metrics
       setMetrics(value)
-      setLastUpdated(value.measuredAt || null)
+      setLastUpdated(value.measuredAt || new Date().toISOString())
       const gateways = Array.isArray(value.gateways) ? value.gateways : []
       const hasRealData = value.revenue > 0 || value.paidSales > 0 || value.waitingPix > 0 || value.checkoutHits > 0
       setSync(hasRealData || gateways.length > 0 ? 'synchronized' : 'empty')
