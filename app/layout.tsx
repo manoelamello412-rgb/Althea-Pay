@@ -53,6 +53,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           .wl-sidebar nav>div:nth-child(5) button span::after{content:'Clientes';font-size:11px}
           .wl-sidebar nav>div:nth-child(7) button span::after{content:'Integrações';font-size:11px}
           .wl-sidebar nav>div:nth-child(8) button span::after{content:'Configurações';font-size:11px}
+          .settings-tabs .settings-tab:nth-child(2){display:none!important}
           .wl-main{width:calc(100% - 244px)!important;margin-left:244px!important;padding:26px 30px 56px!important}
           .wl-shell.is-collapsed .wl-main{width:calc(100% - 76px)!important;margin-left:76px!important}
           .wl-header{margin-bottom:20px!important}
