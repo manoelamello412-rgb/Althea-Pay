@@ -1,8 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
-const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+import { getSupabasePublicConfig } from './public-config'
 
 let browserClient: SupabaseClient | undefined
 
@@ -17,13 +15,8 @@ function getBrowserClient(): SupabaseClient {
     throw new Error('Supabase browser client accessed before browser hydration')
   }
 
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    throw new Error(
-      'Supabase browser configuration is missing. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.'
-    )
-  }
-
-  browserClient = createBrowserClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+  const { url, publishableKey } = getSupabasePublicConfig()
+  browserClient = createBrowserClient(url, publishableKey)
   return browserClient
 }
 
