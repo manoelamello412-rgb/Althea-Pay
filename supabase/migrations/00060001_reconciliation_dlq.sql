@@ -80,7 +80,6 @@ create index if not exists reconciliation_items_run_status_idx on public.reconci
 create index if not exists reconciliation_items_transaction_idx on public.reconciliation_items(transaction_id) where transaction_id is not null;
 create index if not exists event_dead_letters_user_status_idx on public.event_dead_letters(user_id, resolved_at, created_at desc);
 create index if not exists event_dead_letters_event_idx on public.event_dead_letters(event_id) where event_id is not null;
-create index if not exists audit_logs_actor_idx on public.audit_logs(actor_id, created_at desc) where actor_id is not null;
 create index if not exists checkout_items_checkout_id_idx on public.checkout_items(checkout_id);
 create index if not exists disputes_transaction_id_idx on public.disputes(transaction_id) where transaction_id is not null;
 create index if not exists gateway_operation_logs_gateway_id_idx on public.gateway_operation_logs(gateway_id, created_at desc) where gateway_id is not null;
