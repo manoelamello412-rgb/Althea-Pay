@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
+const FUNNEL_TYPES = new Set(['sales', 'lead_capture', 'launch', 'product', 'upsell_downsell', 'subscription', 'custom'])
+
 const json = (body: unknown, status = 200) =>
   NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
 
@@ -23,10 +25,12 @@ export async function POST(request: Request) {
     const name = typeof body?.name === 'string' ? body.name.trim() : ''
     const url = typeof body?.url === 'string' ? body.url.trim() : null
     const connectionType = typeof body?.connection_type === 'string' ? body.connection_type.trim() : 'script'
+    const funnelType = typeof body?.funnel_type === 'string' ? body.funnel_type.trim() : 'custom'
     if (!name) return json({ error: 'name is required' }, 400)
     if (name.length > 120) return json({ error: 'name is too long' }, 400)
     if (url && url.length > 2048) return json({ error: 'url is too long' }, 400)
     if (connectionType !== 'script' && connectionType !== 'webhook') return json({ error: 'invalid connection_type' }, 400)
+    if (!FUNNEL_TYPES.has(funnelType)) return json({ error: 'invalid funnel_type' }, 400)
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
     if (!supabaseUrl) return json({ error: 'Supabase URL is not configured for this environment.' }, 500)
@@ -42,8 +46,9 @@ export async function POST(request: Request) {
       url,
       endpoint: eventEndpoint,
       status: 'active',
+      funnel_type: funnelType,
       user_id: user.id,
-    }).select('id,nome,url,endpoint,status,created_at').single()
+    }).select('id,nome,url,endpoint,status,funnel_type,created_at').single()
     if (funnel.error) return json({ error: funnel.error.message }, 400)
 
     const connection = await supabase.from('funnel_connections').insert({
@@ -52,7 +57,7 @@ export async function POST(request: Request) {
       connection_type: connectionType,
       status: 'active',
       health_status: 'unknown',
-      config: { protocol_version: '2026-09', event_endpoint: eventEndpoint },
+      config: { protocol_version: '2026-09', event_endpoint: eventEndpoint, funnel_type: funnelType },
       connected_at: new Date().toISOString(),
     }).select('id,funnel_id,connection_type,status,health_status,connected_at').single()
     if (connection.error) {
