@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/supabase/public-config'
+import { getSupabasePublicConfig } from '@/lib/supabase/public-config'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-const SUPABASE_KEY = SUPABASE_PUBLISHABLE_KEY
-const SUPABASE_URL_VALUE = SUPABASE_URL
-const TARGET = `${SUPABASE_URL_VALUE}/functions/v1/funnel-events`
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -122,11 +118,12 @@ export async function POST(request: NextRequest) {
       return json({ success: false, error: 'invalid_event_contract' }, 400)
     }
 
-    const upstream = await fetch(TARGET, {
+    const { url, publishableKey } = getSupabasePublicConfig()
+    const upstream = await fetch(`${url}/functions/v1/funnel-events`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        apikey: SUPABASE_KEY,
+        apikey: publishableKey,
         'x-funnel-event-token': token,
       },
       body: JSON.stringify(event),
