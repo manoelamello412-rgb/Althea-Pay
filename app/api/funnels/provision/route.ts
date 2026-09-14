@@ -3,92 +3,54 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 const FUNNEL_TYPES = new Set(['sales', 'lead_capture', 'launch', 'product', 'upsell_downsell', 'subscription', 'custom'])
 
-const json = (body: unknown, status = 200) =>
-  NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
+const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
 
-async function sha256(value: string) {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
-  return Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-function slug(value: string) {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'funnel'
+function normalizeUrl(value: string | null) {
+  const clean = value?.trim() ?? ''
+  if (!clean) return null
+  return /^https?:\/\//i.test(clean) ? clean : `https://${clean}`
 }
 
 export async function POST(request: Request) {
   try {
     const supabase = await createSupabaseServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return json({ error: 'unauthorized' }, 401)
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return json({ error: 'unauthorized' }, 401)
 
     const body = await request.json().catch(() => ({}))
     const name = typeof body?.name === 'string' ? body.name.trim() : ''
-    const url = typeof body?.url === 'string' ? body.url.trim() : null
+    const rawUrl = typeof body?.url === 'string' ? body.url.trim() : null
     const connectionType = typeof body?.connection_type === 'string' ? body.connection_type.trim() : 'script'
     const funnelType = typeof body?.funnel_type === 'string' ? body.funnel_type.trim() : 'custom'
+
     if (!name) return json({ error: 'name is required' }, 400)
     if (name.length > 120) return json({ error: 'name is too long' }, 400)
-    if (url && url.length > 2048) return json({ error: 'url is too long' }, 400)
+    if (rawUrl && rawUrl.length > 2048) return json({ error: 'url is too long' }, 400)
     if (connectionType !== 'script' && connectionType !== 'webhook') return json({ error: 'invalid connection_type' }, 400)
     if (!FUNNEL_TYPES.has(funnelType)) return json({ error: 'invalid funnel_type' }, 400)
 
+    const url = normalizeUrl(rawUrl)
+    if (url) {
+      try { new URL(url) } catch { return json({ error: 'invalid url' }, 400) }
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
     if (!supabaseUrl) return json({ error: 'Supabase URL is not configured for this environment.' }, 500)
-
-    const funnelId = `funnel_${slug(name)}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`
-    const ingestionToken = `alt_fnl_${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`
-    const tokenHash = await sha256(ingestionToken)
     const eventEndpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/funnel-events`
 
-    const funnel = await supabase.from('funnels').insert({
-      id: funnelId,
-      nome: name,
-      url,
-      endpoint: eventEndpoint,
-      status: 'active',
-      funnel_type: funnelType,
-      user_id: user.id,
-    }).select('id,nome,url,endpoint,status,funnel_type,created_at').single()
-    if (funnel.error) return json({ error: funnel.error.message }, 400)
-
-    const connection = await supabase.from('funnel_connections').insert({
-      user_id: user.id,
-      funnel_id: funnelId,
-      connection_type: connectionType,
-      status: 'active',
-      health_status: 'unknown',
-      config: { protocol_version: '2026-09', event_endpoint: eventEndpoint, funnel_type: funnelType },
-      connected_at: new Date().toISOString(),
-    }).select('id,funnel_id,connection_type,status,health_status,connected_at').single()
-    if (connection.error) {
-      await supabase.from('funnels').delete().eq('id', funnelId).eq('user_id', user.id)
-      return json({ error: connection.error.message }, 400)
+    const { data, error } = await supabase.rpc('provision_funnel_atomic', {
+      p_name: name,
+      p_url: url,
+      p_connection_type: connectionType,
+      p_funnel_type: funnelType,
+      p_event_endpoint: eventEndpoint,
+    })
+    if (error) {
+      const status = error.message === 'unauthorized' ? 401 : error.message.startsWith('invalid ') || error.message.endsWith('is required') || error.message.endsWith('is too long') ? 400 : 500
+      return json({ error: status === 500 ? 'internal_error' : error.message }, status)
     }
 
-    const token = await supabase.from('funnel_ingestion_tokens').insert({
-      user_id: user.id,
-      funnel_id: funnelId,
-      token_prefix: ingestionToken.slice(0, 14),
-      token_hash: tokenHash,
-      enabled: true,
-    }).select('id,funnel_id,token_prefix,enabled,created_at').single()
-    if (token.error) {
-      await supabase.from('funnel_connections').delete().eq('id', connection.data.id).eq('user_id', user.id)
-      await supabase.from('funnels').delete().eq('id', funnelId).eq('user_id', user.id)
-      return json({ error: token.error.message }, 400)
-    }
-
-    return json({
-      funnel: funnel.data,
-      connection: connection.data,
-      ingestion: {
-        id: token.data.id,
-        token_prefix: token.data.token_prefix,
-        token: ingestionToken,
-        event_endpoint: eventEndpoint,
-      },
-      warning: 'Store the ingestion token securely. It is returned only during provisioning.',
-    }, 201)
+    return json(data, 201)
   } catch (cause) {
     console.error('[funnels/provision]', cause)
     return json({ error: 'internal_error' }, 500)
