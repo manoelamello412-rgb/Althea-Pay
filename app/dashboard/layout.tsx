@@ -6,14 +6,14 @@ import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
 
 const routes: Record<MobileShellTab, string> = {
   dashboard: '/dashboard',
-  gateway: '/dashboard/gateways',
+  vendas: '/dashboard/vendas',
   chat: '/dashboard/crm',
   ia: '/dashboard/ia',
   funil: '/dashboard/funil',
 }
 
 function tabFromPath(pathname: string): MobileShellTab {
-  if (pathname.startsWith('/dashboard/gateways')) return 'gateway'
+  if (pathname.startsWith('/dashboard/vendas')) return 'vendas'
   if (pathname.startsWith('/dashboard/crm')) return 'chat'
   if (pathname.startsWith('/dashboard/ia')) return 'ia'
   if (pathname.startsWith('/dashboard/funil')) return 'funil'
