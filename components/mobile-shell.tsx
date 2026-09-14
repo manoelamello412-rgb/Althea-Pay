@@ -5,14 +5,14 @@ import { CircleDollarSign, GitBranch, LayoutDashboard, LogOut, MessageCircle, Ne
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
 
-export type MobileShellTab = 'dashboard' | 'gateway' | 'chat' | 'ia' | 'funil'
+export type MobileShellTab = 'dashboard' | 'vendas' | 'chat' | 'ia' | 'funil'
 
 type MenuItem = { label: string; href: string; icon?: typeof LayoutDashboard }
 type MenuSection = { title: string; items: MenuItem[] }
 
 const bottomTabs = [
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { id: 'gateway', label: 'Gateway', href: '/dashboard/gateways', icon: Network },
+  { id: 'vendas', label: 'Vendas', href: '/dashboard/vendas', icon: CircleDollarSign },
   { id: 'chat', label: 'Chat', href: '/dashboard/crm', icon: MessageCircle },
   { id: 'ia', label: 'IA', href: '/dashboard/ia', icon: Sparkles },
   { id: 'funil', label: 'Funis', href: '/dashboard/funil', icon: GitBranch },
