@@ -21,7 +21,6 @@ export default function SalesMobile() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
   const today = todayInSaoPaulo()
   const minDate = shiftDays(today, -89)
-  const [active, setActive] = useState('vendas')
   const [sales, setSales] = useState<Sale[]>([])
   const [query, setQuery] = useState('')
   const [filterOpen, setFilterOpen] = useState(false)
@@ -47,7 +46,7 @@ export default function SalesMobile() {
     try {
       const { data: auth } = await db.auth.getUser()
       if (!auth.user) { setSales([]); return }
-      const q = await db.from('sales').select('id,amount,status,currency,data,gateway_id,external_id,transaction_id,customer_id,occurred_at,created_at').order('occurred_at', { ascending: false }).limit(5000)
+      const q = await db.from('sales').select('id,amount,status,currency,data,gateway_id,external_id,transaction_id,customer_id,occurred_at,created_at').eq('user_id', auth.user.id).order('occurred_at', { ascending: false }).limit(5000)
       if (q.error) throw q.error
       setSales((q.data || []) as Sale[])
     } catch (cause) {
@@ -56,9 +55,17 @@ export default function SalesMobile() {
   }, [db])
 
   useEffect(() => { void load() }, [load])
-  useEffect(() => { let channel: ReturnType<typeof db.channel> | null = null; let cancelled = false; const subscribe = async () => { const { data: auth } = await db.auth.getUser(); if (cancelled || !auth.user) return; channel = db.channel(`sales-mobile-${auth.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, () => void load()).subscribe() }; void subscribe(); return () => { cancelled = true; if (channel) void db.removeChannel(channel) } }, [db, load])
-  useEffect(() => { const h = (event: Event) => setActive((event as CustomEvent<string>).detail || 'dashboard'); window.addEventListener('althea-mobile-page', h); return () => window.removeEventListener('althea-mobile-page', h) }, [])
-  const go = (page: string) => { setActive(page); window.dispatchEvent(new CustomEvent('althea-mobile-page', { detail: page })) }
+  useEffect(() => {
+    let channel: ReturnType<typeof db.channel> | null = null
+    let cancelled = false
+    const subscribe = async () => {
+      const { data: auth } = await db.auth.getUser()
+      if (cancelled || !auth.user) return
+      channel = db.channel(`sales-mobile-${auth.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'sales', filter: `user_id=eq.${auth.user.id}` }, () => void load()).subscribe()
+    }
+    void subscribe()
+    return () => { cancelled = true; if (channel) void db.removeChannel(channel) }
+  }, [db, load])
 
   const filtered = useMemo(() => sales.filter((sale) => {
     const data = obj(sale.data); const customer = obj(data.customer)
@@ -76,17 +83,16 @@ export default function SalesMobile() {
   const totals = useMemo(() => ({ total: filtered.reduce((sum, sale) => sum + amountOf(sale), 0), paid: filtered.filter((sale) => isApproved(sale.status)).length, pending: filtered.filter((sale) => isPending(sale.status)).length }), [filtered])
   const clear = () => { setQuery(''); setStartDate(today); setEndDate(today); setStatus('Todas'); setDraftStatus('Todas') }
   const label = (sale: Sale) => ({ approved: 'Aprovada', pending: 'Pendente', failed: 'Falhou', cancelled: 'Cancelada', refunded: 'Reembolsada', chargeback: 'Chargeback' } as Record<string, string>)[normalizeStatus(sale.status)] ?? 'Outro'
-  if (active !== 'vendas') return null
 
   return <section className="althea-mobile-sales" aria-label="Vendas mobile">
-    <main className="ams-content"><div className="mb-5"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#1DBB54]">Operação</p><h1 className="mt-2 text-[30px] font-semibold tracking-[-0.045em] text-white">Vendas</h1><p className="mt-1 text-sm text-[#7f8b85]">Transações reais da sua operação.</p></div>
+    <main className="ams-content">
+      <div className="mb-5"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#1DBB54]">Operação</p><h1 className="mt-2 text-[30px] font-semibold tracking-[-0.045em] text-white">Vendas</h1><p className="mt-1 text-sm text-[#7f8b85]">Transações reais da sua operação.</p></div>
       <label className="ams-search"><Search size={15} /><input value={query} onChange={(e) => setQuery(e.target.value)} type="search" placeholder="Buscar transações..." aria-label="Buscar transações" /></label>
       <div className="ams-filters"><div className="ams-date-range"><div><span>De</span><input type="date" value={startDate} min={minDate} max={endDate || today} onChange={(e) => setRange(e.target.value, endDate || today)} /></div><i>|</i><div><span>Até</span><input type="date" value={endDate} min={startDate || minDate} max={today} onChange={(e) => setRange(startDate || minDate, e.target.value)} /></div></div><button className="ams-filter" type="button" onClick={() => { setDraftStatus(status); setFilterOpen(true) }}><Filter size={13} /><span>Filtros{status !== 'Todas' ? ` · ${status}` : ''}</span></button></div>
       <div className="ams-period-line"><button type="button" onClick={() => setPeriodOpen((value) => !value)}>Calendário · {startDate === today && endDate === today ? 'Hoje' : `${fmtDate(startDate || minDate)} — ${fmtDate(endDate || today)}`} <span>⌄</span></button>{periodOpen && <div className="ams-inline-menu"><button type="button" onClick={() => { setRange(today, today); setPeriodOpen(false) }}>Hoje</button><button type="button" onClick={() => { setRange(shiftDays(today, -6), today); setPeriodOpen(false) }}>Últimos 7 dias</button><button type="button" onClick={() => { setRange(shiftDays(today, -29), today); setPeriodOpen(false) }}>Últimos 30 dias</button><button type="button" onClick={() => { setRange(minDate, today); setPeriodOpen(false) }}>Últimos 90 dias</button></div>}</div>
       <section className="ams-transactions"><div className="ams-table-head"><span>Cliente</span><span>Valor</span><span>Status</span></div>{loading ? <div className="ams-empty"><div className="ams-empty-icon" /><strong>Carregando vendas</strong><p>Sincronizando dados reais.</p></div> : error ? <div className="ams-empty"><div className="ams-empty-icon"><X size={21} /></div><strong>Falha na sincronização</strong><p>{error}</p><button type="button" onClick={() => void load()}>Tentar novamente</button></div> : filtered.length ? <div className="ams-list">{filtered.map((sale) => { const customer = obj(obj(sale.data).customer); return <button key={sale.id} type="button" className="ams-sale-row" onClick={() => setSelected(sale)}><span className="ams-sale-client"><b>{text(customer.name) || text(customer.full_name) || text(customer.email) || sale.external_id || sale.customer_id || sale.id}</b><small>{fmtDate(dateOf(sale))} · {sale.gateway_id || 'Gateway não informado'}</small></span><span className="ams-sale-value">{fmtMoney(amountOf(sale))}</span><span className={`ams-sale-status ${isApproved(sale.status) ? 'paid' : isPending(sale.status) ? 'pending' : 'other'}`}>{label(sale)}</span></button> })}</div> : <div className="ams-empty"><div className="ams-empty-icon"><CreditCard size={21} /></div><strong>Nenhuma transação encontrada</strong><p>Tente ajustar os filtros ou o período selecionado.</p><button type="button" onClick={clear}>Limpar filtros</button></div>}</section>
       <section className="ams-summary"><article><span>Volume</span><strong>{fmtMoney(totals.total)}</strong></article><article><span>Aprovadas</span><strong>{totals.paid}</strong></article><article><span>Pend.</span><strong>{totals.pending}</strong></article></section>
     </main>
-    <nav className="ams-bottom-nav" aria-label="Navegação principal">{[['dashboard', 'Dashboard'], ['vendas', 'Vendas'], ['funis', 'Funis/Chat'], ['gateways', 'Gateways'], ['configuracoes', 'Config.']].map(([key, labelText]) => <button key={key} type="button" className={active === key ? 'active' : ''} onClick={() => go(key)}><span>{key === 'dashboard' ? '▦' : key === 'vendas' ? '▤' : key === 'funis' ? '♧' : key === 'gateways' ? '◈' : '⚙'}</span><small>{labelText}</small></button>)}</nav>
     {selected && <div className="ams-modal" role="dialog" aria-modal="true" aria-label="Detalhes da venda" onClick={(e) => { if (e.currentTarget === e.target) setSelected(null) }}><div className="ams-sheet"><div className="ams-handle" /><div className="ams-sheet-title"><h2>Detalhes da venda</h2><button type="button" aria-label="Fechar" onClick={() => setSelected(null)}><X size={17} /></button></div><div className="ams-sale-detail"><div><span>Status</span><b>{label(selected)}</b></div><div><span>Valor</span><b>{fmtMoney(amountOf(selected))}</b></div><div><span>Data</span><b>{fmtDateTime(selected.occurred_at ?? selected.created_at ?? '')}</b></div><div><span>ID</span><b>{selected.id}</b></div><div><span>Transação externa</span><b>{selected.external_id || selected.transaction_id || 'Não informado'}</b></div><div><span>Gateway</span><b>{selected.gateway_id || 'Não informado'}</b></div></div><button className="ams-apply" type="button" onClick={() => setSelected(null)}><CheckCircle2 size={15} /> Fechar</button></div></div>}
     {filterOpen && <div className="ams-modal" role="dialog" aria-modal="true" aria-label="Filtrar transações" onClick={(e) => { if (e.currentTarget === e.target) setFilterOpen(false) }}><div className="ams-sheet"><div className="ams-handle" /><div className="ams-sheet-title"><h2>Filtrar transações</h2><button type="button" aria-label="Fechar" onClick={() => setFilterOpen(false)}><X size={17} /></button></div>{['Todas', 'Pagas', 'Pendentes', 'Canceladas'].map((item) => <button key={item} type="button" className={draftStatus === item ? 'selected' : ''} onClick={() => setDraftStatus(item)}><span>{item}</span><b>{draftStatus === item ? '✓' : '○'}</b></button>)}<button className="ams-apply" type="button" onClick={() => { setStatus(draftStatus); setFilterOpen(false) }}>Aplicar filtros</button></div></div>}
   </section>
