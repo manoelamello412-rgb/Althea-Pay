@@ -27,13 +27,14 @@ Deno.serve(async (req) => {
   const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 50, 1), 100);
   try {
     const now = new Date().toISOString();
-    const { data: events, error } = await db.from("integration_events").select("id,user_id,funnel_id,event_type,external_id,status,payload,event_key,processed_at,error_message,retry_count,next_retry_at,claimed_at,claim_attempt").in("status", ["pending", "failed"]).or(`next_retry_at.is.null,next_retry_at.lte.${now}`).order("created_at", { ascending: true }).limit(limit);
+    const retryableStatuses = ["pending", "failed", "retry", "received"];
+    const { data: events, error } = await db.from("integration_events").select("id,user_id,funnel_id,event_type,external_id,status,payload,event_key,processed_at,error_message,retry_count,next_retry_at,claimed_at,claim_attempt").in("status", retryableStatuses).or(`next_retry_at.is.null,next_retry_at.lte.${now}`).order("created_at", { ascending: true }).limit(limit);
     if (error) throw error;
     let processed = 0, failed = 0;
     for (const event of events ?? []) {
       const retryCount = Number(event.retry_count ?? 0) + 1;
       try {
-        const { data: claimedEvent, error: claimError } = await db.from("integration_events").update({ status: "processing", retry_count: retryCount, claimed_at: new Date().toISOString(), claim_attempt: Number(event.claim_attempt ?? 0) + 1, error_message: null }).eq("id", event.id).in("status", ["pending", "failed"]).select("id").maybeSingle();
+        const { data: claimedEvent, error: claimError } = await db.from("integration_events").update({ status: "processing", retry_count: retryCount, claimed_at: new Date().toISOString(), claim_attempt: Number(event.claim_attempt ?? 0) + 1, error_message: null }).eq("id", event.id).in("status", retryableStatuses).select("id").maybeSingle();
         if (claimError) throw claimError;
         if (!claimedEvent) continue;
         const response = await fetch(`${supabaseUrl}/functions/v1/automation-engine-v2`, { method: "POST", headers: { "content-type": "application/json", "x-internal-secret": internalSecret }, body: JSON.stringify({ event_id: event.id, event_type: event.event_type, user_id: event.user_id, funnel_id: event.funnel_id, external_id: event.external_id, payload: event.payload ?? {} }) });
