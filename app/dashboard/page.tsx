@@ -1,7 +1,7 @@
 'use client'
 
-import AltheaDashboardControl from '@/components/althea-dashboard-control'
+import DashboardComplete from '@/components/dashboard-complete'
 
 export default function DashboardPage() {
-  return <AltheaDashboardControl />
+  return <DashboardComplete />
 }
