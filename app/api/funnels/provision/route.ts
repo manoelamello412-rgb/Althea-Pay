@@ -26,12 +26,15 @@ export async function POST(request: Request) {
     if (!name) return json({ error: 'name is required' }, 400)
     if (name.length > 120) return json({ error: 'name is too long' }, 400)
     if (url && url.length > 2048) return json({ error: 'url is too long' }, 400)
+    if (connectionType !== 'script' && connectionType !== 'webhook') return json({ error: 'invalid connection_type' }, 400)
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+    if (!supabaseUrl) return json({ error: 'Supabase URL is not configured for this environment.' }, 500)
 
     const funnelId = `funnel_${slug(name)}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`
     const ingestionToken = `alt_fnl_${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`
     const tokenHash = await sha256(ingestionToken)
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hkraryqoziravulvqkid.supabase.co'
-    const eventEndpoint = `${supabaseUrl}/functions/v1/funnel-events`
+    const eventEndpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/funnel-events`
 
     const funnel = await supabase.from('funnels').insert({
       id: funnelId,
@@ -46,7 +49,7 @@ export async function POST(request: Request) {
     const connection = await supabase.from('funnel_connections').insert({
       user_id: user.id,
       funnel_id: funnelId,
-      connection_type: connectionType || 'script',
+      connection_type: connectionType,
       status: 'active',
       health_status: 'unknown',
       config: { protocol_version: '2026-09', event_endpoint: eventEndpoint },
@@ -81,7 +84,8 @@ export async function POST(request: Request) {
       },
       warning: 'Store the ingestion token securely. It is returned only during provisioning.',
     }, 201)
-  } catch {
+  } catch (cause) {
+    console.error('[funnels/provision]', cause)
     return json({ error: 'internal_error' }, 500)
   }
 }
