@@ -5,7 +5,6 @@ import { ArrowRight, CalendarDays, Clock3, Eye, EyeOff, Network, ShoppingBag, Wi
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-type Gender = 'M' | 'F' | 'outro'
 type Gateway = { gateway_code: string; gateway_name: string; is_operational: boolean; latency_ms: number | null; circuit_state: string; checked_at: string }
 type Metrics = { revenue: number; paidSales: number; waitingPix: number; checkoutHits: number; conversionRate: number; gateways: Gateway[]; measuredAt: string | null }
 type SyncState = 'loading' | 'synchronized' | 'empty' | 'error' | 'reconnecting' | 'unauthorized'
@@ -29,7 +28,6 @@ export default function AltheaDashboardControl() {
   const [periodOpen, setPeriodOpen] = useState(false)
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [name, setName] = useState<string | null>(null)
-  const [gender, setGender] = useState<Gender>('outro')
   const [muted, setMuted] = useState(false)
   const [sync, setSync] = useState<SyncState>('loading')
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
@@ -40,7 +38,7 @@ export default function AltheaDashboardControl() {
     const { data: auth, error } = await supabase.auth.getUser()
     if (error) throw error
     if (!auth.user) return false
-    const { data: profile, error: profileError } = await supabase.from('profiles').select('display_name,full_name,gender').eq('id', auth.user.id).maybeSingle()
+    const { data: profile, error: profileError } = await supabase.from('profiles').select('display_name,full_name').eq('id', auth.user.id).maybeSingle()
     if (profileError) {
       console.warn('[ALTHEA-DASHBOARD] profile hydration unavailable; continuing with auth metadata', profileError)
     }
@@ -48,8 +46,6 @@ export default function AltheaDashboardControl() {
     const profileName = profile?.display_name || profile?.full_name || metadata.display_name || metadata.name || auth.user.email || ''
     const resolvedName = firstName(String(profileName))
     if (resolvedName) setName(resolvedName)
-    const value = profile?.gender ?? metadata.gender
-    setGender(value === 'M' || value === 'F' ? value : 'outro')
     return true
   }, [supabase])
 
@@ -90,7 +86,6 @@ export default function AltheaDashboardControl() {
     return () => { cancelled = true; for (const channel of channels) void supabase.removeChannel(channel) }
   }, [loadMetrics, supabase])
 
-  const greeting = gender === 'F' ? 'Seja bem-vinda' : gender === 'M' ? 'Seja bem-vindo' : 'Acompanhe sua operação em tempo real.'
   const hasGatewayHealth = Boolean(metrics?.gateways?.length)
   const hasRealFinancialData = (metrics?.revenue ?? 0) > 0 || (metrics?.paidSales ?? 0) > 0 || (metrics?.waitingPix ?? 0) > 0 || (metrics?.checkoutHits ?? 0) > 0
   const syncLabel: Record<SyncState, string> = { loading: 'Sincronizando', synchronized: 'Sincronizado', empty: 'Aguardando conexão', error: 'Sincronização indisponível', reconnecting: 'Reconectando', unauthorized: 'Sessão não autorizada' }
@@ -114,8 +109,7 @@ export default function AltheaDashboardControl() {
           <h1 className="text-[30px] font-bold tracking-tight sm:text-[34px]">
             Olá, {name ? name : <span className="inline-block h-[1.15em] w-24 animate-pulse rounded-md bg-white/[0.06] align-middle" aria-label="Carregando nome" />} <span className="inline-block origin-[70%_70%] animate-[althea-wave_2.5s_ease-in-out_infinite]" aria-hidden="true">👋</span>
           </h1>
-          <p className="mt-2 text-sm text-[var(--althea-muted)]">{greeting}</p>
-          <p className="mt-2 text-xs text-[#69736e]">Veja o resumo do seu desempenho!</p>
+          <p className="mt-2 text-sm text-[var(--althea-muted)]">Acompanhe o desempenho da sua raiz em um só lugar.</p>
           <p className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-mono text-[#77817c]"><Clock3 size={12} aria-hidden="true" />Última atualização: {formattedLastUpdated}</p>
         </section>
 
