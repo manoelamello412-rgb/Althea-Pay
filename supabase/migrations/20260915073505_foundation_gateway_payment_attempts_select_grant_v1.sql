@@ -1,0 +1,1 @@
+grant select on table public.gateway_payment_attempts to authenticated;
