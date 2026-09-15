@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { CheckCircle2, Clock3, CreditCard, RefreshCw, Search, ShoppingCart, XCircle } from 'lucide-react'
 
-type CheckoutStatus = 'pending' | 'completed' | 'abandoned' | 'failed' | string
+type CheckoutStatus = 'started' | 'pending' | 'processing' | 'completed' | 'abandoned' | 'failed' | string
 
 type CheckoutSession = {
   id: string
@@ -41,7 +41,7 @@ function money(amount: number | string | null, currency: string | null): string 
 }
 
 function statusLabel(status: string): string {
-  const labels: Record<string, string> = { pending: 'Pendente', completed: 'Concluído', abandoned: 'Abandonado', failed: 'Falhou' }
+  const labels: Record<string, string> = { started: 'Iniciado', pending: 'Pendente', processing: 'Processando', completed: 'Concluído', abandoned: 'Abandonado', failed: 'Falhou' }
   return labels[status.toLowerCase()] || status
 }
 
@@ -50,6 +50,7 @@ function statusClass(status: string): string {
     case 'completed': return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
     case 'failed': return 'border-rose-400/20 bg-rose-400/10 text-rose-300'
     case 'abandoned': return 'border-amber-400/20 bg-amber-400/10 text-amber-300'
+    case 'processing': return 'border-sky-400/20 bg-sky-400/10 text-sky-300'
     default: return 'border-white/10 bg-white/[0.04] text-zinc-300'
   }
 }
@@ -83,11 +84,10 @@ export default function CheckoutsPage() {
     const [{ data: checkoutData, error: checkoutError }, { data: funnelData, error: funnelError }, { data: productData, error: productError }] = await Promise.all([
       supabase.from('checkout_sessions')
         .select('id,funnel_id,product_id,status,currency,amount,customer,attribution,created_at,updated_at,abandoned_at,completed_at,recovery_count,recovery_status')
-        .eq('user_id', auth.user.id)
         .order('created_at', { ascending: false })
         .limit(200),
-      supabase.from('funnels').select('id,nome').eq('user_id', auth.user.id).is('deleted_at', null),
-      supabase.from('products').select('id,data').eq('user_id', auth.user.id).limit(200),
+      supabase.from('funnels').select('id,nome').is('deleted_at', null),
+      supabase.from('products').select('id,data').is('deleted_at', null).limit(200),
     ])
 
     if (checkoutError) throw checkoutError
@@ -124,14 +124,16 @@ export default function CheckoutsPage() {
     return sessions.filter((item) => {
       if (status !== 'all' && item.status.toLowerCase() !== status) return false
       if (!normalized) return true
-      const haystack = [item.id, customerName(item.customer), text(item.customer?.email), funnelMap.get(item.funnel_id || ''), productName(productMap.get(item.product_id || ''), item.product_id), text(item.attribution?.source), text(item.attribution?.campaign)].join(' ').toLowerCase()
+      const customer = record(item.customer)
+      const attribution = record(item.attribution)
+      const haystack = [item.id, customerName(customer), text(customer.email), funnelMap.get(item.funnel_id || ''), productName(productMap.get(item.product_id || ''), item.product_id), text(attribution.source), text(attribution.campaign)].join(' ').toLowerCase()
       return haystack.includes(normalized)
     })
   }, [funnelMap, productMap, query, sessions, status])
 
   const metrics = useMemo(() => ({
     total: sessions.length,
-    pending: sessions.filter((item) => item.status.toLowerCase() === 'pending').length,
+    pending: sessions.filter((item) => ['started', 'pending', 'processing'].includes(item.status.toLowerCase())).length,
     completed: sessions.filter((item) => item.status.toLowerCase() === 'completed').length,
     abandoned: sessions.filter((item) => item.status.toLowerCase() === 'abandoned').length,
   }), [sessions])
@@ -153,7 +155,7 @@ export default function CheckoutsPage() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric icon={ShoppingCart} label="Sessões" value={metrics.total} />
-        <Metric icon={Clock3} label="Pendentes" value={metrics.pending} />
+        <Metric icon={Clock3} label="Em andamento" value={metrics.pending} />
         <Metric icon={CheckCircle2} label="Concluídos" value={metrics.completed} />
         <Metric icon={XCircle} label="Abandonados" value={metrics.abandoned} />
       </div>
@@ -165,7 +167,7 @@ export default function CheckoutsPage() {
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar cliente, funil, produto ou campanha..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[var(--althea-muted)]" />
           </label>
           <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filtrar por status" className="h-11 rounded-xl border border-white/[0.07] bg-[#111513] px-3 text-sm text-white outline-none">
-            <option value="all">Todos os status</option><option value="pending">Pendentes</option><option value="completed">Concluídos</option><option value="abandoned">Abandonados</option><option value="failed">Falhos</option>
+            <option value="all">Todos os status</option><option value="started">Iniciados</option><option value="pending">Pendentes</option><option value="processing">Processando</option><option value="completed">Concluídos</option><option value="abandoned">Abandonados</option><option value="failed">Falhos</option>
           </select>
         </div>
 
@@ -179,7 +181,7 @@ export default function CheckoutsPage() {
           ) : (
             <table className="w-full min-w-[850px] text-left text-sm">
               <thead><tr className="border-b border-white/[0.06] text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--althea-muted)]"><th className="px-3 py-3">Cliente</th><th className="px-3 py-3">Funil</th><th className="px-3 py-3">Produto</th><th className="px-3 py-3">Valor</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Criado</th></tr></thead>
-              <tbody>{filtered.map((item) => <tr key={item.id} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]"><td className="px-3 py-4"><p className="font-medium text-white">{customerName(item.customer)}</p><p className="mt-0.5 text-xs text-[var(--althea-muted)]">{text(item.customer?.email) || item.id.slice(0, 12)}</p></td><td className="px-3 py-4 text-zinc-300">{funnelMap.get(item.funnel_id || '') || '—'}</td><td className="px-3 py-4 text-zinc-300">{productName(productMap.get(item.product_id || ''), item.product_id)}</td><td className="px-3 py-4 font-medium text-white">{money(item.amount, item.currency)}</td><td className="px-3 py-4"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(item.status)}`}>{statusLabel(item.status)}</span></td><td className="px-3 py-4 text-xs text-[var(--althea-muted)]">{new Date(item.created_at).toLocaleString('pt-BR')}</td></tr>)}</tbody>
+              <tbody>{filtered.map((item) => <tr key={item.id} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]"><td className="px-3 py-4"><p className="font-medium text-white">{customerName(item.customer)}</p><p className="mt-0.5 text-xs text-[var(--althea-muted)]">{text(record(item.customer).email) || item.id.slice(0, 12)}</p></td><td className="px-3 py-4 text-zinc-300">{funnelMap.get(item.funnel_id || '') || '—'}</td><td className="px-3 py-4 text-zinc-300">{productName(productMap.get(item.product_id || ''), item.product_id)}</td><td className="px-3 py-4 font-medium text-white">{money(item.amount, item.currency)}</td><td className="px-3 py-4"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(item.status)}`}>{statusLabel(item.status)}</span></td><td className="px-3 py-4 text-xs text-[var(--althea-muted)]">{new Date(item.created_at).toLocaleString('pt-BR')}</td></tr>)}</tbody>
             </table>
           )}
         </div>
