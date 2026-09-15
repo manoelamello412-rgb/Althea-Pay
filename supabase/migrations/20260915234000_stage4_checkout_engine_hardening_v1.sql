@@ -1,0 +1,3 @@
+-- Stage 4 checkout engine hardening was applied to the production Supabase project.
+-- This migration marker is intentionally kept as a repository audit record.
+-- See the corresponding Supabase migration for the executable DDL/RPC implementation.
