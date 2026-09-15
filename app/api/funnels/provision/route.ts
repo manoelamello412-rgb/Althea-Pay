@@ -18,6 +18,18 @@ function isUniqueViolation(error: { code?: string | null; message?: string | nul
 
 const backoff = (attempt: number) => new Promise<void>((resolve) => setTimeout(resolve, 100 * 2 ** attempt))
 
+function mapProvisionError(error: { code?: string | null; message?: string | null }) {
+  const message = error.message ?? ''
+  if (message === 'unauthorized' || message === 'AUTH_REQUIRED') return { status: 401, error: 'unauthorized' }
+  if (message === 'forbidden' || message === 'FORBIDDEN') return { status: 403, error: 'forbidden' }
+  if (message === 'organization_required') return { status: 409, error: 'organization_required' }
+  if (error.code === '22023' || message.startsWith('invalid ') || message.endsWith('is required') || message.endsWith('is too long')) {
+    return { status: 400, error: message }
+  }
+  if (error.code === '23505') return { status: 409, error: 'conflict' }
+  return { status: 500, error: 'internal_error' }
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createSupabaseServerClient()
@@ -64,8 +76,8 @@ export async function POST(request: Request) {
     }
 
     if (provisionError) {
-      const status = provisionError.message === 'unauthorized' ? 401 : provisionError.message?.startsWith('invalid ') || provisionError.message?.endsWith('is required') || provisionError.message?.endsWith('is too long') ? 400 : 500
-      return json({ error: status === 500 ? 'internal_error' : provisionError.message }, status)
+      const mapped = mapProvisionError(provisionError)
+      return json({ error: mapped.error }, mapped.status)
     }
 
     return json(data, 201)
