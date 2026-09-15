@@ -6,40 +6,35 @@ const cors = {
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
 }
 const enc = new TextEncoder()
-
-function token() {
-  const b = new Uint8Array(32)
-  crypto.getRandomValues(b)
-  return `whsec_${[...b].map((x) => x.toString(16).padStart(2, '0')).join('')}`
-}
-
-async function sha(v: string) {
-  const d = await crypto.subtle.digest('SHA-256', enc.encode(v))
-  return [...new Uint8Array(d)].map((x) => x.toString(16).padStart(2, '0')).join('')
-}
-
-function json(v: unknown, status = 200) {
-  return Response.json(v, { status, headers: { ...cors, 'content-type': 'application/json' } })
-}
+function token() { const b = new Uint8Array(32); crypto.getRandomValues(b); return `whsec_${[...b].map((x) => x.toString(16).padStart(2, '0')).join('')}` }
+async function sha(v: string) { const d = await crypto.subtle.digest('SHA-256', enc.encode(v)); return [...new Uint8Array(d)].map((x) => x.toString(16).padStart(2, '0')).join('') }
+function json(v: unknown, status = 200) { return Response.json(v, { status, headers: { ...cors, 'content-type': 'application/json' } }) }
 
 Deno.serve(withSupabase({ auth: 'user' }, async (req, ctx) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   const db = ctx.supabaseAdmin
   const user = ctx.user
   if (!user) return json({ ok: false, error: 'unauthorized' }, 401)
-
   const u = new URL(req.url)
   const parts = u.pathname.split('/').filter(Boolean)
   const action = parts.at(-1)
   const id = parts.length >= 2 ? parts.at(-2) : null
 
+  async function funnelOrg(funnelId: string) {
+    const { data, error } = await db.from('funnels').select('id,organization_id').eq('id', funnelId).is('deleted_at', null).maybeSingle()
+    if (error || !data) return null
+    const { data: membership, error: membershipError } = await db.from('organization_members').select('role').eq('organization_id', data.organization_id).eq('user_id', user.id).maybeSingle()
+    if (membershipError || !membership || !['owner','admin','manager','operator'].includes(String(membership.role))) return null
+    return data.organization_id
+  }
+
   try {
     if (req.method === 'GET') {
-      const { data, error } = await db
-        .from('webhook_integrations')
-        .select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status,created_at,updated_at,last_used_at,last_event_at,event_count')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+      const { data: memberships, error: membershipError } = await db.from('organization_members').select('organization_id').eq('user_id', user.id)
+      if (membershipError) throw membershipError
+      const orgIds = (memberships || []).map((m) => m.organization_id)
+      if (!orgIds.length) return json({ ok: true, integrations: [] })
+      const { data, error } = await db.from('webhook_integrations').select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status,created_at,updated_at,last_used_at,last_event_at,event_count,organization_id').in('organization_id', orgIds).order('created_at', { ascending: false })
       if (error) throw error
       return json({ ok: true, integrations: data || [] })
     }
@@ -47,10 +42,11 @@ Deno.serve(withSupabase({ auth: 'user' }, async (req, ctx) => {
     const body = await req.json().catch(() => ({}))
 
     if (req.method === 'POST' && action === 'rotate' && id) {
-      const secret = token()
-      const current = await db.from('webhook_integrations').select('id,vault_secret_id').eq('id', id).eq('user_id', user.id).single()
+      const current = await db.from('webhook_integrations').select('id,funnel_id,organization_id,vault_secret_id').eq('id', id).single()
       if (current.error) throw current.error
-
+      const allowedOrg = await funnelOrg(String(current.data.funnel_id))
+      if (!allowedOrg || allowedOrg !== current.data.organization_id) return json({ ok: false, error: 'forbidden' }, 403)
+      const secret = token()
       let vaultId = current.data.vault_secret_id
       if (vaultId) {
         const { data, error } = await db.rpc('update_webhook_secret', { p_secret_id: vaultId, p_secret: secret, p_name: `Althea webhook ${id}` })
@@ -61,15 +57,7 @@ Deno.serve(withSupabase({ auth: 'user' }, async (req, ctx) => {
         if (error) throw error
         vaultId = data
       }
-
-      const { data, error } = await db.from('webhook_integrations').update({
-        vault_secret_id: vaultId,
-        secret: null,
-        secret_hash: await sha(secret),
-        secret_prefix: secret.slice(0, 14),
-        updated_at: new Date().toISOString(),
-      }).eq('id', id).eq('user_id', user.id)
-        .select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status').single()
+      const { data, error } = await db.from('webhook_integrations').update({ vault_secret_id: vaultId, secret: null, secret_hash: await sha(secret), secret_prefix: secret.slice(0, 14), updated_at: new Date().toISOString() }).eq('id', id).eq('organization_id', allowedOrg).select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status').single()
       if (error) throw error
       return json({ ok: true, integration: data, secret, endpoint: `${Deno.env.get('SUPABASE_URL')}/functions/v1/althea-webhook/${data.endpoint_key}`, secret_once: true })
     }
@@ -77,57 +65,46 @@ Deno.serve(withSupabase({ auth: 'user' }, async (req, ctx) => {
     if (req.method === 'POST') {
       const funnelId = body.funnel_id ? String(body.funnel_id) : null
       if (!funnelId) return json({ ok: false, error: 'funnel_id_required' }, 400)
-
+      const organizationId = await funnelOrg(funnelId)
+      if (!organizationId) return json({ ok: false, error: 'forbidden' }, 403)
       const secret = token()
       const endpointKey = `ep_${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`
-      const row = {
-        user_id: user.id,
-        funnel_id: funnelId,
-        name: String(body.name || `Webhook ${new Date().toLocaleDateString('pt-BR')}`),
-        provider: String(body.provider || 'custom'),
-        endpoint_key: endpointKey,
-        secret_hash: await sha(secret),
-        secret_prefix: secret.slice(0, 14),
-        status: 'active',
-      }
-      const { data: created, error: createError } = await db.from('webhook_integrations').insert(row)
-        .select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status,created_at').single()
+      const row = { user_id: user.id, funnel_id: funnelId, organization_id: organizationId, name: String(body.name || `Webhook ${new Date().toLocaleDateString('pt-BR')}`), provider: String(body.provider || 'custom'), endpoint_key: endpointKey, secret_hash: await sha(secret), secret_prefix: secret.slice(0, 14), status: 'active' }
+      const { data: created, error: createError } = await db.from('webhook_integrations').insert(row).select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status,created_at,organization_id').single()
       if (createError) throw createError
-
       const { data: vaultId, error: vaultError } = await db.rpc('store_webhook_secret', { p_secret: secret, p_name: `Althea webhook ${created.id}` })
-      if (vaultError) {
-        await db.from('webhook_integrations').delete().eq('id', created.id).eq('user_id', user.id)
-        throw vaultError
-      }
-
-      const { data, error } = await db.from('webhook_integrations').update({ vault_secret_id: vaultId })
-        .eq('id', created.id).eq('user_id', user.id)
-        .select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status,created_at').single()
+      if (vaultError) { await db.from('webhook_integrations').delete().eq('id', created.id).eq('organization_id', organizationId); throw vaultError }
+      const { data, error } = await db.from('webhook_integrations').update({ vault_secret_id: vaultId }).eq('id', created.id).eq('organization_id', organizationId).select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status,created_at').single()
       if (error) throw error
       return json({ ok: true, integration: data, secret, endpoint: `${Deno.env.get('SUPABASE_URL')}/functions/v1/althea-webhook/${endpointKey}`, secret_once: true }, 201)
     }
 
     if (!id) return json({ ok: false, error: 'integration_id_required' }, 400)
+    const current = await db.from('webhook_integrations').select('id,funnel_id,organization_id').eq('id', id).single()
+    if (current.error) throw current.error
+    const allowedOrg = await funnelOrg(String(current.data.funnel_id))
+    if (!allowedOrg || allowedOrg !== current.data.organization_id) return json({ ok: false, error: 'forbidden' }, 403)
 
     if (req.method === 'PATCH') {
       const patch: Record<string, unknown> = {}
       if (body.name !== undefined) patch.name = String(body.name)
       if (body.provider !== undefined) patch.provider = String(body.provider)
-      if (body.funnel_id !== undefined) patch.funnel_id = String(body.funnel_id)
+      if (body.funnel_id !== undefined) {
+        const target = await funnelOrg(String(body.funnel_id))
+        if (!target || target !== allowedOrg) return json({ ok: false, error: 'forbidden' }, 403)
+        patch.funnel_id = String(body.funnel_id)
+      }
       if (body.status !== undefined) patch.status = body.status === 'disabled' ? 'disabled' : 'active'
       patch.updated_at = new Date().toISOString()
-      const { data, error } = await db.from('webhook_integrations').update(patch).eq('id', id).eq('user_id', user.id)
-        .select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status,updated_at').single()
+      const { data, error } = await db.from('webhook_integrations').update(patch).eq('id', id).eq('organization_id', allowedOrg).select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status,updated_at').single()
       if (error) throw error
       return json({ ok: true, integration: data })
     }
-
     if (req.method === 'DELETE') {
-      const { error } = await db.from('webhook_integrations').update({ status: 'disabled', updated_at: new Date().toISOString() }).eq('id', id).eq('user_id', user.id)
+      const { error } = await db.from('webhook_integrations').update({ status: 'disabled', updated_at: new Date().toISOString() }).eq('id', id).eq('organization_id', allowedOrg)
       if (error) throw error
       return json({ ok: true, disabled: true })
     }
-
     return json({ ok: false, error: 'not_found' }, 404)
   } catch (e) {
     console.error(e)
