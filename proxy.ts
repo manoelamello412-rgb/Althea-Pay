@@ -17,7 +17,9 @@ export async function proxy(request: NextRequest) {
     })
   }
 
-  const isLogin = request.nextUrl.pathname === '/login'
+  const pathname = request.nextUrl.pathname
+  const isLogin = pathname === '/login'
+  const isPublicCheckout = pathname === '/checkout' || pathname.startsWith('/checkout/')
   let response = NextResponse.next({ request })
   const supabase = createServerClient(config.url, config.key, {
     cookies: {
@@ -35,10 +37,10 @@ export async function proxy(request: NextRequest) {
   const { data: claimsData } = await supabase.auth.getClaims()
   const isAuthenticated = Boolean(claimsData)
 
-  if (!isAuthenticated && !isLogin) {
+  if (!isAuthenticated && !isLogin && !isPublicCheckout) {
     const target = request.nextUrl.clone()
     target.pathname = '/login'
-    target.searchParams.set('next', request.nextUrl.pathname)
+    target.searchParams.set('next', pathname)
     return NextResponse.redirect(target)
   }
 
