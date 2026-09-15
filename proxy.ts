@@ -1,19 +1,25 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const FALLBACK_SUPABASE_URL = 'https://hkraryqoziravulvqkid.supabase.co'
-const FALLBACK_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZC4p3GU0udH5eboge8QqeA_yhpJBXUl'
+function getSupabaseConfig() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+  if (!url || !key) return null
+  return { url, key }
+}
 
 export async function proxy(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || FALLBACK_SUPABASE_URL
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    FALLBACK_SUPABASE_PUBLISHABLE_KEY
-  const isLogin = request.nextUrl.pathname === '/login'
+  const config = getSupabaseConfig()
+  if (!config) {
+    return new NextResponse('Supabase authentication is not configured for this deployment.', {
+      status: 500,
+      headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+    })
+  }
 
+  const isLogin = request.nextUrl.pathname === '/login'
   let response = NextResponse.next({ request })
-  const supabase = createServerClient(url, key, {
+  const supabase = createServerClient(config.url, config.key, {
     cookies: {
       getAll() {
         return request.cookies.getAll()
