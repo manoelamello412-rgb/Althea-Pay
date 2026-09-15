@@ -1,0 +1,15 @@
+-- Foundation: keep internal worker/control-plane tables service-only.
+-- No anon/authenticated table privileges are granted; service_role remains the backend boundary.
+revoke all on table public.feb_consumed_tickets from anon, authenticated;
+revoke all on table public.gateway_payment_link_execution_commands from anon, authenticated;
+revoke all on table public.iara_execution_idempotency from anon, authenticated;
+revoke all on table public.iara_financial_confirmations from anon, authenticated;
+revoke all on table public.platform_health_checks from anon, authenticated;
+revoke all on table public.production_readiness_gates from anon, authenticated;
+
+alter table public.feb_consumed_tickets force row level security;
+alter table public.gateway_payment_link_execution_commands force row level security;
+alter table public.iara_execution_idempotency force row level security;
+alter table public.iara_financial_confirmations force row level security;
+alter table public.platform_health_checks force row level security;
+alter table public.production_readiness_gates force row level security;
