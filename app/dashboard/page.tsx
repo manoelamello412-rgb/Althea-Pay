@@ -1,5 +1,5 @@
-import DashboardProduction from '@/components/dashboard-production'
+import DashboardProductionV2 from '@/components/dashboard-production-v2'
 
 export default function DashboardPage() {
-  return <DashboardProduction />
+  return <DashboardProductionV2 />
 }
