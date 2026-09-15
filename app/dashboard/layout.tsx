@@ -44,9 +44,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         .althea-page-content .al-bottom-nav,
         .althea-page-content .althea-legacy-bottom-nav,
         .althea-page-content .ams-header,
-        .althea-page-content .ams-bottom-nav,
-        .althea-page-content > div > header,
-        .althea-page-content > main > header {
+        .althea-page-content .ams-bottom-nav {
           display: none !important;
         }
         .althea-page-content > div.min-h-screen,
