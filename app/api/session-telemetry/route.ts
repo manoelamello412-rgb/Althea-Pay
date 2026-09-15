@@ -2,10 +2,6 @@ import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 
-function firstForwardedValue(value: string | null) {
-  return value?.split(',')[0]?.trim() || ''
-}
-
 export async function GET() {
   const supabase = await createSupabaseServerClient()
   const { data: { user }, error } = await supabase.auth.getUser()
@@ -19,9 +15,6 @@ export async function GET() {
   const country = requestHeaders.get('x-vercel-ip-country')?.trim() || null
 
   // Never expose the raw client IP or forwarded IP through this endpoint.
-  // The route is authenticated because telemetry is an internal session concern.
-  void firstForwardedValue
-
   return NextResponse.json({
     location: [city, region, country].filter(Boolean).join(', ') || null,
     country,
