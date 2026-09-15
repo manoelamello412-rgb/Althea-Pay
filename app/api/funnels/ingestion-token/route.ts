@@ -21,21 +21,21 @@ export async function POST(request: Request) {
 
     const { data: funnel, error: funnelError } = await supabase
       .from('funnels')
-      .select('id,endpoint,status')
+      .select('id,endpoint,status,organization_id')
       .eq('id', funnelId)
-      .eq('user_id', user.id)
       .is('deleted_at', null)
       .maybeSingle()
 
     if (funnelError) return json({ error: funnelError.message }, 400)
     if (!funnel) return json({ error: 'funnel_not_found' }, 404)
 
-    await supabase
+    const { error: revokeError } = await supabase
       .from('funnel_ingestion_tokens')
       .update({ enabled: false, revoked_at: new Date().toISOString() })
       .eq('funnel_id', funnelId)
-      .eq('user_id', user.id)
+      .eq('organization_id', funnel.organization_id)
       .eq('enabled', true)
+    if (revokeError) return json({ error: revokeError.message }, 400)
 
     const token = `alt_fnl_${randomBytes(48).toString('hex')}`
     const tokenHash = hashToken(token)
@@ -44,6 +44,7 @@ export async function POST(request: Request) {
       .insert({
         user_id: user.id,
         funnel_id: funnelId,
+        organization_id: funnel.organization_id,
         token_prefix: token.slice(0, 14),
         token_hash: tokenHash,
         enabled: true,
