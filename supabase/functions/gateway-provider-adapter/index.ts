@@ -2,128 +2,306 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { assertPublicHttpsUrl } from "../_shared/ssrf-guard.ts";
 
-type O = Record<string, unknown>;
-const H = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type,x-althea-internal-secret,x-gateway-id,x-althea-gateway-id,x-althea-idempotency-key", "Access-Control-Allow-Methods": "POST,OPTIONS", "Content-Type": "application/json", "Cache-Control": "no-store" };
-const obj = (v: unknown): v is O => typeof v === "object" && v !== null && !Array.isArray(v);
-const str = (v: unknown) => typeof v === "string" ? v.trim() : "";
-const json = (v: O, s = 200) => new Response(JSON.stringify(v), { status: s, headers: H });
-const nested = (v: unknown, k: string) => obj(v) ? str(v[k]) : "";
-const err = (p: O, f: string) => { const e = p.error; if (typeof e === "string") return e; if (obj(e) && typeof e.message === "string") return e.message; if (Array.isArray(p.errors) && obj(p.errors[0]) && typeof p.errors[0].description === "string") return p.errors[0].description; if (typeof p.message === "string") return p.message; return f; };
-const norm = (provider: string, b: O) => { const s = str(b.status ?? b.payment_status ?? b.paymentStatus).toLowerCase(); if (provider === "stripe") return ["succeeded", "requires_capture"].includes(s) ? "approved" : ["processing", "requires_action", "requires_confirmation"].includes(s) ? "pending" : ["canceled", "requires_payment_method"].includes(s) ? "declined" : "error"; if (provider === "asaas") return ["received", "confirmed", "received_in_cash"].includes(s) ? "approved" : ["pending", "awaiting_risk_analysis", "in_analysis"].includes(s) ? "pending" : ["overdue", "refunded", "deleted", "failed", "chargeback"].includes(s) ? "declined" : "error"; if (provider === "mercado_pago") return ["approved", "authorized"].includes(s) ? "approved" : ["in_process", "pending", "in_mediation"].includes(s) ? "pending" : ["rejected", "cancelled", "cancelled_by_collector"].includes(s) ? "declined" : "error"; return ["approved", "succeeded", "success", "paid", "completed", "complete", "captured"].includes(s) ? "approved" : ["pending", "processing", "in_process", "authorized", "requires_action", "created"].includes(s) ? "pending" : ["declined", "failed", "failure", "rejected", "cancelled", "canceled", "refunded", "chargeback"].includes(s) ? "declined" : "error"; };
-const parse = async (r: Response): Promise<O> => { const x = await r.json().catch(() => ({})); return obj(x) ? x : {}; };
-const timeout = 15_000;
+type JsonObject = Record<string, unknown>;
 
-function deepGet(v: unknown, path: string): unknown { let cur: unknown = v; for (const part of path.split(".").filter(Boolean)) { if (!obj(cur)) return undefined; cur = cur[part]; } return cur; }
-function first(v: O, paths: string[], fallback = ""): string { for (const p of paths) { const x = deepGet(v, p); if (typeof x === "string" || typeof x === "number") return String(x); } return fallback; }
-async function publicUrl(raw: string): Promise<string> { const checked = await assertPublicHttpsUrl(raw); if (!checked.ok) throw new Error(`target_not_allowed:${checked.reason}`); return checked.url; }
-function jsonConfig(raw: unknown, name: string): O { if (!str(raw)) return {}; try { const parsed = JSON.parse(String(raw)); if (!obj(parsed)) throw new Error(`${name}_must_be_object`); return parsed; } catch (e) { throw new Error(e instanceof Error && e.message.startsWith(name) ? e.message : `${name}_invalid_json`); } }
-function method(raw: unknown, fallback: string): string { const m = (str(raw) || fallback).toUpperCase(); if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(m)) throw new Error("custom_rest_method_invalid"); return m; }
-function interpolate(value: unknown, root: O): unknown {
-  if (Array.isArray(value)) return value.map((x) => interpolate(x, root));
-  if (obj(value)) return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, interpolate(v, root)]));
-  if (typeof value !== "string") return value;
-  const exact = value.match(/^\{\{\s*([^}]+?)\s*\}\}$/);
-  if (exact) { const v = deepGet(root, exact[1].trim()); return v === undefined ? null : v; }
-  return value.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, p) => { const v = deepGet(root, String(p).trim()); return v === undefined || v === null ? "" : String(v); });
-}
-function customHeaders(raw: unknown, root: O): Record<string, string> {
-  const configured = jsonConfig(raw, "custom_headers");
-  const blocked = new Set(["host", "content-length", "connection", "transfer-encoding", "x-althea-internal-secret", "x-althea-gateway-id"]);
-  const result: Record<string, string> = {};
-  for (const [k, v] of Object.entries(configured)) { const name = k.trim(); if (!name || blocked.has(name.toLowerCase()) || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) throw new Error("custom_rest_header_invalid"); if (typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean") throw new Error("custom_rest_header_value_invalid"); result[name] = String(interpolate(v, root)); }
-  return result;
-}
+type Operation =
+  | "create_payment"
+  | "payment_status"
+  | "retrieve_payment"
+  | "retrieve"
+  | "status"
+  | "refund"
+  | "health_check";
 
-async function customRest(operation: string, body: O, credential: O): Promise<Response> {
-  const base = str(credential.base_url); if (!base) return json({ ok: false, error: "custom_rest_base_url_missing" }, 422);
-  const baseUrl = await publicUrl(base);
-  const statusOps = ["payment_status", "retrieve_payment", "retrieve", "status"];
-  const path = operation === "health_check" ? str(credential.health_path) : operation === "refund" ? str(credential.refund_path) : statusOps.includes(operation) ? str(credential.status_path) : str(credential.create_path);
-  const endpoint = path || (operation === "health_check" ? "/health" : "/payments");
-  const externalId = str(body.external_transaction_id ?? body.original_external_id ?? body.provider_transaction_id);
-  const resolvedPath = endpoint.replaceAll("{id}", encodeURIComponent(externalId));
-  const url = await publicUrl(new URL(resolvedPath, baseUrl).toString());
-  const apiKey = str(credential.api_key ?? credential.access_token ?? credential.secret_key ?? credential.token);
-  const authHeader = str(credential.auth_header) || "Authorization";
-  const authPrefix = credential.auth_prefix === "" ? "" : (str(credential.auth_prefix) || "Bearer");
-  const root: O = { amount: Number(body.amount ?? 0), currency: str(body.currency || "BRL").toUpperCase(), transaction_id: externalId || null, external_transaction_id: externalId || null, payment_token: str(body.payment_token) || null, customer: obj(body.customer) ? body.customer : {}, metadata: obj(body.metadata) ? body.metadata : {}, idempotency_key: str(body.idempotency_key) || null, product_id: body.product_id ?? null, funnel_id: body.funnel_id ?? null };
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (apiKey) headers[authHeader] = authPrefix ? `${authPrefix} ${apiKey}` : apiKey;
-  Object.assign(headers, customHeaders(credential.custom_headers, root));
-  const idem = str(body.idempotency_key);
-  const idemHeader = str(credential.idempotency_header) || "Idempotency-Key";
-  if (idem && idemHeader && !headers[idemHeader]) headers[idemHeader] = idem;
-  const defaultMethod = operation === "health_check" || statusOps.includes(operation) ? "GET" : "POST";
-  const m = method(operation === "health_check" ? credential.health_method : operation === "refund" ? credential.refund_method : statusOps.includes(operation) ? credential.status_method : credential.create_method, defaultMethod);
-  const requestTemplate = str(credential.request_template) ? jsonConfig(credential.request_template, "request_template") : null;
-  const payload = requestTemplate ? interpolate(requestTemplate, root) : { amount: root.amount, currency: root.currency, transaction_id: externalId || undefined, payment_token: root.payment_token || undefined, customer: root.customer, metadata: root.metadata };
-  const fetchOptions: RequestInit = { method: m, headers, signal: AbortSignal.timeout(timeout) };
-  if (!["GET", "DELETE"].includes(m)) { headers["Content-Type"] = "application/json"; fetchOptions.body = JSON.stringify(payload); }
-  const r = await fetch(url, fetchOptions);
-  const p = await parse(r);
-  if (!r.ok) return json({ ok: false, error: err(p, `custom_rest_http_${r.status}`), failure_code: `http_${r.status}` }, r.status >= 400 && r.status < 600 ? r.status : 502);
-  if (operation === "health_check") return json({ ok: true, status: "approved", provider_status: first(p, ["status", "state", "data.status"], "healthy"), response: p });
-  const responseMap = str(credential.response_mapping) ? jsonConfig(credential.response_mapping, "response_mapping") : {};
-  const idPath = str(responseMap.id) || "id";
-  const statusPath = str(responseMap.status) || "status";
-  const amountPath = str(responseMap.amount) || "amount";
-  const currencyPath = str(responseMap.currency) || "currency";
-  const idValue = deepGet(p, idPath) ?? first(p, ["id", "transaction_id", "transactionId", "payment_id", "paymentId", "data.id", "data.transaction_id"], externalId);
-  const providerStatus = String(deepGet(p, statusPath) ?? first(p, ["status", "payment_status", "paymentStatus", "state", "data.status"], ""));
-  const statusMap = jsonConfig(credential.status_mapping, "status_mapping");
-  const mapped = typeof statusMap[providerStatus.toLowerCase()] === "string" ? str(statusMap[providerStatus.toLowerCase()]) : norm("custom_rest", { ...p, status: providerStatus });
-  const amountValue = deepGet(p, amountPath) ?? first(p, ["amount", "value", "data.amount"], String(root.amount));
-  const currencyValue = deepGet(p, currencyPath) ?? first(p, ["currency", "data.currency"], root.currency);
-  return json({ ok: true, id: String(idValue ?? externalId), external_id: String(idValue ?? externalId), status: mapped, provider_status: providerStatus, amount: Number(amountValue), currency: String(currencyValue || root.currency).toUpperCase(), response: p });
-}
+const HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "content-type,x-althea-internal-secret,x-gateway-id,x-althea-gateway-id,x-althea-idempotency-key",
+  "Access-Control-Allow-Methods": "POST,OPTIONS",
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store",
+};
 
-Deno.serve(async req => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: H });
-  if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
-  const expected = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "", supplied = req.headers.get("x-althea-internal-secret") ?? "";
-  if (!expected || expected.length !== supplied.length) return json({ ok: false, error: "forbidden" }, 403);
-  let diff = 0; for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ supplied.charCodeAt(i); if (diff !== 0) return json({ ok: false, error: "forbidden" }, 403);
-  let b: O; try { const x = await req.json(); if (!obj(x)) return json({ ok: false, error: "invalid_json" }, 400); b = x; } catch { return json({ ok: false, error: "invalid_json" }, 400); }
-  const provider = str(b.provider).toLowerCase(), operation = str(b.operation).toLowerCase(), gatewayId = str(b.gateway_id ?? req.headers.get("x-gateway-id"));
-  const requestedEnvironment = str(b.environment).toLowerCase();
-  if (requestedEnvironment && requestedEnvironment !== "sandbox" && requestedEnvironment !== "production") return json({ ok: false, error: "invalid_environment" }, 422);
-  if (!provider || !gatewayId) return json({ ok: false, error: "provider_and_gateway_required" }, 422);
-  const url = Deno.env.get("SUPABASE_URL"), service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"); if (!url || !service) return json({ ok: false, error: "server_configuration_error" }, 500);
-  const db = createClient(url, service, { auth: { persistSession: false } });
-  const reg = await db.from("gateway_provider_registry").select("provider_key,adapter_key,adapter_url,operational,is_active").eq("provider_key", provider).eq("is_active", true).maybeSingle();
-  if (reg.error) return json({ ok: false, error: "provider_registry_lookup_failed" }, 500); if (!reg.data) return json({ ok: false, error: "provider_not_registered" }, 422);
-  const gateway = await db.from("gateways").select("id,user_id,provider,environment,status").eq("id", gatewayId).maybeSingle();
-  if (gateway.error || !gateway.data || String(gateway.data.provider).toLowerCase() !== provider || !["connected", "degraded"].includes(String(gateway.data.status).toLowerCase())) return json({ ok: false, error: "gateway_not_operational" }, 422);
-  const persistedEnvironment = str(gateway.data.environment).toLowerCase() === "sandbox" ? "sandbox" : "production";
-  if (requestedEnvironment && requestedEnvironment !== persistedEnvironment) return json({ ok: false, error: "gateway_environment_mismatch" }, 409);
-  const environment = requestedEnvironment || persistedEnvironment;
-  const cr = await db.rpc("resolve_gateway_credential_for_gateway", { p_gateway_id: gatewayId }); if (cr.error || !obj(cr.data)) return json({ ok: false, error: "provider_credential_missing" }, 422);
-  const c = cr.data, credential = obj(c.credentials) ? c.credentials : c;
-  if (!obj(credential)) return json({ ok: false, error: "provider_credential_invalid" }, 422);
-  if (provider === "custom_rest") { if (reg.data.operational !== true) return json({ ok: false, error: "provider_adapter_not_operational" }, 422); try { return await customRest(operation, b, credential); } catch (e) { const message = e instanceof Error ? e.message : "custom_rest_adapter_error"; return json({ ok: false, error: message.startsWith("target_not_allowed") ? "target_not_allowed" : message }, 502); } }
-  const apiCredential = str(c.api_key ?? credential.api_key ?? credential.access_token ?? credential.secret_key);
-  const statusOps = ["payment_status", "retrieve_payment", "retrieve", "status"];
-  if (!apiCredential && !statusOps.includes(operation)) return json({ ok: false, error: "provider_credential_missing" }, 422);
+const isObject = (value: unknown): value is JsonObject =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const text = (value: unknown): string =>
+  typeof value === "string" ? value.trim() : "";
+
+const response = (body: JsonObject, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: HEADERS });
+
+const getPath = (value: unknown, path: string): unknown => {
+  let current: unknown = value;
+  for (const segment of path.split(".").filter(Boolean)) {
+    if (!isObject(current)) return undefined;
+    current = current[segment];
+  }
+  return current;
+};
+
+const firstString = (value: JsonObject, paths: string[], fallback = ""): string => {
+  for (const path of paths) {
+    const candidate = getPath(value, path);
+    if (typeof candidate === "string" || typeof candidate === "number") return String(candidate);
+  }
+  return fallback;
+};
+
+const parseJson = async (result: Response): Promise<JsonObject> => {
+  const payload = await result.json().catch(() => ({}));
+  return isObject(payload) ? payload : {};
+};
+
+const providerError = (payload: JsonObject, fallback: string): string => {
+  if (typeof payload.error === "string") return payload.error;
+  if (isObject(payload.error) && typeof payload.error.message === "string") return payload.error.message;
+  if (typeof payload.message === "string") return payload.message;
+  if (Array.isArray(payload.errors) && isObject(payload.errors[0])) {
+    const firstError = payload.errors[0];
+    if (typeof firstError.description === "string") return firstError.description;
+    if (typeof firstError.message === "string") return firstError.message;
+  }
+  return fallback;
+};
+
+const normalizeStatus = (rawStatus: string, configuredMap: JsonObject): string => {
+  const status = rawStatus.trim().toLowerCase();
+  const configured = configuredMap[status];
+  if (typeof configured === "string" && configured.trim()) return configured.trim().toLowerCase();
+
+  if (["approved", "authorized", "succeeded", "success", "paid", "completed", "complete", "captured", "received", "confirmed"].includes(status)) return "approved";
+  if (["pending", "processing", "in_process", "in_analysis", "requires_action", "requires_confirmation", "created", "waiting"].includes(status)) return "pending";
+  if (["declined", "failed", "failure", "rejected", "cancelled", "canceled", "refunded", "chargeback", "expired", "overdue"].includes(status)) return "declined";
+  return "error";
+};
+
+const parseObjectConfig = (value: unknown, name: string): JsonObject => {
+  if (!text(value)) return {};
   try {
-    if (statusOps.includes(operation)) {
-      const id = str(b.external_transaction_id ?? b.original_external_id ?? b.provider_transaction_id); if (!id) return json({ ok: false, error: "external_transaction_id_required" }, 422);
-      const api = provider === "stripe" ? `https://api.stripe.com/v1/payment_intents/${encodeURIComponent(id)}` : provider === "asaas" ? `${environment === "sandbox" ? "https://api-sandbox.asaas.com/v3" : "https://api.asaas.com/v3"}/payments/${encodeURIComponent(id)}` : `https://api.mercadopago.com/v1/payments/${encodeURIComponent(id)}`;
-      const auth = provider === "stripe" ? `Basic ${btoa(`${apiCredential}:`)}` : `Bearer ${apiCredential}`;
-      const requestHeaders: Record<string, string> = provider === "asaas" ? { access_token: apiCredential } : { Authorization: auth };
-      const r = await fetch(api, { headers: requestHeaders, signal: AbortSignal.timeout(timeout) }), p = await parse(r); if (!r.ok) return json({ ok: false, error: err(p, "status_lookup_failed"), failure_code: `http_${r.status}`, external_id: id }, r.status);
-      return json({ ok: true, id: p.id ?? id, status: norm(provider, p), provider_status: str(p.status ?? p.payment_status), amount: provider === "stripe" ? p.amount : Number(p.transaction_amount ?? p.value ?? 0) * 100, currency: String(p.currency ?? b.currency ?? "BRL").toUpperCase() });
-    }
-    const amount = Number(b.amount ?? 0), currency = str(b.currency ?? "BRL").toUpperCase(), metadata = obj(b.metadata) ? b.metadata : {}, customer = obj(b.customer) ? b.customer : {}, token = str(b.payment_token), idem = str(b.idempotency_key ?? req.headers.get("x-althea-idempotency-key"));
-    if (!Number.isFinite(amount) || amount <= 0 || !/^[A-Z]{3}$/.test(currency)) return json({ ok: false, error: "invalid_money" }, 422); if (!idem) return json({ ok: false, error: "idempotency_key_required" }, 422);
-    const auth = provider === "stripe" ? `Basic ${btoa(`${apiCredential}:`)}` : `Bearer ${apiCredential}`;
-    if (provider === "stripe") {
-      if (!["create_payment", "payment", "refund"].includes(operation)) return json({ ok: false, error: "unsupported_operation" }, 422);
-      if (operation === "refund") { const original = str(b.original_external_id); if (!original) return json({ ok: false, error: "original_external_id_required" }, 422); const form = new URLSearchParams({ payment_intent: original, amount: String(Math.round(amount)) }); const r = await fetch("https://api.stripe.com/v1/refunds", { method: "POST", headers: { Authorization: auth, "Content-Type": "application/x-www-form-urlencoded", "Idempotency-Key": idem }, body: form, signal: AbortSignal.timeout(timeout) }), p = await parse(r); if (!r.ok) return json({ ok: false, error: err(p, "stripe_refund_failed"), failure_code: `http_${r.status}` }, r.status); return json({ ok: true, id: p.id, status: p.status === "succeeded" ? "approved" : "pending", amount: p.amount, currency: String(p.currency ?? currency).toUpperCase() }); }
-      let pm = str(metadata.payment_method_id); if (token && !pm) { if (token.startsWith("pm_")) pm = token; else if (token.startsWith("tok_")) { const f = new URLSearchParams({ type: "card", "card[token]": token }); const r = await fetch("https://api.stripe.com/v1/payment_methods", { method: "POST", headers: { Authorization: auth, "Content-Type": "application/x-www-form-urlencoded", "Idempotency-Key": `${idem}:payment_method` }, body: f, signal: AbortSignal.timeout(timeout) }), p = await parse(r); if (!r.ok) return json({ ok: false, error: err(p, "stripe_payment_method_failed"), failure_code: `http_${r.status}` }, r.status); pm = str(p.id); } else return json({ ok: false, error: "unsupported_stripe_payment_token" }, 422); }
-      const f = new URLSearchParams({ amount: String(Math.round(amount)), currency: currency.toLowerCase(), "metadata[althea_idempotency]": idem, confirm: pm ? "true" : "false" }); if (pm) f.set("payment_method", pm); const r = await fetch("https://api.stripe.com/v1/payment_intents", { method: "POST", headers: { Authorization: auth, "Content-Type": "application/x-www-form-urlencoded", "Idempotency-Key": idem }, body: f, signal: AbortSignal.timeout(timeout) }), p = await parse(r); if (!r.ok) return json({ ok: false, error: err(p, "stripe_payment_failed"), failure_code: `http_${r.status}` }, r.status); return json({ ok: true, id: p.id, status: norm(provider, p), provider_status: str(p.status), amount: p.amount, currency: String(p.currency ?? currency).toUpperCase() });
-    }
-    if (provider === "asaas") { const base = environment === "sandbox" ? "https://api-sandbox.asaas.com/v3" : "https://api.asaas.com/v3"; const asaasHeaders = { access_token: apiCredential, "Content-Type": "application/json", "X-Idempotency-Key": idem }; if (operation === "refund") { const original = str(b.original_external_id); if (!original) return json({ ok: false, error: "original_external_id_required" }, 422); const r = await fetch(`${base}/payments/${encodeURIComponent(original)}/refund`, { method: "POST", headers: asaasHeaders, body: JSON.stringify({ value: amount / 100 }), signal: AbortSignal.timeout(timeout) }), p = await parse(r); if (!r.ok) return json({ ok: false, error: err(p, "asaas_refund_failed"), failure_code: `http_${r.status}` }, r.status); return json({ ok: true, id: p.id ?? original, status: "approved", amount: Number(p.value ?? amount / 100) * 100, currency }); } const pc = nested(customer, "provider_customer_id"); if (!pc) return json({ ok: false, error: "asaas_provider_customer_id_required" }, 422); const billing = str(metadata.billing_type) || "UNDEFINED"; const payload: O = { customer: pc, billingType: billing, value: amount / 100, dueDate: str(metadata.due_date) || new Date(Date.now() + 86400000).toISOString().slice(0, 10), description: str(metadata.description) || "ALTHEA PAY charge" }; if (token && billing === "CREDIT_CARD") payload.creditCardToken = token; const r = await fetch(`${base}/payments`, { method: "POST", headers: asaasHeaders, body: JSON.stringify(payload), signal: AbortSignal.timeout(timeout) }), p = await parse(r); if (!r.ok) return json({ ok: false, error: err(p, "asaas_payment_failed"), failure_code: `http_${r.status}` }, r.status); return json({ ok: true, id: p.id, status: norm(provider, p), provider_status: str(p.status), amount: Number(p.value ?? amount / 100) * 100, currency }); }
-    if (operation === "refund") { const original = str(b.original_external_id); if (!original) return json({ ok: false, error: "original_external_id_required" }, 422); const r = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(original)}/refunds`, { method: "POST", headers: { Authorization: `Bearer ${apiCredential}`, "Content-Type": "application/json", "X-Idempotency-Key": idem }, body: JSON.stringify({ amount: amount / 100 }), signal: AbortSignal.timeout(timeout) }), p = await parse(r); if (!r.ok) return json({ ok: false, error: err(p, "mercado_pago_refund_failed"), failure_code: `http_${r.status}` }, r.status); return json({ ok: true, id: p.id, status: p.status === "approved" ? "approved" : "pending", amount: Number(p.amount ?? amount / 100) * 100, currency }); }
-    const pm = str(metadata.payment_method_id), email = nested(customer, "email"); if (!pm || !token || !email) return json({ ok: false, error: "mercado_pago_payment_method_token_and_customer_email_required" }, 422); const installments = Math.max(1, Math.min(36, Number(metadata.installments) || 1)); const r = await fetch("https://api.mercadopago.com/v1/payments", { method: "POST", headers: { Authorization: `Bearer ${apiCredential}`, "Content-Type": "application/json", "X-Idempotency-Key": idem }, body: JSON.stringify({ transaction_amount: amount / 100, description: str(metadata.description) || "ALTHEA PAY charge", payment_method_id: pm, token, installments, payer: { email } }), signal: AbortSignal.timeout(timeout) }), p = await parse(r); if (!r.ok) return json({ ok: false, error: err(p, "mercado_pago_payment_failed"), failure_code: `http_${r.status}` }, r.status); return json({ ok: true, id: p.id, status: norm(provider, p), provider_status: str(p.status), amount: Number(p.transaction_amount ?? amount / 100) * 100, currency });
-  } catch (e) { return json({ ok: false, error: "provider_adapter_error", detail: e instanceof Error ? e.message : "unknown_error" }, 502); }
+    const parsed = JSON.parse(String(value));
+    if (!isObject(parsed)) throw new Error(`${name}_must_be_object`);
+    return parsed;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith(name)) throw error;
+    throw new Error(`${name}_invalid_json`);
+  }
+};
+
+const interpolate = (value: unknown, root: JsonObject): unknown => {
+  if (Array.isArray(value)) return value.map((item) => interpolate(item, root));
+  if (isObject(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, interpolate(item, root)]));
+  }
+  if (typeof value !== "string") return value;
+
+  const exact = value.match(/^\{\{\s*([^}]+?)\s*\}\}$/);
+  if (exact) return getPath(root, exact[1].trim()) ?? null;
+
+  return value.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, path) => {
+    const resolved = getPath(root, String(path).trim());
+    return resolved === undefined || resolved === null ? "" : String(resolved);
+  });
+};
+
+const validateMethod = (value: unknown, fallback: string): string => {
+  const method = (text(value) || fallback).toUpperCase();
+  if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) throw new Error("gateway_http_method_invalid");
+  return method;
+};
+
+const publicUrl = async (raw: string): Promise<string> => {
+  const checked = await assertPublicHttpsUrl(raw);
+  if (!checked.ok) throw new Error(`target_not_allowed:${checked.reason}`);
+  return checked.url;
+};
+
+const buildHeaders = (credential: JsonObject, root: JsonObject): Record<string, string> => {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  const token = text(credential.api_key ?? credential.access_token ?? credential.secret_key ?? credential.token);
+  const authHeader = text(credential.auth_header) || "Authorization";
+  const authPrefix = credential.auth_prefix === "" ? "" : (text(credential.auth_prefix) || "Bearer");
+  if (token) headers[authHeader] = authPrefix ? `${authPrefix} ${token}` : token;
+
+  const customHeaders = parseObjectConfig(credential.custom_headers, "custom_headers");
+  const blocked = new Set(["host", "content-length", "connection", "transfer-encoding", "x-althea-internal-secret", "x-althea-gateway-id"]);
+  for (const [key, value] of Object.entries(customHeaders)) {
+    const name = key.trim();
+    if (!name || blocked.has(name.toLowerCase()) || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) throw new Error("gateway_header_invalid");
+    if (!["string", "number", "boolean"].includes(typeof value)) throw new Error("gateway_header_value_invalid");
+    headers[name] = String(interpolate(value, root));
+  }
+
+  const idempotencyKey = text(root.idempotency_key);
+  const idempotencyHeader = text(credential.idempotency_header) || "Idempotency-Key";
+  if (idempotencyKey && !headers[idempotencyHeader]) headers[idempotencyHeader] = idempotencyKey;
+  return headers;
+};
+
+const operationPath = (operation: Operation, credential: JsonObject): string => {
+  if (operation === "health_check") return text(credential.health_path) || "/health";
+  if (operation === "refund") return text(credential.refund_path) || "/payments/{id}/refund";
+  if (["payment_status", "retrieve_payment", "retrieve", "status"].includes(operation)) return text(credential.status_path) || "/payments/{id}";
+  return text(credential.create_path) || "/payments";
+};
+
+const operationMethod = (operation: Operation, credential: JsonObject): string => {
+  if (operation === "health_check") return validateMethod(credential.health_method, "GET");
+  if (operation === "refund") return validateMethod(credential.refund_method, "POST");
+  if (["payment_status", "retrieve_payment", "retrieve", "status"].includes(operation)) return validateMethod(credential.status_method, "GET");
+  return validateMethod(credential.create_method, "POST");
+};
+
+async function executeGenericHttp(operation: Operation, body: JsonObject, credential: JsonObject): Promise<Response> {
+  const baseUrl = await publicUrl(text(credential.base_url));
+  const externalId = text(body.external_transaction_id ?? body.original_external_id ?? body.provider_transaction_id);
+  const path = operationPath(operation, credential).replaceAll("{id}", encodeURIComponent(externalId));
+  const targetUrl = await publicUrl(new URL(path, baseUrl).toString());
+
+  const root: JsonObject = {
+    amount: Number(body.amount ?? 0),
+    currency: text(body.currency || "BRL").toUpperCase(),
+    transaction_id: text(body.transaction_id) || null,
+    external_transaction_id: externalId || null,
+    payment_token: text(body.payment_token) || null,
+    payment_method: isObject(body.payment_method) ? body.payment_method : {},
+    customer: isObject(body.customer) ? body.customer : {},
+    metadata: isObject(body.metadata) ? body.metadata : {},
+    idempotency_key: text(body.idempotency_key) || null,
+    product_id: body.product_id ?? null,
+    funnel_id: body.funnel_id ?? null,
+  };
+
+  const headers = buildHeaders(credential, root);
+  const method = operationMethod(operation, credential);
+  const requestTemplate = text(credential.request_template)
+    ? parseObjectConfig(credential.request_template, "request_template")
+    : null;
+  const payload = requestTemplate
+    ? interpolate(requestTemplate, root)
+    : {
+        amount: root.amount,
+        currency: root.currency,
+        transaction_id: externalId || undefined,
+        payment_token: root.payment_token || undefined,
+        payment_method: root.payment_method,
+        customer: root.customer,
+        metadata: root.metadata,
+      };
+
+  const init: RequestInit = { method, headers, signal: AbortSignal.timeout(15_000) };
+  if (!["GET", "DELETE"].includes(method)) {
+    headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(payload);
+  }
+
+  const providerResponse = await fetch(targetUrl, init);
+  const providerPayload = await parseJson(providerResponse);
+  if (!providerResponse.ok) {
+    return response({
+      ok: false,
+      error: providerError(providerPayload, `gateway_http_${providerResponse.status}`),
+      failure_code: `http_${providerResponse.status}`,
+    }, providerResponse.status >= 400 && providerResponse.status < 600 ? providerResponse.status : 502);
+  }
+
+  if (operation === "health_check") {
+    return response({
+      ok: true,
+      status: "approved",
+      provider_status: firstString(providerPayload, ["status", "state", "data.status"], "healthy"),
+      response: providerPayload,
+    });
+  }
+
+  const responseMap = parseObjectConfig(credential.response_mapping, "response_mapping");
+  const idPath = text(responseMap.id) || "id";
+  const statusPath = text(responseMap.status) || "status";
+  const amountPath = text(responseMap.amount) || "amount";
+  const currencyPath = text(responseMap.currency) || "currency";
+  const id = getPath(providerPayload, idPath) ?? firstString(providerPayload, ["id", "transaction_id", "transactionId", "payment_id", "paymentId", "data.id", "data.transaction_id"], externalId);
+  const providerStatus = String(getPath(providerPayload, statusPath) ?? firstString(providerPayload, ["status", "payment_status", "paymentStatus", "state", "data.status"], ""));
+  const amount = getPath(providerPayload, amountPath) ?? firstString(providerPayload, ["amount", "value", "data.amount"], String(root.amount));
+  const currency = getPath(providerPayload, currencyPath) ?? firstString(providerPayload, ["currency", "data.currency"], root.currency);
+  const statusMapping = parseObjectConfig(credential.status_mapping, "status_mapping");
+
+  return response({
+    ok: true,
+    id: String(id ?? externalId),
+    external_id: String(id ?? externalId),
+    status: normalizeStatus(providerStatus, statusMapping),
+    provider_status: providerStatus,
+    amount: Number(amount),
+    currency: String(currency || root.currency).toUpperCase(),
+    response: providerPayload,
+  });
+}
+
+Deno.serve(async (request) => {
+  if (request.method === "OPTIONS") return new Response("ok", { headers: HEADERS });
+  if (request.method !== "POST") return response({ ok: false, error: "method_not_allowed" }, 405);
+
+  const expected = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
+  const supplied = request.headers.get("x-althea-internal-secret") ?? "";
+  if (!expected || expected.length !== supplied.length) return response({ ok: false, error: "forbidden" }, 403);
+  let difference = 0;
+  for (let index = 0; index < expected.length; index += 1) difference |= expected.charCodeAt(index) ^ supplied.charCodeAt(index);
+  if (difference !== 0) return response({ ok: false, error: "forbidden" }, 403);
+
+  let body: JsonObject;
+  try {
+    const parsed = await request.json();
+    if (!isObject(parsed)) return response({ ok: false, error: "invalid_json" }, 400);
+    body = parsed;
+  } catch {
+    return response({ ok: false, error: "invalid_json" }, 400);
+  }
+
+  const operation = text(body.operation).toLowerCase() as Operation;
+  const gatewayId = text(body.gateway_id ?? request.headers.get("x-gateway-id"));
+  const environment = text(body.environment).toLowerCase();
+  if (!gatewayId) return response({ ok: false, error: "gateway_id_required" }, 422);
+  if (!operation) return response({ ok: false, error: "operation_required" }, 422);
+  if (environment && !["sandbox", "production"].includes(environment)) return response({ ok: false, error: "invalid_environment" }, 422);
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRole) return response({ ok: false, error: "server_configuration_error" }, 500);
+
+  const db = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
+  const gatewayResult = await db
+    .from("gateways")
+    .select("id,user_id,provider,environment,status")
+    .eq("id", gatewayId)
+    .maybeSingle();
+  if (gatewayResult.error || !gatewayResult.data) return response({ ok: false, error: "gateway_not_found" }, 404);
+
+  const gateway = gatewayResult.data;
+  const gatewayEnvironment = text(gateway.environment).toLowerCase() === "sandbox" ? "sandbox" : "production";
+  if (environment && environment !== gatewayEnvironment) return response({ ok: false, error: "gateway_environment_mismatch" }, 409);
+  if (!["connected", "degraded"].includes(text(gateway.status).toLowerCase())) return response({ ok: false, error: "gateway_not_operational" }, 422);
+
+  const registryResult = await db
+    .from("gateway_provider_registry")
+    .select("provider_key,adapter_key,operational,is_active")
+    .eq("provider_key", text(gateway.provider).toLowerCase())
+    .eq("is_active", true)
+    .maybeSingle();
+  if (registryResult.error) return response({ ok: false, error: "provider_registry_lookup_failed" }, 500);
+  if (!registryResult.data) return response({ ok: false, error: "provider_not_registered" }, 422);
+  if (registryResult.data.operational !== true) return response({ ok: false, error: "provider_adapter_not_operational" }, 422);
+
+  const credentialResult = await db.rpc("resolve_gateway_credential_for_gateway", { p_gateway_id: gatewayId });
+  if (credentialResult.error || !isObject(credentialResult.data)) return response({ ok: false, error: "provider_credential_missing" }, 422);
+  const credential = isObject(credentialResult.data.credentials) ? credentialResult.data.credentials : credentialResult.data;
+  if (!isObject(credential) || !text(credential.base_url)) return response({ ok: false, error: "gateway_base_url_missing" }, 422);
+
+  try {
+    return await executeGenericHttp(operation, body, credential);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "gateway_adapter_error";
+    return response({
+      ok: false,
+      error: message.startsWith("target_not_allowed") ? "target_not_allowed" : message,
+    }, 502);
+  }
 });
