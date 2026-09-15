@@ -1,11 +1,5 @@
-import AltheaDashboardControl from '@/components/althea-dashboard-control'
-import DashboardOperationalMap from '@/components/dashboard-operational-map'
+import DashboardProduction from '@/components/dashboard-production'
 
 export default function DashboardPage() {
-  return (
-    <>
-      <AltheaDashboardControl />
-      <DashboardOperationalMap />
-    </>
-  )
+  return <DashboardProduction />
 }
