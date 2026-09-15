@@ -1,0 +1,92 @@
+begin;
+
+-- ALTHEA PAY is an orchestrator, not a gateway vendor. Runtime integration is
+-- driven by a generic HTTP/JSON contract stored in the provider registry and
+-- per-connection credentials. No gateway brand is a platform dependency.
+
+update public.gateway_provider_registry
+set
+  operational = false,
+  is_active = false
+where lower(provider_key) in ('stripe', 'asaas', 'mercado_pago', 'mercadopago', 'pagarme', 'pagseguro', 'iugu', 'efi', 'stone');
+
+insert into public.gateway_provider_registry (
+  provider_key,
+  display_name,
+  credential_schema,
+  capabilities,
+  operational,
+  is_custom_or_webhook_only,
+  is_active,
+  adapter_key,
+  adapter_url
+)
+values (
+  'generic_http',
+  'Gateway HTTP Genérico',
+  jsonb_build_object(
+    'fields', jsonb_build_array(
+      jsonb_build_object('name','base_url','label','URL base da API','type','text','required',true),
+      jsonb_build_object('name','api_key','label','API Key / Token','type','password','required',false),
+      jsonb_build_object('name','auth_header','label','Header de autenticação','type','text','required',false),
+      jsonb_build_object('name','auth_prefix','label','Prefixo de autenticação','type','text','required',false),
+      jsonb_build_object('name','health_path','label','Endpoint de saúde','type','text','required',false),
+      jsonb_build_object('name','create_path','label','Endpoint de criação de pagamento','type','text','required',false),
+      jsonb_build_object('name','status_path','label','Endpoint de consulta de pagamento','type','text','required',false),
+      jsonb_build_object('name','refund_path','label','Endpoint de reembolso','type','text','required',false),
+      jsonb_build_object('name','request_template','label','Template JSON da requisição','type','text','required',false),
+      jsonb_build_object('name','response_mapping','label','Mapeamento JSON da resposta','type','text','required',false),
+      jsonb_build_object('name','status_mapping','label','Mapeamento de status','type','text','required',false),
+      jsonb_build_object('name','custom_headers','label','Headers adicionais JSON','type','text','required',false),
+      jsonb_build_object('name','idempotency_header','label','Header de idempotência','type','text','required',false),
+      jsonb_build_object('name','create_method','label','Método de criação','type','text','required',false),
+      jsonb_build_object('name','status_method','label','Método de consulta','type','text','required',false),
+      jsonb_build_object('name','refund_method','label','Método de reembolso','type','text','required',false),
+      jsonb_build_object('name','health_method','label','Método de saúde','type','text','required',false)
+    )
+  ),
+  jsonb_build_object(
+    'create_payment', true,
+    'payment_status', true,
+    'retrieve_payment', true,
+    'refund', true,
+    'health_check', true,
+    'webhook', true
+  ),
+  true,
+  false,
+  true,
+  'generic_http_json',
+  null
+)
+on conflict (provider_key) do update
+set
+  display_name = excluded.display_name,
+  credential_schema = excluded.credential_schema,
+  capabilities = excluded.capabilities,
+  operational = excluded.operational,
+  is_custom_or_webhook_only = excluded.is_custom_or_webhook_only,
+  is_active = excluded.is_active,
+  adapter_key = excluded.adapter_key,
+  adapter_url = excluded.adapter_url;
+
+-- Keep the old generic key as a backwards-compatible alias for connections
+-- already created before this migration. It is still generic and contains no
+-- gateway-specific implementation.
+update public.gateway_provider_registry
+set
+  display_name = 'Gateway HTTP Genérico (compatibilidade)',
+  credential_schema = (
+    select credential_schema from public.gateway_provider_registry where provider_key = 'generic_http'
+  ),
+  capabilities = (
+    select capabilities from public.gateway_provider_registry where provider_key = 'generic_http'
+  ),
+  operational = true,
+  is_custom_or_webhook_only = false,
+  is_active = true,
+  adapter_key = 'generic_http_json',
+  adapter_url = null
+where provider_key = 'custom_rest';
+
+commit;
