@@ -3,7 +3,8 @@
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, Layers, Loader2, Package, Sparkles, Webhook, X } from 'lucide-react'
-import FunnelCommercialSelector, { FunnelCommercialSelection } from '@/app/dashboard/funil/funnel-commercial-selector'
+import FunnelCommercialSelector from '@/app/dashboard/funil/funnel-commercial-selector'
+import type { FunnelCommercialSelection } from '@/app/dashboard/funil/funnel-commercial-selector'
 
 type FunnelType = 'sales' | 'lead_capture' | 'launch' | 'product' | 'upsell_downsell' | 'subscription' | 'custom'
 type ConnectionType = 'script' | 'webhook'
