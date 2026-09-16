@@ -12,12 +12,11 @@ function normalizeAction(payload: JsonObject, method: string) {
   const qr = first(root, ['qr_code','qrCode','pix.qr_code','pix.qrCode','payment.qr_code','payment.qrCode','data.qr_code','data.qrCode','qr'])
   const copyPaste = first(root, ['copy_paste','copyPaste','pix.copy_paste','pix.copyPaste','payment.copy_paste','payment.copyPaste','data.copy_paste','data.copyPaste','brcode','emv'])
   const url = first(root, ['checkout_url','checkoutUrl','payment_url','paymentUrl','redirect_url','redirectUrl','url','data.checkout_url','data.checkoutUrl','data.payment_url','data.paymentUrl'])
-  const clientSecret = first(root, ['client_secret','clientSecret','payment.client_secret','payment.clientSecret','data.client_secret','data.clientSecret'])
   const expiresAt = first(root, ['expires_at','expiresAt','payment.expires_at','payment.expiresAt','data.expires_at','data.expiresAt'])
   const explicitType = first(root, ['action_type','actionType','next_action.type','nextAction.type']).toLowerCase()
-  const type = explicitType || (qr || copyPaste ? 'pix' : url ? 'redirect' : clientSecret ? 'card' : 'none')
-  if (type === 'none' && !qr && !copyPaste && !url && !clientSecret) return null
-  return { type, qr_code: qr || null, copy_paste: copyPaste || null, url: url || null, client_secret: clientSecret || null, expires_at: expiresAt || null, payment_method: method }
+  const type = explicitType || (qr || copyPaste ? 'pix' : url ? 'redirect' : method === 'card' ? 'card' : 'none')
+  if (type === 'none' && !qr && !copyPaste && !url) return null
+  return { type, qr_code: qr || null, copy_paste: copyPaste || null, url: url || null, expires_at: expiresAt || null, payment_method: method }
 }
 
 export async function POST(request: Request) {
