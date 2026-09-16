@@ -15,6 +15,11 @@ export async function POST(request: Request) {
     const makePrimary = body?.make_primary !== false
     if (!funnelId || !gatewayId) return json({ error: 'funnel_id and gateway_id are required' }, 400)
 
+    const { data: target, error: targetError } = await supabase.from('gateways').select('id,status,organization_id').eq('id', gatewayId).eq('user_id', user.id).maybeSingle()
+    if (targetError) throw targetError
+    if (!target) return json({ error: 'gateway_not_found' }, 404)
+    if (['disabled', 'inactive', 'disconnected'].includes(String(target.status).toLowerCase())) return json({ error: 'gateway_not_operational' }, 409)
+
     const { data, error } = await supabase.rpc('bind_funnel_gateway', {
       p_funnel_id: funnelId,
       p_gateway_id: gatewayId,
@@ -24,7 +29,7 @@ export async function POST(request: Request) {
     })
     if (error) {
       if (error.message === 'forbidden' || error.message === 'FORBIDDEN') return json({ error: 'forbidden' }, 403)
-      if (/not found|mismatch|inactive|disabled/i.test(error.message)) return json({ error: error.message }, 409)
+      if (/not found|mismatch/i.test(error.message)) return json({ error: error.message }, 409)
       return json({ error: 'gateway_binding_failed' }, 500)
     }
     return json({ binding: data })
