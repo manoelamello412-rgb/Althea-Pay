@@ -1,6 +1,7 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, Layers, Loader2, Package, Sparkles, Webhook, X } from 'lucide-react'
 import FunnelCommercialSelector from '@/app/dashboard/funil/funnel-commercial-selector'
