@@ -5,12 +5,12 @@ import { AlertCircle, CheckCircle2, Cpu, Loader2, Pencil, Plus, Power, RefreshCw
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type SchemaField = { name: string; label: string; type: 'text' | 'password'; required: boolean }
-type ProviderRegistry = { id: string; provider_key: string; display_name: string; credential_schema: { fields: SchemaField[] }; operational: boolean; is_custom_or_webhook_only: boolean }
+type ProviderRegistry = { id: string; provider_key: string; display_name: string; credential_schema: { fields: SchemaField[] }; operational: boolean; is_custom_or_webhook_only: boolean; adapter_key?: string | null; adapter_contract_version?: number | null }
 type GatewayConnection = { id: string; display_name: string | null; provider: string; environment: 'sandbox' | 'production'; status: string; credential_id: string | null }
 
 const friendlyAdapterName = (provider: ProviderRegistry) => {
   const key = provider.provider_key.toLowerCase()
-  if (key === 'custom_rest' || key === 'generic_http') return 'API REST / HTTP genérica'
+  if (key === 'custom_rest' || key === 'generic_http' || provider.adapter_key === 'generic_http_json') return 'API REST / HTTP genérica'
   if (provider.is_custom_or_webhook_only) return 'API personalizada / Webhook'
   return provider.display_name
 }
@@ -61,11 +61,24 @@ export const DynamicGatewayConnector: React.FC = () => {
       return
     }
     const [registry, gatewayRows] = await Promise.all([
-      db.from('gateway_provider_registry').select('id,provider_key,display_name,credential_schema,operational,is_custom_or_webhook_only').eq('is_active', true).order('display_name', { ascending: true }),
-      db.from('gateways').select('id,display_name,provider,environment,status,credential_id').eq('user_id', userId).order('created_at', { ascending: false })
+      db.from('gateway_provider_registry').select('id,provider_key,display_name,credential_schema,operational,is_custom_or_webhook_only,adapter_key,adapter_contract_version').eq('is_active', true).order('display_name', { ascending: true }),
+      // Tenant isolation is enforced by gateways RLS through organization_id.
+      db.from('gateways').select('id,display_name,provider,environment,status,credential_id').order('created_at', { ascending: false })
     ])
     if (registry.error) setError(registry.error.message)
-    else setProviders((registry.data ?? []).filter(p => validSchema(p.credential_schema)) as ProviderRegistry[])
+    else {
+      const available = (registry.data ?? [])
+        .filter(p => validSchema(p.credential_schema) && p.operational)
+        // custom_rest is a legacy compatibility registration of the same generic_http_json adapter.
+        .filter(p => p.provider_key !== 'custom_rest')
+        .sort((a, b) => Number(b.adapter_contract_version ?? 0) - Number(a.adapter_contract_version ?? 0)) as ProviderRegistry[]
+      const unique = available.filter((provider, index, all) => all.findIndex(candidate => {
+        const candidateKey = candidate.adapter_key || candidate.provider_key
+        const providerKey = provider.adapter_key || provider.provider_key
+        return candidateKey === providerKey
+      }) === index)
+      setProviders(unique)
+    }
     if (gatewayRows.error) setError(e => e ?? gatewayRows.error.message)
     else setConnections((gatewayRows.data ?? []) as GatewayConnection[])
     setLoading(false)
@@ -117,7 +130,7 @@ export const DynamicGatewayConnector: React.FC = () => {
           p_display_name: displayName.trim(),
           p_environment: environment,
           p_credentials: formValues,
-          p_metadata: { source: 'althea_gateway_connection_v3' }
+          p_metadata: { source: 'althea_gateway_connection_v4' }
         })
         if (rpcError) throw new Error(rpcError.message)
         const gatewayId = typeof data?.gateway_id === 'string' ? data.gateway_id : null
@@ -157,11 +170,8 @@ export const DynamicGatewayConnector: React.FC = () => {
     const enabled = !['disabled', 'inactive'].includes(gateway.status.toLowerCase())
     const { error: credentialError } = await db.rpc('set_gateway_credential_status', { p_credential_id: gateway.credential_id, p_is_active: !enabled })
     if (credentialError) { setError(credentialError.message); return }
-    const { data: auth } = await db.auth.getUser()
-    if (auth.user?.id) {
-      const { error: updateError } = await db.from('gateways').update({ status: enabled ? 'disabled' : 'inactive' }).eq('id', gateway.id).eq('user_id', auth.user.id)
-      if (updateError) { setError(updateError.message); return }
-    }
+    const { error: updateError } = await db.from('gateways').update({ status: enabled ? 'disabled' : 'inactive' }).eq('id', gateway.id)
+    if (updateError) { setError(updateError.message); return }
     setMessage(enabled ? 'Gateway desativado. Histórico financeiro preservado.' : 'Gateway reativado. Valide a conexão antes de usar em um funil.')
     await load()
   }
@@ -194,7 +204,7 @@ export const DynamicGatewayConnector: React.FC = () => {
         <div className="flex items-center justify-between"><div><h4 className="text-[10px] font-medium uppercase tracking-wide text-neutral-200">{editingGatewayId ? 'Editar conexão' : 'Nova conexão de gateway'}</h4><p className="mt-1 text-[10px] text-neutral-600">O nome abaixo identifica o gateway que você cadastrou, não o adapter.</p></div>{editingGatewayId && <button type="button" onClick={resetForm} className="text-neutral-500 hover:text-white" aria-label="Cancelar edição"><X className="h-4 w-4"/></button>}</div>
         <label className="block space-y-1.5"><span className="text-[10px] font-mono uppercase text-neutral-400">Nome do gateway</span><input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Ex.: Meu Gateway de Produção" className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-xs text-white outline-none placeholder:text-neutral-700" /></label>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <label className="space-y-1.5"><span className="text-[10px] font-mono uppercase text-neutral-400">Método de integração</span><select value={selectedProviderKey} onChange={e => setSelectedProviderKey(e.target.value)} disabled={!!editingGatewayId} className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-xs text-white outline-none disabled:opacity-60"><option value="">Selecione como a API será integrada...</option>{providers.map(provider => <option key={provider.id} value={provider.provider_key}>{friendlyAdapterName(provider)}{provider.operational ? '' : ' · não homologado'}</option>)}</select><span className="block text-[9px] text-neutral-600">Isso define o adaptador de comunicação. O gateway real é definido pelo nome e pelas credenciais.</span></label>
+          <label className="space-y-1.5"><span className="text-[10px] font-mono uppercase text-neutral-400">Método de integração</span><select value={selectedProviderKey} onChange={e => setSelectedProviderKey(e.target.value)} disabled={!!editingGatewayId} className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-xs text-white outline-none disabled:opacity-60"><option value="">Selecione como a API será integrada...</option>{providers.map(provider => <option key={provider.id} value={provider.provider_key}>{friendlyAdapterName(provider)}</option>)}</select><span className="block text-[9px] text-neutral-600">Isso define o adaptador de comunicação. O gateway real é definido pelo nome e pelas credenciais.</span></label>
           <label className="space-y-1.5"><span className="text-[10px] font-mono uppercase text-neutral-400">Ambiente</span><select value={environment} onChange={e => setEnvironment(e.target.value as 'sandbox' | 'production')} className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-xs text-white outline-none"><option value="production">Produção</option><option value="sandbox">Sandbox / Testes</option></select></label>
         </div>
         {activeProvider && <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 space-y-3"><div className="flex items-center gap-2"><Plus className="h-3.5 w-3.5 text-[#1DB854]"/><span className="text-[10px] font-mono uppercase text-neutral-300">Credenciais da conexão</span></div>{activeProvider.credential_schema.fields.map(field => <label key={field.name} className="block space-y-1.5"><span className="text-[10px] font-mono uppercase text-neutral-500">{field.label}{field.required ? ' *' : ''}</span><input type={field.type} value={formValues[field.name] ?? ''} onChange={e => setFormValues(v => ({ ...v, [field.name]: e.target.value }))} placeholder={field.name} autoComplete="off" className="w-full rounded-lg border border-neutral-800 bg-neutral-950 p-2.5 text-xs text-white outline-none placeholder:text-neutral-700" /></label>)}</div>}
