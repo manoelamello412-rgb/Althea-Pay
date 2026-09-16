@@ -5,14 +5,14 @@ import { Activity, RefreshCw, TrendingUp, Zap } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { DynamicGatewayConnector } from '@/components/dynamic-gateway-connector';
 
-type GatewayProvider = string;
-type LogProvider = GatewayProvider | 'SYSTEM';
 type GatewayStatus = 'OPERACIONAL' | 'FAILOVER_ATIVO' | 'INDISPONÍVEL';
+type LogProvider = string;
 type LogType = 'SUCCESS' | 'WARNING' | 'CRITICAL';
 
 interface GatewayState {
   id: string;
-  provider: GatewayProvider;
+  name: string;
+  provider: string;
   priority: number;
   roleDescription: string;
   status: GatewayStatus;
@@ -37,15 +37,14 @@ interface GatewayRow {
 const INITIAL_GATEWAYS: GatewayState[] = [];
 const INITIAL_LOGS: NetworkLogEvent[] = [];
 
-function normalizeProvider(value: string | null | undefined): GatewayProvider | null {
-  const normalized = value?.trim().toUpperCase();
-  return normalized && /^[A-Z0-9][A-Z0-9_-]{0,63}$/.test(normalized) ? normalized : null;
+function normalizeProvider(value: string | null | undefined): string {
+  return value?.trim() || 'Gateway';
 }
 
 function normalizeStatus(value: string | null | undefined): GatewayStatus {
   const normalized = value?.trim().toUpperCase();
   if (normalized === 'FAILOVER_ATIVO' || normalized === 'FAILOVER ATIVO') return 'FAILOVER_ATIVO';
-  if (normalized === 'OPERACIONAL' || normalized === 'CONNECTED' || normalized === 'ACTIVE') return 'OPERACIONAL';
+  if (normalized === 'OPERACIONAL' || normalized === 'CONNECTED' || normalized === 'ACTIVE' || normalized === 'DEGRADED') return 'OPERACIONAL';
   return 'INDISPONÍVEL';
 }
 
@@ -73,36 +72,50 @@ export default function GatewaysManagementPage() {
   const loadGatewayTelemetry = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: authData } = await supabase.auth.getUser();
-      const userId = authData.user?.id;
-      if (!userId) {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!authData.user?.id) {
         setGateways([]);
         setSuccessRate(null);
         return;
       }
 
-      const { data, error } = await supabase.from('gateways').select('id,display_name,provider,status,priority').eq('user_id', userId).order('priority', { ascending: true });
+      // The gateways table is tenant-scoped by RLS through organization_id.
+      // Do not filter by user_id here: membership/RLS is the canonical tenant boundary.
+      const { data, error } = await supabase
+        .from('gateways')
+        .select('id,display_name,provider,status,priority')
+        .order('priority', { ascending: true })
+        .order('created_at', { ascending: false });
       if (error) throw error;
 
       const rows = (data ?? []) as GatewayRow[];
-      const mapped = rows.map((row, index): GatewayState | null => {
-        const provider = normalizeProvider(row.provider ?? row.display_name);
-        if (!provider) return null;
+      const mapped = rows.map((row, index): GatewayState => {
+        const name = normalizeProvider(row.display_name);
+        const provider = normalizeProvider(row.provider);
         const priority = Number.isFinite(row.priority) ? Number(row.priority) : index + 1;
         return {
           id: row.id,
+          name,
           provider,
           priority,
           roleDescription: `[PRIORIDADE ${priority}]`,
           status: normalizeStatus(row.status),
         };
-      }).filter((item): item is GatewayState => item !== null).sort((a, b) => a.priority - b.priority);
+      }).sort((a, b) => a.priority - b.priority);
 
       setGateways(mapped);
       const operational = mapped.filter((gateway) => gateway.status === 'OPERACIONAL').length;
       setSuccessRate(mapped.length ? Number(((operational / mapped.length) * 100).toFixed(1)) : null);
     } catch (error) {
-      appendLog({ id: `system-error-${Date.now()}`, timestamp: formatTime(new Date()), provider: 'SYSTEM', message: error instanceof Error ? `Falha ao sincronizar gateways: ${error.message}` : 'Falha ao sincronizar gateways.', type: 'CRITICAL' });
+      const message = error instanceof Error ? error.message : 'erro desconhecido';
+      appendLog({
+        id: `system-error-${Date.now()}`,
+        timestamp: formatTime(new Date()),
+        provider: 'SYSTEM',
+        message: `Falha ao sincronizar gateways: ${message}`,
+        type: 'CRITICAL',
+      });
       setGateways([]);
       setSuccessRate(null);
     } finally {
@@ -116,22 +129,37 @@ export default function GatewaysManagementPage() {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let active = true;
     const subscribe = async () => {
-      const { data } = await supabase.auth.getUser();
-      const userId = data.user?.id;
-      if (!active || !userId) return;
-      channel = supabase.channel(`gateway-telemetry-${userId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'gateways', filter: `user_id=eq.${userId}` }, (payload) => {
-        const row = (payload.new ?? payload.old) as GatewayRow;
-        const provider = normalizeProvider(row.provider ?? row.display_name);
-        if (!provider || !row.id) return;
-        const nextStatus = normalizeStatus(row.status);
-        setGateways((current) => {
-          const next = current.some((item) => item.id === row.id)
-            ? current.map((item) => item.id === row.id ? { ...item, status: nextStatus, priority: Number.isFinite(row.priority) ? Number(row.priority) : item.priority } : item)
-            : [...current, { id: row.id, provider, priority: Number.isFinite(row.priority) ? Number(row.priority) : current.length + 1, roleDescription: `[PRIORIDADE ${Number.isFinite(row.priority) ? Number(row.priority) : current.length + 1}]`, status: nextStatus }];
-          return next.sort((a, b) => a.priority - b.priority);
-        });
-        appendLog({ id: `gateway-${row.id}-${Date.now()}`, timestamp: formatTime(new Date()), provider, message: `STATUS -> ${statusLabel(nextStatus)}`, type: nextStatus === 'INDISPONÍVEL' ? 'CRITICAL' : nextStatus === 'FAILOVER_ATIVO' ? 'WARNING' : 'SUCCESS' });
-      }).subscribe();
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data.user?.id || !active) return;
+
+      // RLS limits realtime rows to the current organization; no user_id filter is required.
+      channel = supabase
+        .channel(`gateway-telemetry-${data.user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'gateways' }, (payload) => {
+          const row = (payload.new ?? payload.old) as GatewayRow;
+          if (!row?.id) return;
+          const name = normalizeProvider(row.display_name);
+          const provider = normalizeProvider(row.provider);
+          const nextStatus = normalizeStatus(row.status);
+          const priority = Number.isFinite(row.priority) ? Number(row.priority) : 9999;
+
+          setGateways((current) => {
+            const exists = current.some((item) => item.id === row.id);
+            const next = exists
+              ? current.map((item) => item.id === row.id ? { ...item, name, provider, status: nextStatus, priority: Number.isFinite(row.priority) ? priority : item.priority } : item)
+              : [...current, { id: row.id, name, provider, priority, roleDescription: `[PRIORIDADE ${priority}]`, status: nextStatus }];
+            return next.sort((a, b) => a.priority - b.priority);
+          });
+
+          appendLog({
+            id: `gateway-${row.id}-${Date.now()}`,
+            timestamp: formatTime(new Date()),
+            provider: name,
+            message: `STATUS -> ${statusLabel(nextStatus)}`,
+            type: nextStatus === 'INDISPONÍVEL' ? 'CRITICAL' : nextStatus === 'FAILOVER_ATIVO' ? 'WARNING' : 'SUCCESS',
+          });
+        })
+        .subscribe();
     };
     void subscribe();
     return () => { active = false; if (channel) void supabase.removeChannel(channel); };
@@ -149,9 +177,9 @@ export default function GatewaysManagementPage() {
       <section className="space-y-3">
         <h2 className="text-[11px] font-medium uppercase tracking-wide text-zinc-200">Fila de prioridade <span className="text-emerald-400">(Smart Routing)</span></h2>
         <div className="overflow-hidden rounded-xl border border-white/[0.12] bg-[#0a0a0c] divide-y divide-white/[0.08]">
-          {loading ? <div className="px-4 py-8 text-center text-xs text-zinc-500">Carregando Gateways...</div> : gateways.length === 0 ? <div className="px-4 py-8 text-center text-xs text-zinc-500">Nenhum Gateway conectado. Use o conector acima para adicionar uma conexão.</div> : gateways.map((gateway, index) => (
+          {loading ? <div className="px-4 py-8 text-center text-xs text-zinc-500">Carregando Gateways...</div> : gateways.length === 0 ? <div className="px-4 py-8 text-center text-xs text-zinc-500">Nenhum gateway conectado. Use o conector acima para adicionar uma conexão.</div> : gateways.map((gateway, index) => (
             <div key={gateway.id} className="flex min-h-[82px] items-center justify-between gap-3 px-4 py-4">
-              <div className="flex min-w-0 items-center gap-3"><span className="w-4 shrink-0 font-mono text-sm text-emerald-400">{index + 1}.</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-x-4 gap-y-1"><span className="font-semibold text-[18px] text-zinc-100">{gateway.provider}</span><span className="font-mono text-[10px] text-emerald-400">{gateway.roleDescription}</span></div></div></div>
+              <div className="flex min-w-0 items-center gap-3"><span className="w-4 shrink-0 font-mono text-sm text-emerald-400">{index + 1}.</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-x-4 gap-y-1"><span className="truncate font-semibold text-[18px] text-zinc-100">{gateway.name}</span><span className="font-mono text-[10px] text-emerald-400">{gateway.roleDescription}</span></div><div className="mt-1 text-[9px] font-mono uppercase text-zinc-600">{gateway.provider}</div></div></div>
               <div className={`flex shrink-0 items-center gap-2 text-[11px] font-medium ${gateway.status === 'INDISPONÍVEL' ? 'text-rose-400' : gateway.status === 'FAILOVER_ATIVO' ? 'text-amber-400' : 'text-emerald-400'}`}><span className={`h-2 w-2 rounded-full ${gateway.status === 'INDISPONÍVEL' ? 'bg-rose-500' : gateway.status === 'FAILOVER_ATIVO' ? 'bg-amber-500' : 'bg-emerald-500'}`} />{statusLabel(gateway.status)}</div>
             </div>
           ))}
