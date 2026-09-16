@@ -5,10 +5,10 @@ const json = (body: unknown, status = 200) => NextResponse.json(body, { status, 
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 
 function mapError(message: string) {
-  if (message === 'FUNNEL_NOT_FOUND' || message === 'STEP_NOT_FOUND') return [404, message.toLowerCase()]
-  if (message === 'FORBIDDEN') return [403, 'forbidden']
-  if (message.includes('REQUIRED') || message.includes('INVALID')) return [400, message.toLowerCase()]
-  return [500, 'journey_operation_failed']
+  if (message === 'FUNNEL_NOT_FOUND' || message === 'STEP_NOT_FOUND') return [404, message.toLowerCase()] as const
+  if (message === 'FORBIDDEN') return [403, 'forbidden'] as const
+  if (message.includes('REQUIRED') || message.includes('INVALID')) return [400, message.toLowerCase()] as const
+  return [500, 'journey_operation_failed'] as const
 }
 
 export async function GET(request: Request) {
@@ -49,8 +49,8 @@ export async function POST(request: Request) {
     const stepType = text(body?.step_type)
     const name = text(body?.name)
     if (!funnelId || !stepType || !name) return json({ error: 'funnel_id, step_type and name are required' }, 400)
-    const { data, error } = await supabase.rpc('add_funnel_step', { p_funnel_id: funnelId, p_step_type: stepType, p_name: name, p_config: body?.config && typeof body.config === 'object' ? body.config : {} })
-    if (error) { const [status, code] = mapError(error.message); return json({ error: code }, status) }
+    const { data, error } = await supabase.rpc('add_funnel_step', { p_funnel_id: funnelId as unknown as number, p_step_type: stepType, p_name: name, p_config: body?.config && typeof body.config === 'object' ? body.config : {} })
+    if (error) { const [status, code] = mapError(error.message); return json(code === 'journey_operation_failed' ? status : status, { error: code } as never) }
     return json({ step: data })
   } catch (cause) {
     console.error('[funnels/journey:post]', cause)
@@ -67,7 +67,7 @@ export async function PATCH(request: Request) {
     const stepId = text(body?.step_id)
     if (!stepId) return json({ error: 'step_id is required' }, 400)
     const config = body?.config === null || (body?.config && typeof body.config === 'object' && !Array.isArray(body.config)) ? body.config : null
-    const { data, error } = await supabase.rpc('update_funnel_step', { p_step_id: stepId, p_name: body?.name == null ? null : text(body.name), p_status: body?.status == null ? null : text(body.status), p_config: config })
+    const { data, error } = await supabase.rpc('update_funnel_step', { p_step_id: stepId as unknown as number, p_name: body?.name == null ? null : text(body.name), p_status: body?.status == null ? null : text(body.status), p_config: config })
     if (error) { const [status, code] = mapError(error.message); return json({ error: code }, status) }
     return json({ step: data })
   } catch (cause) {
