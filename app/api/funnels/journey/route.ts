@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     const name = text(body?.name)
     if (!funnelId || !stepType || !name) return json({ error: 'funnel_id, step_type and name are required' }, 400)
     const { data, error } = await supabase.rpc('add_funnel_step', { p_funnel_id: funnelId as unknown as number, p_step_type: stepType, p_name: name, p_config: body?.config && typeof body.config === 'object' ? body.config : {} })
-    if (error) { const [status, code] = mapError(error.message); return json(code === 'journey_operation_failed' ? status : status, { error: code } as never) }
+    if (error) { const [status, code] = mapError(error.message); return json({ error: code }, status) }
     return json({ step: data })
   } catch (cause) {
     console.error('[funnels/journey:post]', cause)
