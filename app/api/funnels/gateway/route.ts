@@ -15,11 +15,6 @@ export async function POST(request: Request) {
     const makePrimary = body?.make_primary !== false
     if (!funnelId || !gatewayId) return json({ error: 'funnel_id and gateway_id are required' }, 400)
 
-    const { data: target, error: targetError } = await supabase.from('gateways').select('id,status,organization_id').eq('id', gatewayId).eq('user_id', user.id).maybeSingle()
-    if (targetError) throw targetError
-    if (!target) return json({ error: 'gateway_not_found' }, 404)
-    if (['disabled', 'inactive', 'disconnected'].includes(String(target.status).toLowerCase())) return json({ error: 'gateway_not_operational' }, 409)
-
     const { data, error } = await supabase.rpc('bind_funnel_gateway', {
       p_funnel_id: funnelId,
       p_gateway_id: gatewayId,
@@ -28,8 +23,10 @@ export async function POST(request: Request) {
       p_make_primary: makePrimary,
     })
     if (error) {
-      if (error.message === 'forbidden' || error.message === 'FORBIDDEN') return json({ error: 'forbidden' }, 403)
-      if (/not found|mismatch/i.test(error.message)) return json({ error: error.message }, 409)
+      const message = String(error.message || '')
+      if (/forbidden/i.test(message)) return json({ error: 'forbidden' }, 403)
+      if (/gateway.*not found|funnel.*not found|mismatch/i.test(message)) return json({ error: 'gateway_not_found' }, 404)
+      if (/operational|disabled|inactive|disconnected/i.test(message)) return json({ error: 'gateway_not_operational' }, 409)
       return json({ error: 'gateway_binding_failed' }, 500)
     }
     return json({ binding: data })
@@ -47,9 +44,13 @@ export async function GET(request: Request) {
     const funnelId = new URL(request.url).searchParams.get('funnel_id')?.trim() ?? ''
     if (!funnelId) return json({ error: 'funnel_id is required' }, 400)
 
+    const { data: funnel, error: funnelError } = await supabase.from('funnels').select('id,organization_id').eq('id', funnelId).maybeSingle()
+    if (funnelError) throw funnelError
+    if (!funnel) return json({ error: 'funnel_not_found' }, 404)
+
     const [{ data: bindings, error: bindingsError }, { data: gateways, error: gatewaysError }] = await Promise.all([
       supabase.from('funnel_gateway_bindings').select('id,funnel_id,gateway_id,role,priority,is_primary,status,created_at,updated_at').eq('funnel_id', funnelId).order('priority', { ascending: true }),
-      supabase.from('gateways').select('id,display_name,provider,environment,status,capabilities').eq('user_id', user.id).order('display_name', { ascending: true }),
+      supabase.from('gateways').select('id,display_name,provider,environment,status,capabilities').eq('organization_id', funnel.organization_id).order('display_name', { ascending: true }),
     ])
     if (bindingsError) throw bindingsError
     if (gatewaysError) throw gatewaysError
