@@ -23,6 +23,13 @@ function mapProvisionError(error: { code?: string | null; message?: string | nul
   if (message === 'unauthorized' || message === 'AUTH_REQUIRED') return { status: 401, error: 'unauthorized' }
   if (message === 'forbidden' || message === 'FORBIDDEN') return { status: 403, error: 'forbidden' }
   if (message === 'organization_required') return { status: 409, error: 'organization_required' }
+  if (message === 'product_required') return { status: 400, error: 'product_required' }
+  if (message === 'gateway_required') return { status: 400, error: 'gateway_required' }
+  if (message === 'product_not_found') return { status: 404, error: 'product_not_found' }
+  if (message === 'gateway_not_found') return { status: 404, error: 'gateway_not_found' }
+  if (message === 'product_not_active') return { status: 409, error: 'product_not_active' }
+  if (message === 'gateway_not_operational') return { status: 409, error: 'gateway_not_operational' }
+  if (message === 'product_organization_mismatch' || message === 'gateway_organization_mismatch') return { status: 403, error: 'resource_organization_mismatch' }
   if (error.code === '22023' || message.startsWith('invalid ') || message.endsWith('is required') || message.endsWith('is too long')) {
     return { status: 400, error: message }
   }
@@ -41,12 +48,16 @@ export async function POST(request: Request) {
     const rawUrl = typeof body?.url === 'string' ? body.url.trim() : null
     const connectionType = typeof body?.connection_type === 'string' ? body.connection_type.trim() : 'script'
     const funnelType = typeof body?.funnel_type === 'string' ? body.funnel_type.trim() : 'custom'
+    const productId = typeof body?.product_id === 'string' ? body.product_id.trim() : ''
+    const gatewayId = typeof body?.gateway_id === 'string' ? body.gateway_id.trim() : ''
 
     if (!name) return json({ error: 'name is required' }, 400)
     if (name.length > 120) return json({ error: 'name is too long' }, 400)
     if (rawUrl && rawUrl.length > 2048) return json({ error: 'url is too long' }, 400)
     if (connectionType !== 'script' && connectionType !== 'webhook') return json({ error: 'invalid connection_type' }, 400)
     if (!FUNNEL_TYPES.has(funnelType)) return json({ error: 'invalid funnel_type' }, 400)
+    if (!productId) return json({ error: 'product_required' }, 400)
+    if (!gatewayId) return json({ error: 'gateway_required' }, 400)
 
     const url = normalizeUrl(rawUrl)
     if (url) {
@@ -61,12 +72,14 @@ export async function POST(request: Request) {
     let provisionError: { code?: string | null; message?: string | null } | null = null
 
     for (let attempt = 0; attempt < MAX_PROVISION_ATTEMPTS; attempt += 1) {
-      const result = await supabase.rpc('provision_funnel_atomic', {
+      const result = await supabase.rpc('provision_funnel_commercial_atomic', {
         p_name: name,
         p_url: url,
         p_connection_type: connectionType,
         p_funnel_type: funnelType,
         p_event_endpoint: eventEndpoint,
+        p_product_id: productId,
+        p_gateway_id: gatewayId,
       })
 
       data = result.data
