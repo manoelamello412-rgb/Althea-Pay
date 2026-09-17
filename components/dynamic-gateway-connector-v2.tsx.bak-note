@@ -1,1 +1,0 @@
-The V2 implementation remains in Git history. The active gateways page should consume the provider-driven V3 implementation. This note is intentionally non-runtime.
