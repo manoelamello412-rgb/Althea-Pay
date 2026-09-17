@@ -1,31 +1,54 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Activity, AlertTriangle, CheckCircle2, ChevronLeft, RefreshCw, Server } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronLeft, RefreshCw, Server } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-interface ProviderStatus { name: string; latency: number | null; status: 'stable' | 'unstable' | 'unavailable'; successRate: number | null }
+interface ProviderStatus { id: string; name: string; provider: string; status: 'stable' | 'unstable' | 'unavailable'; rawStatus: string }
 
 interface PerformanceProps { onBack: () => void }
 
-const PROVIDERS = ['Cielo API', 'Rede Gateway', 'Stone Client', 'PagBank Engine']
-
-function classify(latency: number | null): ProviderStatus['status'] {
-  if (latency === null) return 'unavailable'
-  return latency > 110 ? 'unstable' : 'stable'
+function classifyGateway(status: string): ProviderStatus['status'] {
+  if (status === 'connected') return 'stable'
+  if (status === 'degraded' || status === 'error') return 'unstable'
+  return 'unavailable'
 }
 
 export function ConfigTabPerformance({ onBack }: PerformanceProps) {
   const [edgeLatency, setEdgeLatency] = useState<number | null>(null)
   const [history, setHistory] = useState<number[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
-  const [providers, setProviders] = useState<ProviderStatus[]>(PROVIDERS.map((name) => ({ name, latency: null, status: 'unavailable', successRate: null })))
+  const [providers, setProviders] = useState<ProviderStatus[]>([])
+  const [providerError, setProviderError] = useState<string | null>(null)
+
+  const loadProviders = useCallback(async () => {
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const { data, error } = await supabase
+        .from('gateways')
+        .select('id,display_name,provider,status')
+        .order('display_name', { ascending: true })
+      if (error) throw error
+      setProviders((data ?? []).map((row: { id: string; display_name?: string | null; provider?: string | null; status?: string | null }) => ({
+        id: row.id,
+        name: row.display_name?.trim() || row.provider?.trim() || 'Gateway sem nome',
+        provider: row.provider?.trim() || 'provider_desconhecido',
+        rawStatus: row.status ?? 'unknown',
+        status: classifyGateway(row.status ?? 'unknown'),
+      })))
+      setProviderError(null)
+    } catch (error) {
+      setProviders([])
+      setProviderError(error instanceof Error ? error.message : 'Falha ao carregar gateways.')
+    }
+  }, [])
 
   const check = useCallback(async () => {
     setIsSyncing(true)
     const started = performance.now()
     try {
-      const response = await fetch('/api/health', { cache: 'no-store' })
+      const response = await fetch('/api/health/supabase', { cache: 'no-store' })
       const latency = Math.max(1, Math.round(performance.now() - started))
       if (!response.ok) throw new Error('health check failed')
       setEdgeLatency(latency)
@@ -40,9 +63,10 @@ export function ConfigTabPerformance({ onBack }: PerformanceProps) {
 
   useEffect(() => {
     void check()
+    void loadProviders()
     const interval = window.setInterval(() => void check(), 2500)
     return () => window.clearInterval(interval)
-  }, [check])
+  }, [check, loadProviders])
 
   return (
     <div className="w-full flex flex-col gap-4 animate-fade-in pb-32 font-['Space_Grotesk'] text-left text-white">
@@ -66,12 +90,17 @@ export function ConfigTabPerformance({ onBack }: PerformanceProps) {
       </div>
 
       <div className="mt-1 flex flex-col gap-2">
-        <span className="pl-1 text-[10px] font-bold uppercase tracking-wider text-[#A6A6A6]">Status das APIs Externas</span>
-        <div className="rounded-xl border border-zinc-900 bg-[#0F1A16]/40 p-3 text-[10px] leading-relaxed text-zinc-500">Nenhum conector de adquirente está vinculado a esta operação ainda. Os status abaixo serão preenchidos automaticamente quando as integrações reais forem configuradas.</div>
-        {providers.map((provider) => <div key={provider.name} className="flex items-center justify-between rounded-xl border border-zinc-900 bg-[#0F1A16]/60 p-3">
-          <div className="flex min-w-0 items-center gap-2.5"><div className="h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-700" /><div className="truncate"><span className="block text-xs font-bold text-zinc-300">{provider.name}</span><span className="block truncate text-[10px] text-zinc-600">Integração não configurada</span></div></div>
-          <div className="flex shrink-0 items-center gap-2"><div className="text-right"><span className="font-mono text-xs font-bold text-zinc-600">—</span><p className="text-[9px] font-medium uppercase tracking-tighter text-zinc-600">Indisponível</p></div><AlertTriangle className="h-3.5 w-3.5 text-zinc-700" /></div>
-        </div>)}
+        <span className="pl-1 text-[10px] font-bold uppercase tracking-wider text-[#A6A6A6]">Gateways conectadas</span>
+        {providerError ? <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-3 text-[10px] text-amber-300">Não foi possível carregar as conexões: {providerError}</div> : null}
+        {!providerError && providers.length === 0 ? <div className="rounded-xl border border-zinc-900 bg-[#0F1A16]/40 p-3 text-[10px] leading-relaxed text-zinc-500">Nenhuma gateway cadastrada. Esta área reflete automaticamente as conexões reais criadas no painel de Gateways.</div> : null}
+        {providers.map((provider) => {
+          const operational = provider.status === 'stable'
+          const warning = provider.status === 'unstable'
+          return <div key={provider.id} className="flex items-center justify-between rounded-xl border border-zinc-900 bg-[#0F1A16]/60 p-3">
+            <div className="flex min-w-0 items-center gap-2.5"><div className={`h-1.5 w-1.5 shrink-0 rounded-full ${operational ? 'bg-[#1DB854]' : warning ? 'bg-amber-400' : 'bg-zinc-700'}`} /><div className="truncate"><span className="block text-xs font-bold text-zinc-300">{provider.name}</span><span className="block truncate text-[10px] text-zinc-600">{provider.provider}</span></div></div>
+            <div className="flex shrink-0 items-center gap-2"><div className="text-right"><span className={`text-[9px] font-bold uppercase tracking-tighter ${operational ? 'text-[#1DB854]' : warning ? 'text-amber-300' : 'text-zinc-600'}`}>{provider.rawStatus}</span><p className="text-[9px] text-zinc-600">estado da conexão</p></div>{operational ? <CheckCircle2 className="h-3.5 w-3.5 text-[#1DB854]" /> : <AlertTriangle className={`h-3.5 w-3.5 ${warning ? 'text-amber-400' : 'text-zinc-700'}`} />}</div>
+          </div>
+        })}
       </div>
     </div>
   )
