@@ -18,6 +18,17 @@
   --althea-control-radius: 12px;
   --althea-content-bottom: 128px;
   --althea-content-max: 1280px;
+
+  /* Canonical aliases retained for existing v2 utility consumers. */
+  --althea-bg-base: var(--althea-bg);
+  --althea-bg-surface: var(--althea-surface);
+  --althea-bg-surface-hover: var(--althea-inner);
+  --althea-border-muted: var(--althea-border);
+  --althea-border-active: rgba(29, 184, 84, 0.22);
+  --althea-brand-cyan: var(--althea-brand);
+  --althea-brand-emerald: var(--althea-brand);
+  --althea-brand-amber: var(--althea-gold);
+  --althea-brand-rose: #C95C5C;
 }
 
 *,
@@ -135,6 +146,13 @@ a { -webkit-user-select: none; user-select: none; }
 
 .althea-ds-mobile-safe { padding-bottom: var(--althea-content-bottom); }
 
+/* Compatibility utilities formerly isolated in althea-design-system-v2.css. */
+.font-data { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-variant-numeric: tabular-nums; }
+.safe-pb-mobile { padding-bottom: max(8rem, env(safe-area-inset-bottom) + 8rem); }
+.althea-surface { background: var(--althea-surface); border: 1px solid var(--althea-border); }
+.althea-pill-rail { display: flex; width: 100%; min-width: 0; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.125rem; scrollbar-width: none; }
+.althea-pill-rail::-webkit-scrollbar { display: none; }
+
 .app-brand-pay,
 .brand-lockup-pay,
 .brand-lockup-tag b { color: var(--althea-brand); }
@@ -158,6 +176,7 @@ a { -webkit-user-select: none; user-select: none; }
 .althea-page-content [class~="bg-emerald-500"] { background-color: var(--althea-brand) !important; }
 .althea-page-content [class~="bg-emerald-500/5"] { background-color: rgba(29,184,84,.05) !important; }
 .althea-page-content [class~="bg-emerald-500/10"] { background-color: rgba(29,184,84,.10) !important; }
+.althea.page-content [class~="bg-emerald-500/20"] { background-color: rgba(29,184,84,.20) !important; }
 .althea-page-content [class~="bg-emerald-500/20"] { background-color: rgba(29,184,84,.20) !important; }
 .althea-page-content [class~="bg-emerald-900/20"],
 .althea-page-content [class~="bg-emerald-950/20"] { background-color: rgba(13,54,45,.20) !important; }
@@ -223,6 +242,7 @@ a { -webkit-user-select: none; user-select: none; }
   .althea-card { border-radius: 16px; }
   .althea-ds-card { padding: 16px; }
   .althea-page-content .settings-shell { padding-bottom: var(--althea-content-bottom); }
+  body { overscroll-behavior-x: none; }
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
