@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: althea-crm-background-workers
+  group: althea-crm-workers
   cancel-in-progress: false
 jobs:
   workers:
