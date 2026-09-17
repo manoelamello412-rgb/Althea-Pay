@@ -1,1 +1,0 @@
-The V2 runtime entrypoint is intentionally preserved. The provider-driven implementation is available as V3 and should replace the V2 export in the gateways page.
