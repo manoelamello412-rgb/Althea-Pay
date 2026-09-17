@@ -25,18 +25,18 @@ type Gateway = {
   credential_id: string | null
 }
 
-const adapterName = (p: Provider) =>
-  p.provider_key === 'generic_http' || p.adapter_key === 'generic_http_json'
+const adapterName = (provider: Provider) =>
+  provider.provider_key === 'generic_http' || provider.adapter_key === 'generic_http_json'
     ? 'API REST / HTTP genérica'
-    : p.display_name
+    : provider.display_name
 
-const validSchema = (v: unknown): v is { fields: GatewayCredentialField[] } => {
-  if (!v || typeof v !== 'object' || !Array.isArray((v as { fields?: unknown }).fields)) return false
-  return (v as { fields: unknown[] }).fields.every(field => {
-    if (!field || typeof field !== 'object') return false
-    const f = field as Record<string, unknown>
-    return typeof f.name === 'string' && typeof f.label === 'string' &&
-      (f.type === 'text' || f.type === 'password') && typeof f.required === 'boolean'
+const validSchema = (value: unknown): value is { fields: GatewayCredentialField[] } => {
+  if (!value || typeof value !== 'object' || !Array.isArray((value as { fields?: unknown }).fields)) return false
+  return (value as { fields: unknown[] }).fields.every(item => {
+    if (!item || typeof item !== 'object') return false
+    const field = item as Record<string, unknown>
+    return typeof field.name === 'string' && typeof field.label === 'string' &&
+      (field.type === 'text' || field.type === 'password') && typeof field.required === 'boolean'
   })
 }
 
@@ -99,9 +99,10 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
   useEffect(() => { void load() }, [])
 
   const active = providers.find(provider => provider.provider_key === providerKey) ?? null
+  const isGenericHttp = active?.provider_key === 'generic_http' || active?.adapter_key === 'generic_http_json'
   const credentialFields = useMemo(
-    () => getOperationalCredentialFields(active?.credential_schema.fields ?? []),
-    [active]
+    () => getOperationalCredentialFields(active?.credential_schema.fields ?? [], isGenericHttp),
+    [active, isGenericHttp]
   )
   const webhookFields = useMemo(
     () => getWebhookCredentialFields(active?.credential_schema.fields ?? []),
@@ -110,9 +111,9 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
 
   useEffect(() => {
     const next: Record<string, string> = {}
-    for (const field of credentialFields) next[field.name] = ''
+    for (const credential of credentialFields) next[credential.name] = ''
     const nextWebhook: Record<string, string> = {}
-    for (const field of webhookFields) nextWebhook[field.name] = ''
+    for (const credential of webhookFields) nextWebhook[credential.name] = ''
     setValues(next)
     setWebhookValues(nextWebhook)
   }, [credentialFields, webhookFields])
@@ -152,11 +153,11 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
     try {
       if (!name.trim()) throw new Error('Dê um nome para esta conexão de gateway.')
       if (!editing) {
-        for (const field of credentialFields) {
-          if (field.required && !values[field.name]?.trim()) throw new Error(`Preencha: ${field.label}.`)
+        for (const credential of credentialFields) {
+          if (credential.required && !values[credential.name]?.trim()) throw new Error(`Preencha: ${credential.label}.`)
         }
-        for (const field of webhookFields) {
-          if (field.required && !webhookValues[field.name]?.trim()) throw new Error(`Preencha: ${field.label}.`)
+        for (const credential of webhookFields) {
+          if (credential.required && !webhookValues[credential.name]?.trim()) throw new Error(`Preencha: ${credential.label}.`)
         }
       }
       const credentials = { ...values, ...webhookValues }
@@ -173,7 +174,7 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
             p_display_name: name.trim(),
             p_environment: environment,
             p_credentials: credentials,
-            p_metadata: { source: 'althea_gateway_connection_v8' },
+            p_metadata: { source: 'althea_gateway_connection_v9' },
           })
 
       if (rpc.error) throw new Error(rpc.error.message)
@@ -208,8 +209,14 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
     if (credentialError) { setError(credentialError.message); return }
     const update = await db.from('gateways').update({ status: enabled ? 'disabled' : 'inactive' }).eq('id', gateway.id)
     if (update.error) { setError(update.error.message); return }
-    setMessage(enabled ? 'Gateway desativado.' : 'Gateway reativado.')
+    if (enabled) {
+      setMessage('Gateway desativado.')
+      await load()
+      return
+    }
+    setMessage('Gateway reativado. Validando a conexão novamente.')
     await load()
+    await test(gateway.id)
   }
 
   const disconnect = async (gateway: Gateway) => {
@@ -220,7 +227,7 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
     await load()
   }
 
-  const field = (credential: GatewayCredentialField, target: 'credential' | 'webhook' = 'credential') => {
+  const renderField = (credential: GatewayCredentialField, target: 'credential' | 'webhook' = 'credential') => {
     const source = target === 'webhook' ? webhookValues : values
     const setSource = target === 'webhook' ? setWebhookValues : setValues
     return (
@@ -246,7 +253,7 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
           <Cpu className="h-4 w-4 text-[#1DB854]" />
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider font-mono text-white">Central de Gateways</h3>
-            <p className="mt-1 text-[11px] text-neutral-500">O provedor define a integração técnica. Aqui entram somente as credenciais da conexão.</p>
+            <p className="mt-1 text-[11px] text-neutral-500">Conecte, teste, edite e desative gateways sem alterar código.</p>
           </div>
         </div>
         <button type="button" onClick={() => void load()} disabled={loading} className="rounded-lg border border-neutral-800 p-2 text-neutral-400">
@@ -270,7 +277,7 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
               <div key={gateway.id} className="flex items-center justify-between gap-3 rounded-lg border border-neutral-800 p-3">
                 <div className="min-w-0">
                   <div className="truncate text-xs font-semibold text-white">{gateway.display_name || 'Gateway sem nome'}</div>
-                  <div className="mt-1 text-[9px] font-mono uppercase text-neutral-500">{gateway.environment} · {statusLabel(gateway.status)}</div>
+                  <div className="mt-1 text-[9px] font-mono uppercase text-neutral-500">{gateway.provider} · {gateway.environment} · {statusLabel(gateway.status)}</div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-full ${['connected', 'degraded'].includes(gateway.status.toLowerCase()) ? 'bg-emerald-500' : 'bg-neutral-600'}`} />
@@ -290,7 +297,7 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h4 className="text-[10px] font-medium uppercase tracking-wide text-neutral-200">{editing ? 'Editar conexão' : 'Nova conexão de gateway'}</h4>
-              <p className="mt-1 text-[10px] text-neutral-600">Selecione um provider cadastrado. Endpoints e transporte são herdados do adapter.</p>
+              <p className="mt-1 text-[10px] text-neutral-600">Providers nativos pedem só credenciais. A opção HTTP genérica libera configuração avançada de API.</p>
             </div>
             {editing && <button type="button" onClick={reset} className="text-neutral-500"><X className="h-4 w-4" /></button>}
           </div>
@@ -320,10 +327,10 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
           {active && credentialFields.length > 0 && (
             <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
               <div>
-                <h5 className="text-xs font-semibold uppercase tracking-wide text-white">Credenciais da conexão</h5>
-                <p className="mt-1 text-[10px] text-neutral-500">Somente os dados operacionais declarados pelo provider aparecem aqui.</p>
+                <h5 className="text-xs font-semibold uppercase tracking-wide text-white">{isGenericHttp ? 'Credenciais e configuração avançada da API' : 'Credenciais da conexão'}</h5>
+                <p className="mt-1 text-[10px] text-neutral-500">{isGenericHttp ? 'A URL base e os endpoints ficam configuráveis porque este provider representa uma API ainda não nativa.' : 'O transporte técnico é herdado do adapter canônico do provider.'}</p>
               </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{credentialFields.map(field)}</div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{credentialFields.map(credential => renderField(credential))}</div>
             </div>
           )}
 
@@ -331,9 +338,9 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
             <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
               <div>
                 <h5 className="text-xs font-semibold uppercase tracking-wide text-white">Webhook / assinatura</h5>
-                <p className="mt-1 text-[10px] text-neutral-500">Segredo usado somente para validar eventos assinados do provedor. Ele não configura transporte HTTP.</p>
+                <p className="mt-1 text-[10px] text-neutral-500">Segredo usado para validar eventos assinados do provedor.</p>
               </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{webhookFields.map(field => field( field as GatewayCredentialField, 'webhook'))}</div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{webhookFields.map(credential => renderField(credential, 'webhook'))}</div>
             </div>
           )}
 
