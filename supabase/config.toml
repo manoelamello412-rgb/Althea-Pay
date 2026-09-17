@@ -8,7 +8,7 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.gateway-connection-test]
-# Validates the caller token inside the function so generic/native providers share one contract.
+# Validates the caller token inside the function so native and generic providers share one contract.
 verify_jwt = false
 
 [functions.gateway-attempt-recovery]
@@ -21,9 +21,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.gateway-sandbox]
-verify_jwt = true
-
-[functions.gateway-refund]
 verify_jwt = true
 
 [functions.checkout-engine-v2]
@@ -53,6 +50,33 @@ verify_jwt = false
 [functions.iara-ai-core]
 verify_jwt = true
 
+[functions.iara-copilot]
+verify_jwt = true
+
+[functions.iara-funnel-builder]
+verify_jwt = true
+
+[functions.iara-funnel-activate]
+verify_jwt = true
+
+[functions.iara-commercial-intervention]
+verify_jwt = true
+
+[functions.iara-commercial-intervention-worker]
+verify_jwt = false
+
+[functions.iara-daily-report]
+verify_jwt = true
+
+[functions.iara-daily-report-worker]
+verify_jwt = false
+
+[functions.iara-financial-confirm]
+verify_jwt = true
+
+[functions.iara-financial-command]
+verify_jwt = true
+
 [functions.automation-engine-v2]
 verify_jwt = false
 
@@ -63,9 +87,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.funnel-events]
-verify_jwt = false
-
-[functions.funnel-events-secure]
 verify_jwt = false
 
 [functions.reconciliation-worker]
