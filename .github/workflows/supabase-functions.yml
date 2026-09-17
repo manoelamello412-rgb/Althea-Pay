@@ -40,9 +40,11 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy Edge Functions
+      - name: Deploy canonical Edge Functions and prune retired slugs
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          supabase functions deploy --project-ref "hkraryqoziravulvqkid"
+          # The repository is the canonical function inventory. --prune removes remote
+          # functions that were intentionally retired and are no longer versioned here.
+          supabase functions deploy --project-ref "hkraryqoziravulvqkid" --prune
