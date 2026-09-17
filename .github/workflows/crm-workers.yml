@@ -1,4 +1,4 @@
-name: ALTHEA CRM workers
+name: ALTHEA CRM background workers
 on:
   schedule:
     - cron: '*/5 * * * *'
@@ -6,22 +6,15 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: althea-crm-workers
+  group: althea-crm-background-workers
   cancel-in-progress: false
 jobs:
   workers:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Dispatch omnichannel outbox
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          ALTHEA_INTERNAL_SECRET: ${{ secrets.ALTHEA_INTERNAL_SECRET }}
-        run: |
-          set -euo pipefail
-          test -n "$SUPABASE_URL"
-          test -n "$ALTHEA_INTERNAL_SECRET"
-          curl --fail-with-body --retry 2 --max-time 60 -X POST "$SUPABASE_URL/functions/v1/crm-channel-outbox-dispatcher" -H "content-type: application/json" -H "x-internal-secret: $ALTHEA_INTERNAL_SECRET" --data '{"limit":100}'
+      # crm-channel-outbox-dispatcher is intentionally not scheduled here.
+      # Production already runs it every minute through Supabase pg_cron.
       - name: Retry failed CRM automations
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
