@@ -100,30 +100,3 @@ verify_jwt = false
 
 [functions.crm-predictive-outcome-worker]
 verify_jwt = false
-
-[functions.iara-copilot]
-verify_jwt = true
-
-[functions.iara-funnel-builder]
-verify_jwt = true
-
-[functions.iara-commercial-intervention]
-verify_jwt = true
-
-[functions.iara-daily-report]
-verify_jwt = true
-
-[functions.iara-funnel-activate]
-verify_jwt = true
-
-[functions.iara-commercial-intervention-worker]
-verify_jwt = false
-
-[functions.iara-daily-report-worker]
-verify_jwt = false
-
-[functions.iara-financial-command]
-verify_jwt = true
-
-[functions.iara-financial-confirm]
-verify_jwt = true
