@@ -1,6 +1,11 @@
-name: Supabase migrations
+name: Supabase migration audit
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/config.toml'
   push:
     branches: [main]
     paths:
@@ -12,11 +17,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: supabase-migrations-${{ github.ref }}
-  cancel-in-progress: false
+  group: supabase-migration-audit-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  migration:
+  audit:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -30,7 +35,7 @@ jobs:
         with:
           version: latest
 
-      - name: Validate deployment credentials
+      - name: Validate audit credentials
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -39,7 +44,7 @@ jobs:
           test -n "${SUPABASE_ACCESS_TOKEN:-}" || { echo "SUPABASE_ACCESS_TOKEN is not configured."; exit 1; }
           test -n "${SUPABASE_DB_PASSWORD:-}" || { echo "SUPABASE_DB_PASSWORD is not configured."; exit 1; }
 
-      - name: Link production project
+      - name: Link production project read-only for migration audit
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -47,10 +52,11 @@ jobs:
           set -euo pipefail
           supabase link --project-ref "hkraryqoziravulvqkid" --password "$SUPABASE_DB_PASSWORD"
 
-      - name: Apply database migrations
+      - name: Compare local and remote migration history
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -euo pipefail
-          supabase db push --linked --password "$SUPABASE_DB_PASSWORD"
+          supabase migration list --linked --password "$SUPABASE_DB_PASSWORD"
+          echo "Database deployment is intentionally disabled in CI. Reconcile remote-only migrations before running supabase db push manually."
