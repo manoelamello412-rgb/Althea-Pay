@@ -1,28 +1,34 @@
 'use client'
 
-import { useState } from 'react'
-import { Check, UserPlus, Users } from 'lucide-react'
+import Link from 'next/link'
+import { ShieldCheck, Users, UsersRound } from 'lucide-react'
 
 export default function UsuariosSettingsPage() {
-  const [email, setEmail] = useState('')
-  const [role, setRole] = useState('operador')
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState('')
+  return (
+    <div className="space-y-5 pb-32 font-['Space_Grotesk'] text-white">
+      <header className="flex items-start gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#1DB854]/20 bg-[#0F1A16] text-[#1DB854]"><Users size={17}/></span>
+        <div><h1 className="text-xl font-bold">Usuários</h1><p className="text-[11px] text-zinc-500">Membros e níveis de acesso persistidos na organização.</p></div>
+      </header>
 
-  function invite(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setSaving(true)
-    setMessage('')
-    window.setTimeout(() => {
-      setSaving(false)
-      setMessage('Convite preparado. O envio real será ativado quando o módulo de equipe estiver conectado.')
-      setEmail('')
-    }, 400)
-  }
+      <section className="rounded-2xl border border-zinc-900 bg-[#0F1A16]/40 p-5">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="mt-0.5 shrink-0 text-[#1DB854]" size={18}/>
+          <div>
+            <h2 className="text-sm font-bold">Gestão segura de equipe</h2>
+            <p className="mt-1 text-xs leading-5 text-zinc-500">
+              A ALTHEA exibe somente vínculos reais da organização. Convites e alterações de papel não são simulados: enquanto não houver uma operação de backend específica para essas ações, esta tela não apresenta controles que fingem executá-las.
+            </p>
+          </div>
+        </div>
+        <Link href="/dashboard/members" className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#1DB854] px-4 text-xs font-bold text-black transition hover:brightness-110">
+          <UsersRound size={15}/> Ver membros e acessos reais
+        </Link>
+      </section>
 
-  return <div className="space-y-5 pb-32 font-['Space_Grotesk'] text-white">
-    <header className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#1DB854]/20 bg-[#0F1A16] text-[#1DB854]"><Users size={17}/></span><div><h1 className="text-xl font-bold">Usuários</h1><p className="text-[11px] text-zinc-500">Controle de equipe, convites e níveis de acesso.</p></div></header>
-    <section className="rounded-2xl border border-zinc-900 bg-[#0F1A16]/40 p-4"><div className="mb-4"><span className="text-[10px] font-bold uppercase tracking-wider text-[#1DB854]">Adicionar usuário</span></div><form onSubmit={invite} className="space-y-3"><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="E-mail do usuário" className="w-full rounded-xl border border-zinc-900 bg-[#060608] p-3 text-xs text-white outline-none focus:border-[#1DB854]/40"/><select value={role} onChange={e=>setRole(e.target.value)} className="w-full rounded-xl border border-zinc-900 bg-[#060608] p-3 text-xs text-white outline-none"><option value="administrador">Administrador</option><option value="operador">Operador</option><option value="leitura">Somente leitura</option></select><button disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1DB854] py-3 text-xs font-bold text-black disabled:opacity-60">{saving?'Preparando convite...':message?<><Check size={14}/>Convite preparado</>:<><UserPlus size={14}/>Adicionar usuário</>}</button></form>{message&&<p className="mt-3 text-[10px] text-[#1DB854]">{message}</p>}</section>
-    <div className="rounded-xl border border-zinc-900 bg-[#060608] p-3 text-[10px] leading-relaxed text-zinc-500">Nenhum membro é inventado. Quando a equipe estiver cadastrada, esta área exibirá os usuários reais e suas permissões.</div>
-  </div>
+      <div className="rounded-xl border border-zinc-900 bg-[#060608] p-3 text-[10px] leading-relaxed text-zinc-500">
+        Para habilitar convites no futuro, use uma operação autenticada de backend que crie/convide o usuário e aplique o papel da organização com auditoria e RLS. Nenhum convite é fabricado no navegador.
+      </div>
+    </div>
+  )
 }
