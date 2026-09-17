@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { AlertCircle, CheckCircle2, Cpu, Loader2, Pencil, Power, RefreshCw, Unplug, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { getOperationalCredentialFields, type GatewayCredentialField } from '@/components/gateway-provider-fields'
+import { getOperationalCredentialFields, getWebhookCredentialFields, type GatewayCredentialField } from '@/components/gateway-provider-fields'
 
 type Provider = {
   id: string
@@ -53,6 +53,7 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
   const [name, setName] = useState('')
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('production')
   const [values, setValues] = useState<Record<string, string>>({})
+  const [webhookValues, setWebhookValues] = useState<Record<string, string>>({})
   const [editing, setEditing] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -102,12 +103,19 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
     () => getOperationalCredentialFields(active?.credential_schema.fields ?? []),
     [active]
   )
+  const webhookFields = useMemo(
+    () => getWebhookCredentialFields(active?.credential_schema.fields ?? []),
+    [active]
+  )
 
   useEffect(() => {
     const next: Record<string, string> = {}
     for (const field of credentialFields) next[field.name] = ''
+    const nextWebhook: Record<string, string> = {}
+    for (const field of webhookFields) nextWebhook[field.name] = ''
     setValues(next)
-  }, [credentialFields])
+    setWebhookValues(nextWebhook)
+  }, [credentialFields, webhookFields])
 
   const reset = () => {
     setEditing(null)
@@ -115,6 +123,7 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
     setName('')
     setEnvironment('production')
     setValues({})
+    setWebhookValues({})
   }
 
   const test = async (gatewayId: string) => {
@@ -146,21 +155,25 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
         for (const field of credentialFields) {
           if (field.required && !values[field.name]?.trim()) throw new Error(`Preencha: ${field.label}.`)
         }
+        for (const field of webhookFields) {
+          if (field.required && !webhookValues[field.name]?.trim()) throw new Error(`Preencha: ${field.label}.`)
+        }
       }
+      const credentials = { ...values, ...webhookValues }
 
       const rpc = editing
         ? await db.rpc('update_dynamic_gateway', {
             p_gateway_id: editing,
             p_display_name: name.trim(),
             p_environment: environment,
-            p_credentials: Object.values(values).some(value => value.trim()) ? values : {},
+            p_credentials: Object.values(credentials).some(value => value.trim()) ? credentials : {},
           })
         : await db.rpc('register_dynamic_gateway', {
             p_provider_key: active.provider_key,
             p_display_name: name.trim(),
             p_environment: environment,
-            p_credentials: values,
-            p_metadata: { source: 'althea_gateway_connection_v7' },
+            p_credentials: credentials,
+            p_metadata: { source: 'althea_gateway_connection_v8' },
           })
 
       if (rpc.error) throw new Error(rpc.error.message)
@@ -207,20 +220,24 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
     await load()
   }
 
-  const field = (credential: GatewayCredentialField) => (
-    <label key={credential.name} className="block space-y-1.5">
-      <span className="text-[10px] font-mono uppercase text-neutral-400">
-        {credential.label}{credential.required ? ' *' : ''}
-      </span>
-      <input
-        type={credential.type}
-        value={values[credential.name] ?? ''}
-        onChange={event => setValues(current => ({ ...current, [credential.name]: event.target.value }))}
-        autoComplete="off"
-        className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm text-white outline-none focus:border-emerald-700"
-      />
-    </label>
-  )
+  const field = (credential: GatewayCredentialField, target: 'credential' | 'webhook' = 'credential') => {
+    const source = target === 'webhook' ? webhookValues : values
+    const setSource = target === 'webhook' ? setWebhookValues : setValues
+    return (
+      <label key={credential.name} className="block space-y-1.5">
+        <span className="text-[10px] font-mono uppercase text-neutral-400">
+          {credential.label}{credential.required ? ' *' : ''}
+        </span>
+        <input
+          type={credential.type}
+          value={source[credential.name] ?? ''}
+          onChange={event => setSource(current => ({ ...current, [credential.name]: event.target.value }))}
+          autoComplete="off"
+          className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm text-white outline-none focus:border-emerald-700"
+        />
+      </label>
+    )
+  }
 
   return (
     <section className="w-full rounded-xl border border-neutral-800 bg-neutral-950 p-5 md:p-6 space-y-5">
@@ -310,7 +327,17 @@ export const DynamicGatewayConnectorV3: React.FC = () => {
             </div>
           )}
 
-          {active && credentialFields.length === 0 && (
+          {active && webhookFields.length > 0 && (
+            <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+              <div>
+                <h5 className="text-xs font-semibold uppercase tracking-wide text-white">Webhook / assinatura</h5>
+                <p className="mt-1 text-[10px] text-neutral-500">Segredo usado somente para validar eventos assinados do provedor. Ele não configura transporte HTTP.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{webhookFields.map(field => field( field as GatewayCredentialField, 'webhook'))}</div>
+            </div>
+          )}
+
+          {active && credentialFields.length === 0 && webhookFields.length === 0 && (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-4 text-xs text-neutral-500">Este provider não exige credenciais manuais. A configuração técnica é resolvida pelo adapter.</div>
           )}
 
