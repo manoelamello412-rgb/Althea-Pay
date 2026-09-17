@@ -4,7 +4,14 @@ project_id = "hkraryqoziravulvqkid"
 verify_jwt = true
 
 [functions.gateway-provider-adapter]
-# Adapter is an internal service boundary authenticated by ALTHEA_INTERNAL_SECRET.
+# Internal service boundary authenticated by ALTHEA_INTERNAL_SECRET.
+verify_jwt = false
+
+[functions.gateway-connection-test]
+# Validates the caller token inside the function so generic/native providers share one contract.
+verify_jwt = false
+
+[functions.gateway-attempt-recovery]
 verify_jwt = false
 
 [functions.gateway-webhook]
@@ -19,10 +26,6 @@ verify_jwt = true
 [functions.gateway-refund]
 verify_jwt = true
 
-[functions.checkout-engine]
-# retired: 410 stub, see checkout-engine-v2
-verify_jwt = false
-
 [functions.checkout-engine-v2]
 verify_jwt = true
 
@@ -32,31 +35,28 @@ verify_jwt = true
 [functions.althea-public-api]
 verify_jwt = false
 
-[functions.api]
-# retired: 410 stub, see althea-public-api
-verify_jwt = false
-
 [functions.health]
 verify_jwt = false
 
 [functions.althea-webhook]
 verify_jwt = false
 
-[functions.integration-webhook]
-# retired: 410 stub, see althea-webhook
-verify_jwt = false
-
 [functions.webhook-integrations]
 verify_jwt = true
+
+[functions.outbound-webhook-management]
+verify_jwt = true
+
+[functions.outbound-webhook-dispatcher]
+verify_jwt = false
 
 [functions.iara-ai-core]
 verify_jwt = true
 
-[functions.automation-engine]
-# retired: 410 stub, see automation-engine-v2
+[functions.automation-engine-v2]
 verify_jwt = false
 
-[functions.automation-engine-v2]
+[functions.automation-retry-worker]
 verify_jwt = false
 
 [functions.event-worker]
@@ -77,11 +77,53 @@ verify_jwt = true
 [functions.risk-engine]
 verify_jwt = false
 
-[functions.outbound-webhook-dispatcher]
-verify_jwt = false
-
 [functions.core-worker]
 verify_jwt = false
 
 [functions.integration-event-processor]
 verify_jwt = false
+
+[functions.crm-channel-outbox-dispatcher]
+verify_jwt = false
+
+[functions.crm-channel-inbound-webhook]
+verify_jwt = false
+
+[functions.crm-channel-delivery-webhook]
+verify_jwt = false
+
+[functions.crm-channel-twilio-inbound]
+verify_jwt = false
+
+[functions.crm-channel-resend-webhook]
+verify_jwt = false
+
+[functions.crm-predictive-outcome-worker]
+verify_jwt = false
+
+[functions.iara-copilot]
+verify_jwt = true
+
+[functions.iara-funnel-builder]
+verify_jwt = true
+
+[functions.iara-commercial-intervention]
+verify_jwt = true
+
+[functions.iara-daily-report]
+verify_jwt = true
+
+[functions.iara-funnel-activate]
+verify_jwt = true
+
+[functions.iara-commercial-intervention-worker]
+verify_jwt = false
+
+[functions.iara-daily-report-worker]
+verify_jwt = false
+
+[functions.iara-financial-command]
+verify_jwt = true
+
+[functions.iara-financial-confirm]
+verify_jwt = true
