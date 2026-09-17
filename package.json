@@ -9,8 +9,7 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "preflight": "node scripts/release-preflight.mjs",
-    "gateway:all": "node scripts/gateway-all.mjs"
+    "preflight": "node scripts/release-preflight.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "latest",
