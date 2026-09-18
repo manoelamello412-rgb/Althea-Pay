@@ -21,7 +21,7 @@ Deno.serve(async req=>{
   const results=[];const url=`${Deno.env.get("SUPABASE_URL")}/functions/v1/automation-engine-v2`;
   for(const row of rows){
    try{
-    const {data:allowed,error:rateError}=await db.rpc("crm_check_automation_rate_limit",{p_user_id:row.user_id,p_rule_id:row.rule_id,p_limit:60,p_window_seconds:60});
+    const {data:allowed,error:rateError}=await db.rpc("crm_check_automation_rate_limit_org",{p_organization_id:row.organization_id,p_rule_id:row.rule_id,p_limit:60,p_window_seconds:60});
     if(rateError)throw rateError;
     if(allowed===false){
       const nextRetry=new Date(Date.now()+automationBackoffMs(Number(row.attempt_count||1))).toISOString();
