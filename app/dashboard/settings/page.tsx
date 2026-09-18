@@ -38,7 +38,7 @@ const sections = [
     title: 'Inteligência e integrações',
     items: [
       { label: 'Iara', description: 'Preferências do assistente e limites de atuação.', href: '/dashboard/settings/iara', icon: Sparkles },
-      { label: 'Integrações', description: 'Webhooks de saída e segredos de integração.', href: '/dashboard/settings/integracoes', icon: Webhook },
+      { label: 'Integrações', description: 'Webhooks de saída e segredos de integração.', href: '/dashboard/webhooks', icon: Webhook },
       { label: 'API', description: 'Chaves e documentação da API operacional.', href: '/dashboard/api', icon: KeyRound },
     ],
   },
