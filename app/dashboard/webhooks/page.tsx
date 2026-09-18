@@ -134,9 +134,16 @@ export default function WebhooksPage() {
     void db.auth.getUser().then(({ data }) => {
       if (cancelled || !data.user) return
       const uid = data.user.id
-      for (const table of ['webhook_integrations', 'outbound_webhooks', 'outbound_webhook_deliveries', 'integration_events']) {
+      for (const table of ['webhook_integrations', 'integration_events']) {
         const channel = db
-          .channel(`webhooks-${table}-${uid}`)
+          .channel(`webhooks-org-${table}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table }, () => void load())
+          .subscribe()
+        channels.push(channel)
+      }
+      for (const table of ['outbound_webhooks', 'outbound_webhook_deliveries']) {
+        const channel = db
+          .channel(`webhooks-user-${table}-${uid}`)
           .on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${uid}` }, () => void load())
           .subscribe()
         channels.push(channel)
