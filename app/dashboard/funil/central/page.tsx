@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Activity, ArrowRight, BarChart3, CheckCircle2, GitBranch, Loader2, Plus, RefreshCw, Settings2, ShoppingCart, Sparkles, Zap } from 'lucide-react'
-import { useSearchParams } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type Tab = 'overview' | 'steps' | 'offers' | 'automations' | 'analytics' | 'events'
@@ -22,8 +21,6 @@ const money = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency',
 
 export default function FunnelCentralPage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
-  const searchParams = useSearchParams()
-  const requestedFunnelId = searchParams.get('funnel')?.trim() || ''
   const [tab, setTab] = useState<Tab>('overview')
   const [funnels, setFunnels] = useState<Funnel[]>([])
   const [selectedId, setSelectedId] = useState('')
@@ -64,7 +61,7 @@ export default function FunnelCentralPage() {
     setMetrics({ sales: approved.length, revenue: approved.reduce((sum, s) => sum + Number(s.amount ?? 0), 0), events: Number(connectionResult.data?.event_count ?? eventList.length), failedEvents: Number(connectionResult.data?.error_count ?? eventList.filter((e) => e.status === 'failed' || e.error_message).length), approval: sales.length ? approved.length / sales.length * 100 : 0 })
   }, [selectedId, supabase])
 
-  useEffect(() => { void load(requestedFunnelId || undefined).catch((e) => setError(e instanceof Error ? e.message : 'Não foi possível carregar a central.')).finally(() => setLoading(false)) }, [load, requestedFunnelId])
+  useEffect(() => { const requestedFunnelId = new URLSearchParams(window.location.search).get('funnel')?.trim() || ''; void load(requestedFunnelId || undefined).catch((e) => setError(e instanceof Error ? e.message : 'Não foi possível carregar a central.')).finally(() => setLoading(false)) }, [load])
 
   useEffect(() => {
     if (!selectedId) return
