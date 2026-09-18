@@ -69,10 +69,10 @@ async function generic(operation:Operation,b:O,c:O){
 
 Deno.serve(async req=>{
   if(req.method==="OPTIONS")return new Response("ok",{headers:H});if(req.method!=="POST")return out({ok:false,error:"method_not_allowed"},405);
-  const expected=Deno.env.get("ALTHEA_INTERNAL_SECRET")??"",supplied=req.headers.get("x-althea-internal-secret")??"";if(!expected||expected.length!==supplied.length)return out({ok:false,error:"forbidden"},403);let d=0;for(let i=0;i<expected.length;i++)d|=expected.charCodeAt(i)^supplied.charCodeAt(i);if(d!==0)return out({ok:false,error:"forbidden"},403);
+  const su=Deno.env.get("SUPABASE_URL"),sr=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");if(!su||!sr)return out({ok:false,error:"server_configuration_error"},500);const db=createClient(su,sr,{auth:{persistSession:false}});
+  const supplied=req.headers.get("x-althea-internal-secret")??req.headers.get("x-internal-secret")??"";if(!supplied)return out({ok:false,error:"forbidden"},403);const verified=await db.rpc("verify_althea_internal_secret",{p_secret:supplied});if(verified.error)return out({ok:false,error:"internal_auth_unavailable"},500);if(verified.data!==true)return out({ok:false,error:"forbidden"},403);
   let b:O;try{const x=await req.json();if(!obj(x))return out({ok:false,error:"invalid_json"},400);b=x}catch{return out({ok:false,error:"invalid_json"},400)}
   const gid=str(b.gateway_id??req.headers.get("x-gateway-id")),op=str(b.operation).toLowerCase() as Operation;if(!gid||!op)return out({ok:false,error:!gid?"gateway_id_required":"operation_required"},422);
-  const su=Deno.env.get("SUPABASE_URL"),sr=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");if(!su||!sr)return out({ok:false,error:"server_configuration_error"},500);const db=createClient(su,sr,{auth:{persistSession:false}});
   const g=await db.from("gateways").select("id,provider,environment,status").eq("id",gid).maybeSingle();if(g.error||!g.data)return out({ok:false,error:"gateway_not_found"},404);
   if(op!=="health_check"&&!["connected","degraded"].includes(str(g.data.status).toLowerCase()))return out({ok:false,error:"gateway_not_operational"},422);
   const reg=await db.from("gateway_provider_registry").select("provider_key,adapter_key,operational,is_active").eq("provider_key",str(g.data.provider).toLowerCase()).eq("is_active",true).maybeSingle();if(reg.error)return out({ok:false,error:"provider_registry_lookup_failed"},500);if(!reg.data||reg.data.operational!==true)return out({ok:false,error:"provider_adapter_not_operational"},422);
