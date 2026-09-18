@@ -75,6 +75,18 @@ describe('funnel operational mirror', () => {
     expect(migration).toContain('revoke all on public.v_funnel_operational_timeline from anon')
   })
 
+  test('includes current bound gateway health without replaying every health snapshot', () => {
+    const migration = source('supabase/migrations/20260918155940_funnel_operational_gateway_health_v19.sql')
+    expect(migration).toContain("source,")
+    expect(migration).toContain("'gateway_health'::text")
+    expect(migration).toContain('from public.funnel_gateway_bindings b')
+    expect(migration).toContain('join lateral (')
+    expect(migration).toContain('order by h.checked_at desc')
+    expect(migration).toContain('limit 1')
+    expect(migration).toContain("where b.status='active'")
+    expect(migration).toContain('revoke all on public.v_funnel_operational_timeline from anon')
+  })
+
   test('mirror exposes payment, checkout, chat, health and control filters', () => {
     const component = source('components/funnel-operational-mirror.tsx')
     expect(component).toContain("v_funnel_operational_timeline")
