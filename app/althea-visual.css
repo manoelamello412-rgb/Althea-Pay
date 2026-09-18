@@ -1,4 +1,4 @@
-:root{--althea-ink:#0B0B0D;--althea-forest:#0F1A16;--althea-deep:#0D362D;--althea-green:#1DB854;--althea-gold:#D4AF37;--althea-silver:#A6A6A6;--althea-glow:rgba(29,184,84,.22)}
+/* Brand tokens come from althea-canonical.css. */
 html,body{font-family:'Space Grotesk',ui-sans-serif,system-ui,sans-serif!important;background:var(--althea-ink)}
 body{letter-spacing:.005em}
 .althea-app{grid-template-columns:270px minmax(0,1fr)!important;background:radial-gradient(700px 480px at 68% -8%,rgba(29,184,84,.11),transparent 62%),radial-gradient(500px 420px at 0% 100%,rgba(212,175,55,.045),transparent 70%),#0B0B0D!important}
