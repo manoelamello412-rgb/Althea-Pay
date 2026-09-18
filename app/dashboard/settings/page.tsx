@@ -20,7 +20,7 @@ const sections = [
     title: 'Conta e acesso',
     items: [
       { label: 'Perfil', description: 'Identidade, avatar e dados pessoais.', href: '/dashboard/settings/perfil', icon: UserRound },
-      { label: 'Segurança', description: 'Senha, MFA e sessões da conta.', href: '/dashboard/settings/seguranca', icon: ShieldCheck },
+      { label: 'Segurança', description: 'Senha, MFA e sessões da conta.', href: '/dashboard/security', icon: ShieldCheck },
       { label: 'Membros e acessos', description: 'Vínculos e papéis reais da organização.', href: '/dashboard/members', icon: UsersRound },
     ],
   },
