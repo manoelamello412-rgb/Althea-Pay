@@ -23,6 +23,7 @@ const operationalCode=checked.filter(file=>!file.includes(`${sep}supabase${sep}m
 assertNo(/rank_gateway_candidates/,"Retired gateway ranking RPC still referenced",operationalCode)
 assertNo(/dynamic-gateway-connector-v[23]/,"Versioned gateway connector still referenced",operationalCode)
 assertNo(/althea-mobile-page/,"Legacy event-based navigation still referenced",operationalCode)
+assertNo(/risk_simulation/,"Production risk simulation hook still referenced",operationalCode)
 const nestedShellFiles=checked.filter(file=>file.includes(`${sep}app${sep}dashboard${sep}`)&&!file.endsWith(join("app","dashboard","layout.tsx")))
 assertNo(/from\s+['"]@\/components\/mobile-shell['"]/,"Nested MobileShell import below dashboard layout",nestedShellFiles)
 const duplicateRoutes=[
