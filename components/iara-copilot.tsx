@@ -88,38 +88,52 @@ export default function IaraCopilot() {
   const empty = messages.length === 0
 
   return (
-    <section className="min-h-[calc(100dvh-5rem)] bg-[#050908] px-3 pb-32 pt-3 text-white sm:px-5 sm:pt-5">
-      <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-[920px] flex-col overflow-hidden rounded-[24px] border border-[#1DBB54]/20 bg-[#07110d] shadow-[0_30px_100px_rgba(0,0,0,0.45)]">
-        <header className="flex items-center gap-3 border-b border-white/[0.055] bg-[#08120e]/95 px-5 py-4 backdrop-blur-xl sm:px-6">
-          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#1DBB54]/20 bg-[#1DBB54]/[0.10] text-[#1DBB54] shadow-[0_0_28px_rgba(29,184,84,0.10)]"><Bot className="h-6 w-6" strokeWidth={1.8} /></div>
-          <div className="min-w-0"><h1 className="text-[19px] font-semibold tracking-[-0.02em] text-white">IARA</h1><p className="mt-0.5 flex items-center gap-1.5 text-sm text-[#8a9891]"><span className="h-2 w-2 rounded-full bg-[#1DBB54] shadow-[0_0_10px_rgba(29,184,84,0.7)]" /> Inteligência da Althea Pay</p></div>
+    <div className="w-full space-y-5">
+      <section className="flex flex-col gap-4 border-b border-white/[.055] pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Inteligência operacional</p>
+          <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">IARA</h1>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--althea-muted)]">Converse com a inteligência da Althea usando o contexto real disponível na sua operação.</p>
+        </div>
+        <span className="inline-flex h-9 items-center gap-2 self-start rounded-full border border-[rgba(29,184,84,.14)] bg-[rgba(29,184,84,.055)] px-3 text-[9px] font-semibold text-[var(--althea-brand)] lg:self-auto">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--althea-brand)] shadow-[0_0_8px_rgba(29,184,84,.65)]" />
+          ONLINE
+        </span>
+      </section>
+
+      <section className="flex min-h-[calc(100dvh-13rem)] w-full flex-col overflow-hidden rounded-2xl border border-white/[.055] bg-[var(--althea-surface)]">
+        <header className="flex items-center gap-3 border-b border-white/[.05] px-5 py-4 sm:px-6">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[rgba(29,184,84,.12)] bg-[rgba(29,184,84,.055)] text-[var(--althea-brand)]"><Bot className="h-5 w-5" strokeWidth={1.8} /></span>
+          <div className="min-w-0"><p className="text-sm font-semibold text-white">Conversa com a IARA</p><p className="mt-0.5 text-[10px] text-[var(--althea-muted)]">Mensagens reais desta sessão</p></div>
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-7">
           {empty ? (
             <div className="mx-auto max-w-[760px]">
-              <div className="flex justify-end"><div className="max-w-[72%] rounded-[20px] rounded-br-md bg-[#0cbd55] px-5 py-3.5 text-[15px] font-medium text-white shadow-[0_12px_35px_rgba(29,184,84,0.15)]">Olá Iara<span className="ml-3 text-[11px] text-white/60">✓✓</span></div></div>
-              <div className="mt-7 flex items-start gap-3">
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#1DBB54]/20 bg-[#0a3326] text-[#1DBB54]"><Bot className="h-5 w-5" /></div>
-                <div className="max-w-[88%] rounded-[20px] rounded-bl-md border border-white/[0.055] bg-[#101917] px-5 py-4 text-[15px] leading-[1.65] text-[#e5ebe7] shadow-[0_16px_45px_rgba(0,0,0,0.18)]">
-                  <p>Olá.</p><p className="mt-2">Eu sou a IARA, a inteligência da <span className="text-[#1DBB54]">Althea Pay</span>.</p><p className="mt-4">Estou aqui para ajudar você a gerenciar seus funis, acompanhar suas vendas, analisar seus clientes e extrair insights valiosos para o seu negócio.</p><p className="mt-4">Como posso te ajudar hoje?</p><span className="mt-3 block text-[10px] text-[#68756e]">agora</span>
+              <div className="rounded-[22px] border border-white/[0.055] bg-[var(--althea-bg)] p-5 sm:p-6">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[rgba(29,184,84,.14)] bg-[#0a3326] text-[var(--althea-brand)]"><Bot className="h-5 w-5" /></div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">IARA pronta para analisar sua operação</p>
+                    <p className="mt-2 text-sm leading-6 text-[#8a9891]">Use uma ação rápida ou escreva uma pergunta. A conversa abaixo só será preenchida com mensagens reais desta sessão.</p>
+                  </div>
                 </div>
               </div>
-              <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3">{quickActions.map(({ label, icon: Icon, prompt }) => <button key={label} type="button" disabled={sending} onClick={() => void askIara(undefined, prompt)} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#1DBB54]/25 bg-[#07150f] px-3 text-xs font-medium text-[#d9e3dc] transition hover:border-[#1DBB54]/50 hover:bg-[#0a2117] disabled:opacity-50"><Icon size={17} className="text-[#1DBB54]" strokeWidth={1.8} /><span>{label}</span></button>)}</div>
+              <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3">{quickActions.map(({ label, icon: Icon, prompt }) => <button key={label} type="button" disabled={sending} onClick={() => void askIara(undefined, prompt)} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[rgba(29,184,84,.18)] bg-[#07150f] px-3 text-xs font-medium text-[#d9e3dc] transition hover:border-[#1DB854]/50 hover:bg-[#0a2117] disabled:opacity-50"><Icon size={17} className="text-[var(--althea-brand)]" strokeWidth={1.8} /><span>{label}</span></button>)}</div>
             </div>
           ) : (
-            <div className="mx-auto flex max-w-3xl flex-col gap-5">{messages.map((message) => <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>{message.sender === 'iara' && <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#1DBB54]/20 bg-[#0a3326] text-[#1DBB54]"><Bot className="h-5 w-5" /></div>}<div className={message.sender === 'user' ? 'max-w-[82%] rounded-[20px] rounded-br-md bg-[#0cbd55] px-5 py-3.5 text-[15px] leading-6 text-white shadow-[0_12px_35px_rgba(29,184,84,0.12)]' : 'max-w-[88%] rounded-[20px] rounded-bl-md border border-white/[0.055] bg-[#101917] px-5 py-4 text-[15px] leading-6 text-[#e5ebe7]'}>{message.sender === 'iara' && <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1DBB54]">IARA</div>}<p className="whitespace-pre-wrap">{message.content}</p></div></div>)}{sending && <div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-full border border-[#1DBB54]/20 bg-[#0a3326] text-[#1DBB54]"><Bot className="h-5 w-5" /></div><div className="rounded-[20px] rounded-bl-md border border-white/[0.055] bg-[#101917] px-5 py-4 text-xs text-[#87938c]">IARA está analisando…</div></div>}</div>
+            <div className="mx-auto flex max-w-3xl flex-col gap-5">{messages.map((message) => <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>{message.sender === 'iara' && <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[rgba(29,184,84,.14)] bg-[#0a3326] text-[var(--althea-brand)]"><Bot className="h-5 w-5" /></div>}<div className={message.sender === 'user' ? 'max-w-[82%] rounded-[20px] rounded-br-md bg-[#0cbd55] px-5 py-3.5 text-[15px] leading-6 text-white shadow-[0_12px_35px_rgba(29,184,84,0.12)]' : 'max-w-[88%] rounded-[20px] rounded-bl-md border border-white/[0.055] bg-[var(--althea-bg)] px-5 py-4 text-[15px] leading-6 text-[#e5ebe7]'}>{message.sender === 'iara' && <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--althea-brand)]">IARA</div>}<p className="whitespace-pre-wrap">{message.content}</p></div></div>)}{sending && <div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-full border border-[rgba(29,184,84,.14)] bg-[#0a3326] text-[var(--althea-brand)]"><Bot className="h-5 w-5" /></div><div className="rounded-[20px] rounded-bl-md border border-white/[0.055] bg-[var(--althea-bg)] px-5 py-4 text-xs text-[#87938c]">IARA está analisando…</div></div>}</div>
           )}
         </div>
 
         {error && <div className="mx-4 mb-3 flex items-start gap-2 rounded-xl border border-rose-500/25 bg-rose-950/15 px-3 py-2.5 text-xs text-rose-200 sm:mx-6"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" /><span>{error}</span></div>}
 
-        <form onSubmit={(event) => void askIara(event)} className="border-t border-white/[0.055] bg-[#07110d] p-3 sm:p-4">
-          <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-[30px] border border-[#1DBB54]/35 bg-[#0b1512] p-1.5 shadow-[0_0_25px_rgba(29,184,84,0.05)] focus-within:border-[#1DBB54]/60">
+        <form onSubmit={(event) => void askIara(event)} className="border-t border-white/[0.055] bg-[var(--althea-surface)] p-3 sm:p-4">
+          <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-[30px] border border-[#1DB854]/35 bg-[#0b1512] p-1.5 shadow-[0_0_25px_rgba(29,184,84,0.05)] focus-within:border-[#1DB854]/60">
             <Bot className="ml-3 h-5 w-5 shrink-0 text-[#738079]" /><input value={command} onChange={(event) => setCommand(event.target.value)} disabled={sending} placeholder="Pergunte qualquer coisa à IARA..." aria-label="Mensagem para a IARA" className="min-w-0 flex-1 bg-transparent px-1 py-3 text-[15px] text-white outline-none placeholder:text-[#68756e]" /><button type="submit" disabled={!command.trim() || sending} aria-label="Enviar mensagem" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#0cbd55] text-white shadow-[0_0_25px_rgba(29,184,84,0.25)] transition hover:scale-[1.03] disabled:opacity-30"><Send className="h-5 w-5 -rotate-1" /></button>
           </div>
         </form>
-      </div>
-    </section>
+      </section>
+    </div>
   )
 }

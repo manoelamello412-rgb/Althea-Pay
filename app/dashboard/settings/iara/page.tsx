@@ -72,40 +72,41 @@ export default function IaraSettingsPage() {
     } finally { setSaving(false) }
   }
 
-  if (loading) return <div className="min-h-[400px] grid place-items-center text-xs text-zinc-500">Carregando configurações reais da conta...</div>
+  if (loading) return <div className="min-h-[400px] grid place-items-center text-xs text-[var(--althea-muted)]">Carregando configurações reais da conta...</div>
 
   return (
-    <div className="space-y-5 pb-32 text-left font-['Space_Grotesk'] text-white">
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#1DB854]/20 bg-[#0F1A16] text-[#1DB854]"><Sparkles size={16} /></span>
-          <div><h1 className="text-xl font-bold tracking-tight">Assistente Virtual: Iara</h1><p className="text-[11px] font-medium text-zinc-500">Preferências persistidas na configuração real da conta.</p></div>
+    <div className="w-full space-y-5 text-left text-white">
+      <section className="flex flex-col gap-5 border-b border-white/[.055] pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Inteligência</p>
+          <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">Configurações da IARA</h1>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--althea-muted)]">Defina identidade, contexto, tom e limites de atuação persistidos na configuração real da conta.</p>
         </div>
-        <button type="button" onClick={() => router.push('/dashboard/settings')} className="min-h-10 rounded-xl border border-zinc-900 px-3 text-xs font-semibold text-zinc-400 hover:text-white">Voltar</button>
-      </header>
+        <button type="button" onClick={() => router.push('/dashboard/settings')} className="inline-flex h-10 items-center self-start rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white lg:self-auto">Configurações</button>
+      </section>
 
       <form onSubmit={handleSave} className="space-y-4">
-        <section className="space-y-4 rounded-2xl border border-zinc-900 bg-[#0F1A16]/40 p-4">
-          <div><span className="text-[10px] font-bold uppercase tracking-wider text-[#1DB854]">Identidade</span><p className="mt-1 text-[10px] text-zinc-500">Defina como a assistente será apresentada na operação.</p></div>
-          <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Nome de exibição</span><input type="text" maxLength={40} value={settings.name} onChange={(event) => setSettings((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-xl border border-zinc-900 bg-[#060608] p-3 text-xs text-white outline-none focus:border-[#1DB854]/40" /></label>
+        <section className="space-y-4 rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
+          <div><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--althea-brand)]">Identidade</span><p className="mt-1 text-[10px] text-[var(--althea-muted)]">Defina como a assistente será apresentada na operação.</p></div>
+          <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Nome de exibição</span><input type="text" maxLength={40} value={settings.name} onChange={(event) => setSettings((current) => ({ ...current, name: event.target.value }))} className="w-full rounded-xl border border-white/[.045] bg-[var(--althea-bg)] p-3 text-xs text-white outline-none focus:border-[rgba(29,184,84,.32)]" /></label>
         </section>
 
-        <section className="space-y-4 rounded-2xl border border-zinc-900 bg-[#0F1A16]/40 p-4">
-          <div><span className="text-[10px] font-bold uppercase tracking-wider text-[#1DB854]">Contexto Comercial & Tom</span><p className="mt-1 text-[10px] text-zinc-500">Dados armazenados no banco da operação.</p></div>
-          <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Contexto da operação</span><textarea rows={5} maxLength={4000} value={settings.context} onChange={(event) => setSettings((current) => ({ ...current, context: event.target.value }))} className="w-full resize-none rounded-xl border border-zinc-900 bg-[#060608] p-3 text-xs leading-relaxed text-white outline-none focus:border-[#1DB854]/40" /></label>
-          <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Tom de voz</span><select value={settings.tone} onChange={(event) => setSettings((current) => ({ ...current, tone: event.target.value }))} className="w-full rounded-xl border border-zinc-900 bg-[#060608] p-3 text-xs text-white outline-none focus:border-[#1DB854]/40"><option value="prestativo">Amigável e Prestativo</option><option value="analitico">Analítico e Focado em Métricas</option><option value="agressivo-vendas">Persuasivo e Focado em Conversão</option></select></label>
-          <div className="rounded-xl border border-zinc-900 bg-[#060608] px-3 py-2.5 text-[10px] text-zinc-500">Tom selecionado: <span className="font-semibold text-zinc-300">{toneLabel}</span></div>
+        <section className="space-y-4 rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
+          <div><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--althea-brand)]">Contexto Comercial & Tom</span><p className="mt-1 text-[10px] text-[var(--althea-muted)]">Dados armazenados no banco da operação.</p></div>
+          <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Contexto da operação</span><textarea rows={5} maxLength={4000} value={settings.context} onChange={(event) => setSettings((current) => ({ ...current, context: event.target.value }))} className="w-full resize-none rounded-xl border border-white/[.045] bg-[var(--althea-bg)] p-3 text-xs leading-relaxed text-white outline-none focus:border-[rgba(29,184,84,.32)]" /></label>
+          <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Tom de voz</span><select value={settings.tone} onChange={(event) => setSettings((current) => ({ ...current, tone: event.target.value }))} className="w-full rounded-xl border border-white/[.045] bg-[var(--althea-bg)] p-3 text-xs text-white outline-none focus:border-[rgba(29,184,84,.32)]"><option value="prestativo">Amigável e Prestativo</option><option value="analitico">Analítico e Focado em Métricas</option><option value="agressivo-vendas">Persuasivo e Focado em Conversão</option></select></label>
+          <div className="rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 py-2.5 text-[10px] text-[var(--althea-muted)]">Tom selecionado: <span className="font-semibold text-[#c8d2cc]">{toneLabel}</span></div>
         </section>
 
-        <section className="space-y-4 rounded-2xl border border-zinc-900 bg-[#0F1A16]/40 p-4">
-          <div><span className="text-[10px] font-bold uppercase tracking-wider text-red-500">Autonomia</span><p className="mt-1 text-[10px] text-zinc-500">Preferência persistida no banco. A execução continua limitada pelas permissões do backend.</p></div>
-          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-zinc-900 bg-[#060608] p-3"><span className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0F1A16] text-[#1DB854]"><Globe2 size={15} /></span><span><span className="block text-xs font-bold text-zinc-200">Busca externa permitida</span><span className="block text-[10px] text-zinc-500">Controla apenas a preferência registrada para a assistente.</span></span></span><input type="checkbox" className="h-4 w-4" checked={settings.allowWeb} onChange={(event) => setSettings((current) => ({ ...current, allowWeb: event.target.checked }))} /></label>
-          <div className="space-y-2 rounded-xl border border-red-900/40 bg-red-950/20 p-3"><div className="flex items-center gap-2"><ShieldCheck size={15} className="text-red-400" /><span className="text-xs font-bold text-red-400">Limite de infraestrutura</span></div><p className="text-[10px] leading-relaxed text-zinc-400">{SECURITY_BOUNDARY}</p></div>
+        <section className="space-y-4 rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
+          <div><span className="text-[10px] font-bold uppercase tracking-wider text-red-500">Autonomia</span><p className="mt-1 text-[10px] text-[var(--althea-muted)]">Preferência persistida no banco. A execução continua limitada pelas permissões do backend.</p></div>
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/[.045] bg-[var(--althea-bg)] p-3"><span className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--althea-surface)] text-[var(--althea-brand)]"><Globe2 size={15} /></span><span><span className="block text-xs font-bold text-white">Busca externa permitida</span><span className="block text-[10px] text-[var(--althea-muted)]">Controla apenas a preferência registrada para a assistente.</span></span></span><input type="checkbox" className="h-4 w-4" checked={settings.allowWeb} onChange={(event) => setSettings((current) => ({ ...current, allowWeb: event.target.checked }))} /></label>
+          <div className="space-y-2 rounded-xl border border-red-900/40 bg-red-950/20 p-3"><div className="flex items-center gap-2"><ShieldCheck size={15} className="text-red-400" /><span className="text-xs font-bold text-red-400">Limite de infraestrutura</span></div><p className="text-[10px] leading-relaxed text-[var(--althea-muted)]">{SECURITY_BOUNDARY}</p></div>
         </section>
 
-        <button type="submit" disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1DB854] py-3 text-xs font-bold text-black disabled:opacity-60">{saving ? 'Salvando no banco...' : saved ? 'Configurações salvas' : 'Salvar configurações'}{saved && <Check size={14} />}</button>
+        <button type="submit" disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--althea-brand)] py-3 text-xs font-bold text-black disabled:opacity-60">{saving ? 'Salvando no banco...' : saved ? 'Configurações salvas' : 'Salvar configurações'}{saved && <Check size={14} />}</button>
         {error && <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-3 text-[10px] text-red-300" role="alert">{error}</div>}
-        {saved && <p className="text-center text-[10px] font-medium text-[#1DB854]" role="status">Alteração persistida em platform_settings.</p>}
+        {saved && <p className="text-center text-[10px] font-medium text-[var(--althea-brand)]" role="status">Alteração persistida em platform_settings.</p>}
       </form>
     </div>
   )

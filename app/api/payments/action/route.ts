@@ -37,9 +37,10 @@ export async function POST(request: Request) {
     if (!externalId) return NextResponse.json({ ok:true, action:null, status:tx.status })
     const { data: gateway } = await admin.from('gateways').select('id,environment,status').eq('id', tx.gateway_id).eq('organization_id', session.organization_id).maybeSingle()
     if (!gateway || !['active','connected','degraded'].includes(text(gateway.status).toLowerCase())) return NextResponse.json({ ok:true, action:null, status:tx.status })
-    const secret = text(process.env.ALTHEA_INTERNAL_SECRET)
+    const { data: secretValue, error: secretError } = await admin.rpc('get_althea_internal_secret')
+    const secret = text(secretValue)
     const supabaseUrl = text(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)
-    if (!secret || !supabaseUrl) return NextResponse.json({ ok:false, code:'PAYMENT_PROCESSOR_NOT_CONFIGURED' }, { status:503 })
+    if (secretError || !secret || !supabaseUrl) return NextResponse.json({ ok:false, code:'PAYMENT_PROCESSOR_NOT_CONFIGURED' }, { status:503 })
     const response = await fetch(`${supabaseUrl.replace(/\/$/,'')}/functions/v1/gateway-provider-adapter`, { method:'POST', headers:{'content-type':'application/json','x-althea-internal-secret':secret,'x-althea-gateway-id':tx.gateway_id}, body:JSON.stringify({ operation:'payment_status', gateway_id:tx.gateway_id, environment:gateway.environment, transaction_id:tx.id, external_transaction_id:externalId, amount:tx.amount, currency:tx.currency, payment_method:{ type:text(tx.metadata?.payment_method) }, idempotency_key:`action:${tx.id}` }), cache:'no-store' })
     const result = await response.json().catch(()=>({})) as JsonObject
     if (!response.ok) return NextResponse.json({ ok:true, action:null, status:tx.status })

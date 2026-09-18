@@ -13,19 +13,6 @@ const CORS_HEADERS = {
 
 const MAX_BODY_BYTES = 100_000
 const MAX_STRING = 4_000
-const ALLOWED_EVENTS = new Set([
-  'page_view',
-  'quiz_started',
-  'quiz_answered',
-  'checkout_started',
-  'checkout_abandoned',
-  'payment_created',
-  'payment_failed',
-  'payment_approved',
-  'chat_started',
-  'chat_message',
-])
-
 type JsonObject = Record<string, unknown>
 
 function json(body: JsonObject, status = 200) {
@@ -47,9 +34,22 @@ function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength
 }
 
+const FORBIDDEN_PAYMENT_KEYS = new Set(['pan', 'card_number', 'cardnumber', 'cvv', 'cvc'])
+
+function containsForbiddenPaymentData(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsForbiddenPaymentData)
+  if (!isObject(value)) return false
+  for (const [key, nested] of Object.entries(value)) {
+    if (FORBIDDEN_PAYMENT_KEYS.has(key.toLowerCase())) return true
+    if (containsForbiddenPaymentData(nested)) return true
+  }
+  return false
+}
+
 function sanitizeEvent(raw: JsonObject): JsonObject | null {
-  const eventType = nonEmptyString(raw.event_type, 80)
-  if (!eventType || !ALLOWED_EVENTS.has(eventType)) return null
+  const eventType = nonEmptyString(raw.event_type, 80)?.toLowerCase() ?? null
+  if (!eventType || !/^[a-z][a-z0-9_.:-]{1,79}$/.test(eventType)) return null
+  if (containsForbiddenPaymentData(raw)) return null
 
   const funnelId = nonEmptyString(raw.funnel_id, 300)
   if (!funnelId) return null
@@ -61,6 +61,9 @@ function sanitizeEvent(raw: JsonObject): JsonObject | null {
 
   const customer = isObject(raw.customer) ? raw.customer : undefined
   const answers = isObject(raw.answers) ? raw.answers : undefined
+  const payload = isObject(raw.payload) ? raw.payload : undefined
+  const attribution = isObject(raw.attribution) ? raw.attribution : undefined
+  const source = isObject(raw.source) ? raw.source : undefined
 
   const sanitized: JsonObject = {
     event_type: eventType,
@@ -71,9 +74,12 @@ function sanitizeEvent(raw: JsonObject): JsonObject | null {
     ...(message ? { message } : {}),
     ...(customer ? { customer } : {}),
     ...(answers ? { answers } : {}),
+    ...(payload ? { payload } : {}),
+    ...(attribution ? { attribution } : {}),
+    ...(source ? { source } : {}),
   }
 
-  for (const key of ['product_id', 'transaction_id', 'checkout_id', 'session_id', 'page_url']) {
+  for (const key of ['product_id', 'transaction_id', 'checkout_id', 'session_id', 'visitor_id', 'customer_id', 'page_url', 'version']) {
     const value = nonEmptyString(raw[key], 500)
     if (value) sanitized[key] = value
   }

@@ -117,8 +117,11 @@ export async function POST(req: NextRequest) {
     if ('error' in resolved) return NextResponse.json({ error: resolved.error }, { status: resolved.status, headers: cors })
     if (!resolved.enabled) return NextResponse.json({ error: 'chat_disabled' }, { status: 403, headers: cors })
 
-    const internalSecret = process.env.ALTHEA_INTERNAL_SECRET?.trim() ?? ''
-    if (!internalSecret) return NextResponse.json({ error: 'chat_server_not_configured' }, { status: 503, headers: cors })
+    const admin = createSupabaseAdminClient()
+    const { data: internalSecret, error: secretError } = await admin.rpc('get_althea_internal_secret')
+    if (secretError || typeof internalSecret !== 'string' || !internalSecret) {
+      return NextResponse.json({ error: 'chat_server_not_configured' }, { status: 503, headers: cors })
+    }
 
     const upstreamPayload = { ...parsed, funnel_id: funnelId, user_id: resolved.funnel.user_id }
     const response = await fetch(`${url}/functions/v1/funnel-events`, {

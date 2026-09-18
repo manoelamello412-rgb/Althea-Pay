@@ -12,6 +12,12 @@ function normalizeUrl(value: string | null) {
   return /^https?:\/\//i.test(clean) ? clean : `https://${clean}`
 }
 
+function optionalId(value: unknown) {
+  if (typeof value !== 'string') return null
+  const clean = value.trim()
+  return clean || null
+}
+
 function isUniqueViolation(error: { code?: string | null; message?: string | null }) {
   return error.code === '23505' || /duplicate key|unique constraint/i.test(error.message ?? '')
 }
@@ -23,8 +29,6 @@ function mapProvisionError(error: { code?: string | null; message?: string | nul
   if (message === 'unauthorized' || message === 'AUTH_REQUIRED') return { status: 401, error: 'unauthorized' }
   if (message === 'forbidden' || message === 'FORBIDDEN') return { status: 403, error: 'forbidden' }
   if (message === 'organization_required') return { status: 409, error: 'organization_required' }
-  if (message === 'product_required') return { status: 400, error: 'product_required' }
-  if (message === 'gateway_required') return { status: 400, error: 'gateway_required' }
   if (message === 'product_not_found') return { status: 404, error: 'product_not_found' }
   if (message === 'gateway_not_found') return { status: 404, error: 'gateway_not_found' }
   if (message === 'product_not_active') return { status: 409, error: 'product_not_active' }
@@ -48,16 +52,14 @@ export async function POST(request: Request) {
     const rawUrl = typeof body?.url === 'string' ? body.url.trim() : null
     const connectionType = typeof body?.connection_type === 'string' ? body.connection_type.trim() : 'script'
     const funnelType = typeof body?.funnel_type === 'string' ? body.funnel_type.trim() : 'custom'
-    const productId = typeof body?.product_id === 'string' ? body.product_id.trim() : ''
-    const gatewayId = typeof body?.gateway_id === 'string' ? body.gateway_id.trim() : ''
+    const productId = optionalId(body?.product_id)
+    const gatewayId = optionalId(body?.gateway_id)
 
     if (!name) return json({ error: 'name is required' }, 400)
     if (name.length > 120) return json({ error: 'name is too long' }, 400)
     if (rawUrl && rawUrl.length > 2048) return json({ error: 'url is too long' }, 400)
     if (connectionType !== 'script' && connectionType !== 'webhook') return json({ error: 'invalid connection_type' }, 400)
     if (!FUNNEL_TYPES.has(funnelType)) return json({ error: 'invalid funnel_type' }, 400)
-    if (!productId) return json({ error: 'product_required' }, 400)
-    if (!gatewayId) return json({ error: 'gateway_required' }, 400)
 
     const url = normalizeUrl(rawUrl)
     if (url) {
@@ -93,7 +95,17 @@ export async function POST(request: Request) {
       return json({ error: mapped.error }, mapped.status)
     }
 
-    return json(data, 201)
+    const payload = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : { data }
+    const origin = new URL(request.url).origin
+    return json({
+      ...payload,
+      connector: {
+        protocol_version: '1',
+        event_endpoint: eventEndpoint,
+        client_token_endpoint: `${supabaseUrl.replace(/\/$/, '')}/functions/v1/funnel-client-token`,
+        browser_sdk_url: `${origin}/althea-funnel-connector.js`,
+      },
+    }, 201)
   } catch (cause) {
     console.error('[funnels/provision]', cause)
     return json({ error: 'internal_error' }, 500)

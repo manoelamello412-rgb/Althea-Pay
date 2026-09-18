@@ -121,3 +121,15 @@ verify_jwt = true
 [functions.webhook-integrations]
 verify_jwt = true
 
+
+[functions.funnel-command-worker]
+verify_jwt = false
+
+[functions.funnel-provider-adapter]
+verify_jwt = false
+
+[functions.funnel-connection-control]
+verify_jwt = true
+
+[functions.funnel-drift-worker]
+verify_jwt = false

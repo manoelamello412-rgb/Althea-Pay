@@ -1,4 +1,4 @@
-:root{--althea-ink:#0B0B0D;--althea-forest:#0F1A16;--althea-deep:#0D362D;--althea-green:#1DB854;--althea-gold:#D4AF37;--althea-silver:#A6A6A6;--althea-white:#FFFFFF;--althea-border:rgba(166,166,166,.16);--althea-green-line:rgba(29,184,84,.22);--althea-green-glow:rgba(29,184,84,.16)}
+/* Brand tokens come from althea-canonical.css. */
 html,body{background:#0B0B0D;color:#fff;font-family:'Space Grotesk',sans-serif}
 .althea-app{background:#0B0B0D;isolation:isolate}.althea-app:before{background-image:linear-gradient(rgba(29,184,84,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(29,184,84,.022) 1px,transparent 1px);background-size:48px 48px;opacity:.7}.althea-sidebar{background:linear-gradient(180deg,#0F1A16 0%,#0B0B0D 100%);border-right:1px solid rgba(166,166,166,.13)}
 .althea-main{max-width:1580px;padding:38px 44px 84px}.althea-header h1,.panel-heading h2,.auth-heading h1{font-family:'Space Grotesk',sans-serif;font-weight:500}.althea-header h1{letter-spacing:-.045em}.althea-kicker,.panel-heading span,.sales-eyebrow,.visual-section-label{font-weight:500;color:#1DB854;letter-spacing:.24em}

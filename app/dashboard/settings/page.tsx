@@ -29,7 +29,7 @@ const sections = [
     items: [
       { label: 'Minha Empresa', description: 'Cadastro jurídico, fiscal e operacional.', href: '/dashboard/settings/empresa', icon: Building2 },
       { label: 'Gateways', description: 'Conexões, credenciais e testes de gateways.', href: '/dashboard/gateways', icon: Network },
-      { label: 'Funil e domínio', description: 'Conexão, domínio, eventos e chat do funil.', href: '/dashboard/settings/funil-dominio', icon: GitBranch },
+      { label: 'Funil e domínio', description: 'Conexão, domínio, eventos e chat do funil.', href: '/dashboard/funil', icon: GitBranch },
       { label: 'Recuperação', description: 'Políticas de recuperação operacional.', href: '/dashboard/settings/recuperacao', icon: RefreshCw },
       { label: 'Desempenho', description: 'Saúde, latência e telemetria da operação.', href: '/dashboard/settings/desempenho', icon: Activity },
     ],
@@ -48,40 +48,40 @@ export default function SettingsPage() {
   const router = useRouter()
 
   return (
-    <main className="min-h-screen bg-[#07090d] px-4 pb-32 pt-6 text-white sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-7">
-        <header>
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#1DB854]">
-            <ShieldCheck size={14} /> ALTHEA PAY // CONFIGURAÇÕES
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight">Central de configurações</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500">
-            Cada área possui uma única tela canônica. Esta página apenas organiza os acessos e não mantém formulários paralelos.
-          </p>
-        </header>
+    <div className="w-full space-y-6">
+      <section className="border-b border-white/[.055] pb-5">
+        <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Administração</p>
+        <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">Configurações</h1>
+        <p className="mt-1 max-w-3xl text-xs leading-5 text-[var(--althea-muted)]">
+          Organize a conta, a operação e as integrações em uma única central. Cada item leva para a área canônica correspondente, sem formulários duplicados.
+        </p>
+      </section>
 
-        {sections.map(section => (
-          <section key={section.title} className="space-y-3">
-            <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">{section.title}</h2>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {section.items.map(({ label, description, href, icon: Icon }) => (
-                <button
-                  key={href}
-                  type="button"
-                  onClick={() => router.push(href)}
-                  className="group min-h-[132px] rounded-2xl border border-white/[0.07] bg-[#0F1A16]/55 p-5 text-left transition hover:border-[#1DB854]/25 hover:bg-[#0F1A16]"
-                >
-                  <span className="grid h-10 w-10 place-items-center rounded-xl border border-[#1DB854]/15 bg-[#1DB854]/[0.06] text-[#1DB854]">
-                    <Icon size={18} />
-                  </span>
-                  <h3 className="mt-4 text-sm font-semibold text-white">{label}</h3>
-                  <p className="mt-1 text-xs leading-5 text-zinc-500">{description}</p>
-                </button>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-    </main>
+      {sections.map(section => (
+        <section key={section.title} className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-white">{section.title}</h2>
+            <div className="mt-1 h-px w-10 bg-[rgba(29,184,84,.28)]" />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {section.items.map(({ label, description, href, icon: Icon }) => (
+              <button
+                key={href}
+                type="button"
+                onClick={() => router.push(href)}
+                className="group min-h-[138px] rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-[rgba(29,184,84,.16)]"
+              >
+                <span className="grid h-10 w-10 place-items-center rounded-xl border border-[rgba(29,184,84,.10)] bg-[rgba(29,184,84,.055)] text-[var(--althea-brand)]">
+                  <Icon size={17} />
+                </span>
+                <h3 className="mt-4 text-sm font-semibold text-white">{label}</h3>
+                <p className="mt-1 text-[10px] leading-4 text-[var(--althea-muted)]">{description}</p>
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   )
 }

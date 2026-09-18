@@ -4,8 +4,14 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{"Content-Type":"application/json"}});
 Deno.serve(async req=>{
   if(req.method!=="POST") return json({error:"method_not_allowed"},405);
-  const internal=Deno.env.get("ALTHEA_INTERNAL_SECRET")||"";
-  if(!internal || req.headers.get("x-internal-secret")!==internal) return json({error:"unauthorized"},401);
+  const dbUrl=Deno.env.get("SUPABASE_URL"),service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if(!dbUrl||!service)return json({error:"server_configuration_error"},500);
+  const admin=createClient(dbUrl,service);
+  const supplied=req.headers.get("x-internal-secret")??req.headers.get("x-althea-internal-secret")??"";
+  if(!supplied)return json({error:"unauthorized"},401);
+  const verified=await admin.rpc("verify_althea_internal_secret",{p_secret:supplied});
+  if(verified.error)return json({error:"internal_auth_unavailable"},500);
+  if(verified.data!==true)return json({error:"unauthorized"},401);
   let b:any; try{b=await req.json()}catch{return json({error:"invalid_json"},400)}
   const amount=Number(b.amount??0), userId=String(b.user_id??"");
   if(!userId||!Number.isFinite(amount)||amount<=0)return json({error:"user_id_and_positive_amount_required"},400);
@@ -36,7 +42,6 @@ Deno.serve(async req=>{
     reasonCodes=[...reasonCodes,...(signals.length?["heuristic_signals"]:["baseline_low_risk"]),...(providerAvailable?[]:["risk_provider_unavailable_fail_open"])];
   }
 
-  const dbUrl=Deno.env.get("SUPABASE_URL"),service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if(dbUrl&&service){const admin=createClient(dbUrl,service);const {error}=await admin.from("risk_assessments").insert({user_id:userId,external_reference:String(b.idempotency_key??crypto.randomUUID()),amount,currency:String(b.currency??"BRL"),risk_score:score,risk_level:level,decision,provider,reason_codes:reasonCodes,signals:{ip_present:Boolean(b.ip),device_present:Boolean(b.device_id),card_fingerprint_present:Boolean(b.card_fingerprint),provider_available:providerAvailable},created_at:new Date().toISOString()});if(error)console.error("risk.persist_failed",error.message);}
+  {const {error}=await admin.from("risk_assessments").insert({user_id:userId,external_reference:String(b.idempotency_key??crypto.randomUUID()),amount,currency:String(b.currency??"BRL"),risk_score:score,risk_level:level,decision,provider,reason_codes:reasonCodes,signals:{ip_present:Boolean(b.ip),device_present:Boolean(b.device_id),card_fingerprint_present:Boolean(b.card_fingerprint),provider_available:providerAvailable},created_at:new Date().toISOString()});if(error)console.error("risk.persist_failed",error.message);}
   return json({decision,risk_score:score,risk_level:level,reason_codes:reasonCodes,provider,provider_available:providerAvailable,fail_open:!providerAvailable,latency_target_ms:900});
 });

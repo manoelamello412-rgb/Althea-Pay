@@ -23,7 +23,7 @@ const DEFAULTS: RecoverySettings = {
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
   return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={onChange} className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 ${checked ? 'justify-end bg-[#1DB854]' : 'justify-start border border-[#0D362D] bg-[#0B0B0D]'}`}>
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={onChange} className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors duration-200 ${checked ? 'justify-end bg-[var(--althea-brand)]' : 'justify-start border border-white/[.045] bg-[var(--althea-bg)]'}`}>
       <motion.span layout className="h-5 w-5 rounded-full bg-white shadow-md" />
     </button>
   )
@@ -78,30 +78,34 @@ export function ConfigTabRecuperacao({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="w-full space-y-4 pb-32 font-['Space_Grotesk'] text-white">
-      <div className="flex items-center justify-between border-b border-[#0D362D]/30 pb-2">
-        <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-xs font-bold text-[#A6A6A6] transition-colors hover:text-white"><ChevronLeft className="h-4 w-4 text-[#1DB854]" />Voltar</button>
-        <div className="flex items-center gap-1.5"><RefreshCcw className="h-3.5 w-3.5 text-[#1DB854]" /><span className="text-[10px] font-bold uppercase tracking-wider text-slate-200">Réguas de Recuperação</span></div>
-      </div>
+    <div className="w-full space-y-5 text-white">
+      <section className="flex flex-col gap-5 border-b border-white/[.055] pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Automação</p>
+          <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">Recuperação</h1>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--althea-muted)]">Configure réguas e canais reais para recuperação de carrinho e pagamentos pendentes.</p>
+        </div>
+        <button type="button" onClick={onBack} className="inline-flex h-10 items-center gap-2 self-start rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white lg:self-auto"><ChevronLeft className="h-3.5 w-3.5 text-[var(--althea-brand)]" />Configurações</button>
+      </section>
 
-      {loading ? <div className="animate-pulse space-y-3"><div className="h-5 w-48 rounded bg-[#0F1A16]" /><div className="h-28 rounded-2xl bg-[#0F1A16]" /><div className="h-32 rounded-2xl bg-[#0F1A16]" /></div> : <>
+      {loading ? <div className="animate-pulse space-y-3"><div className="h-5 w-48 rounded bg-[var(--althea-surface)]" /><div className="h-28 rounded-2xl bg-[var(--althea-surface)]" /><div className="h-32 rounded-2xl bg-[var(--althea-surface)]" /></div> : <>
         <section className="space-y-2">
-          <span className="pl-1 text-[10px] font-bold uppercase tracking-wider text-[#A6A6A6]">Automações Assíncronas</span>
-          <div className="rounded-2xl border border-[#0D362D] bg-[#0F1A16] p-4">
-            {[['cartAutomation','Carrinho Abandonado','Disparos após 15 minutos de inatividade'],['pixAutomation','PIX Expirado','Lembrete após expiração do pagamento'],['boletoAutomation','Boleto sem Pagamento','Notificação antes do vencimento']].map(([key,title,description], index) => <div key={key} className={`flex items-center justify-between gap-3 ${index ? 'border-t border-[#0D362D]/40 pt-4 mt-4' : ''}`}><div><span className="block text-xs font-bold text-white">{title}</span><span className="mt-0.5 block text-[10px] text-[#A6A6A6]">{description}</span></div><Toggle checked={settings[key as keyof RecoverySettings] as boolean} label={`Ativar ${title}`} onChange={() => setSettings((current) => ({ ...current, [key]: !current[key as keyof RecoverySettings] }))} /></div>)}
+          <span className="pl-1 text-[10px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Automações Assíncronas</span>
+          <div className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
+            {[['cartAutomation','Carrinho Abandonado','Disparos após 15 minutos de inatividade'],['pixAutomation','PIX Expirado','Lembrete após expiração do pagamento'],['boletoAutomation','Boleto sem Pagamento','Notificação antes do vencimento']].map(([key,title,description], index) => <div key={key} className={`flex items-center justify-between gap-3 ${index ? 'border-t border-[#0D362D]/40 pt-4 mt-4' : ''}`}><div><span className="block text-xs font-bold text-white">{title}</span><span className="mt-0.5 block text-[10px] text-[var(--althea-muted)]">{description}</span></div><Toggle checked={settings[key as keyof RecoverySettings] as boolean} label={`Ativar ${title}`} onChange={() => setSettings((current) => ({ ...current, [key]: !current[key as keyof RecoverySettings] }))} /></div>)}
           </div>
         </section>
 
         <section className="space-y-2">
-          <span className="pl-1 text-[10px] font-bold uppercase tracking-wider text-[#A6A6A6]">Canais de Remetente</span>
-          <div className="space-y-4 rounded-2xl border border-[#0D362D] bg-[#0F1A16] p-4">
-            <label className="block space-y-1.5"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300"><Mail className="h-3 w-3 text-[#1DB854]" />E-mail de Disparo</span><input type="email" value={settings.senderEmail} onChange={(event) => setSettings((current) => ({ ...current, senderEmail: event.target.value }))} placeholder="notificacoes@seudominio.com.br" className="w-full rounded-xl border border-[#0D362D] bg-[#0B0B0D] px-3 py-2.5 text-xs text-slate-200 outline-none transition focus:border-[#1DB854]/60" /></label>
-            <label className="block space-y-1.5"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300"><Phone className="h-3 w-3 text-[#1DB854]" />WhatsApp (API)</span><input type="tel" value={settings.senderWhatsapp} onChange={(event) => setSettings((current) => ({ ...current, senderWhatsapp: event.target.value }))} placeholder="+55 (11) 99999-9999" className="w-full rounded-xl border border-[#0D362D] bg-[#0B0B0D] px-3 py-2.5 text-xs text-slate-200 outline-none transition focus:border-[#1DB854]/60" /></label>
+          <span className="pl-1 text-[10px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Canais de Remetente</span>
+          <div className="space-y-4 rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
+            <label className="block space-y-1.5"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300"><Mail className="h-3 w-3 text-[var(--althea-brand)]" />E-mail de Disparo</span><input type="email" value={settings.senderEmail} onChange={(event) => setSettings((current) => ({ ...current, senderEmail: event.target.value }))} placeholder="notificacoes@seudominio.com.br" className="w-full rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 py-2.5 text-xs text-slate-200 outline-none transition focus:border-[rgba(29,184,84,.32)]" /></label>
+            <label className="block space-y-1.5"><span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300"><Phone className="h-3 w-3 text-[var(--althea-brand)]" />WhatsApp (API)</span><input type="tel" value={settings.senderWhatsapp} onChange={(event) => setSettings((current) => ({ ...current, senderWhatsapp: event.target.value }))} placeholder="+55 (11) 99999-9999" className="w-full rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 py-2.5 text-xs text-slate-200 outline-none transition focus:border-[rgba(29,184,84,.32)]" /></label>
           </div>
         </section>
 
         {error && <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-3 text-[10px] text-red-300" role="alert">{error}</div>}
-        <motion.button whileTap={{ scale: 0.97 }} type="submit" form="recovery-settings-form" disabled={isSaving} className={`flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-xs font-bold transition-all ${saveSuccess ? 'border-[#1DB854] bg-[#1DB854]/20 text-[#1DB854]' : 'border-[#1DB854] bg-[#1DB854] text-black disabled:opacity-40'}`}>
+        <motion.button whileTap={{ scale: 0.97 }} type="submit" form="recovery-settings-form" disabled={isSaving} className={`flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-xs font-bold transition-all ${saveSuccess ? 'border-[#1DB854] bg-[var(--althea-brand)]/20 text-[var(--althea-brand)]' : 'border-[#1DB854] bg-[var(--althea-brand)] text-black disabled:opacity-40'}`}>
           {isSaving ? <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/30 border-t-black" />Atualizando Canais...</> : saveSuccess ? <><CheckCircle2 className="h-4 w-4" />Configurações Confirmadas!</> : <><Save className="h-4 w-4" />Confirmar Alterações</>}
         </motion.button>
       </>}

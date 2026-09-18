@@ -166,7 +166,8 @@ Deno.serve(
         if (updated.error) throw updated.error
       }
 
-      const internalSecret = Deno.env.get('ALTHEA_INTERNAL_SECRET') || ''
+      const internalResult = await db.rpc('get_althea_internal_secret')
+      const internalSecret = !internalResult.error && typeof internalResult.data === 'string' ? internalResult.data : ''
       let automationTriggered = false
       let universalWebhookTriggered = false
       if (internalSecret) {

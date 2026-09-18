@@ -38,8 +38,10 @@ Deno.serve(async (req) => {
   if (!/^[A-Za-z0-9._:-]{1,300}$/.test(idempotencyKey)) return json({ error: "invalid_idempotency_key" }, 400);
   if (["card_data", "pan", "card_number", "cardNumber", "cvv", "cvc"].some((k) => body[k] !== undefined)) return json({ error: "raw_card_data_forbidden" }, 400);
 
-  const { data: funnel } = await db.from("funnels").select("id").eq("id", funnelId).eq("user_id", user.id).is("deleted_at", null).maybeSingle();
+  const { data: funnel } = await db.from("funnels").select("id,organization_id").eq("id", funnelId).eq("user_id", user.id).is("deleted_at", null).maybeSingle();
   if (!funnel) return json({ error: "funnel_not_found" }, 404);
+  const organizationId = String(funnel.organization_id || "");
+  if (!organizationId) return json({ error: "funnel_organization_missing" }, 500);
   if (productId) {
     const { data: product, error } = await db.from("products").select("id").eq("id", productId).eq("user_id", user.id).maybeSingle();
     if (error) return json({ error: "product_lookup_failed" }, 500);
@@ -98,7 +100,7 @@ Deno.serve(async (req) => {
 
     if (action !== "purchase") { const p = { checkout, replayed: false }; await complete("completed", 200, p, String(checkout.id)); return json(p); }
 
-    const gatewayResponse = await fetch(`${URL}/functions/v1/gateway-orchestrator`, { method: "POST", headers: { "content-type": "application/json", authorization: req.headers.get("authorization") || "", "x-idempotency-key": idempotencyKey }, body: JSON.stringify({ funnel_id: funnelId, product_id: productId, amount, currency, customer, metadata: { ...metadata, checkout_id: checkout.id }, idempotency_key: idempotencyKey }) });
+    const gatewayResponse = await fetch(`${URL}/functions/v1/gateway-orchestrator`, { method: "POST", headers: { "content-type": "application/json", authorization: req.headers.get("authorization") || "", "x-idempotency-key": idempotencyKey }, body: JSON.stringify({ funnel_id: funnelId, product_id: productId, amount, currency, customer, metadata: { ...metadata, checkout_id: checkout.id, attribution }, idempotency_key: idempotencyKey }) });
     const gateway = await gatewayResponse.json().catch(() => ({ error: "gateway_invalid_response" }));
 
     if (!gatewayResponse.ok) {
@@ -130,7 +132,7 @@ Deno.serve(async (req) => {
     const externalId = transaction.external_id || (isRecord(gateway) ? gateway.external_id : null) || null;
     let sale = (await db.from("sales").select("*").eq("user_id", user.id).eq("transaction_id", transactionId).maybeSingle()).data;
     if (!sale) {
-      const insertedSale = await db.from("sales").insert({ user_id: user.id, funnel_id: funnelId, product_id: productId, checkout_id: checkout.id, transaction_id: transactionId, amount, currency, status: "approved", attribution, external_id: externalId, gateway_id: transaction.gateway_id || (isRecord(gateway) ? gateway.gateway_id : null) || null, occurred_at: new Date().toISOString() }).select().single();
+      const insertedSale = await db.from("sales").insert({ id: `gateway_tx_${transactionId}`, user_id: user.id, organization_id: organizationId, funnel_id: funnelId, product_id: productId, checkout_id: checkout.id, transaction_id: transactionId, amount, currency, status: "approved", attribution, external_id: externalId, gateway_id: transaction.gateway_id || (isRecord(gateway) ? gateway.gateway_id : null) || null, occurred_at: new Date().toISOString() }).select().single();
       if (insertedSale.error && insertedSale.error.code !== "23505") { const p = { error: "sale_projection_failed" }; await complete("failed", 500, p, String(checkout.id)); return json(p, 500); }
       sale = insertedSale.data ?? (await db.from("sales").select("*").eq("user_id", user.id).eq("transaction_id", transactionId).maybeSingle()).data;
     }
@@ -145,7 +147,7 @@ Deno.serve(async (req) => {
     const eventKey = `checkout:${checkout.id}:purchase`;
     const { data: existingEvent } = await db.from("integration_events").select("id").eq("user_id", user.id).eq("event_key", eventKey).maybeSingle();
     if (!existingEvent) {
-      const insertedEvent = await db.from("integration_events").insert({ user_id: user.id, funnel_id: funnelId, event_type: "purchase", event_key: eventKey, external_id: externalId || idempotencyKey, payload: { checkout_id: checkout.id, transaction_id: transactionId, sale_id: sale.id, amount, currency, product_id: productId, attribution, customer }, status: "pending" });
+      const insertedEvent = await db.from("integration_events").insert({ user_id: user.id, organization_id: organizationId, funnel_id: funnelId, event_type: "purchase", event_key: eventKey, external_id: externalId || idempotencyKey, payload: { checkout_id: checkout.id, transaction_id: transactionId, sale_id: sale.id, amount, currency, product_id: productId, attribution, customer }, status: "pending" });
       if (insertedEvent.error && insertedEvent.error.code !== "23505") { const p = { error: "integration_event_failed" }; await complete("failed", 500, p, String(checkout.id)); return json(p, 500); }
     }
 

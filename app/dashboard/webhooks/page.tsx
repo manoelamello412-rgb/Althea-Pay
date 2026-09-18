@@ -72,7 +72,7 @@ const fmt = (value: string | null) => value
   : '—'
 const badge = (status: string) =>
   status === 'active' || status === 'processed' || status === 'delivered'
-    ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+    ? 'border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.08)] text-[#8edca5]'
     : status === 'failed' || status === 'dead_letter'
       ? 'border-red-400/20 bg-red-400/10 text-red-300'
       : 'border-amber-400/20 bg-amber-400/10 text-amber-300'
@@ -228,86 +228,84 @@ export default function WebhooksPage() {
   const processedEvents = events.filter(item => item.status === 'processed').length
 
   return (
-    <main className="min-h-screen bg-[#070A09] px-4 py-6 text-slate-100 lg:px-8">
-      <div className="mx-auto max-w-[1700px] space-y-6">
-        <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className="w-full space-y-5">
+        <section className="flex flex-col gap-5 border-b border-white/[.055] pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="mb-2 text-[10px] font-black uppercase tracking-[.28em] text-emerald-400">ALTHEA PAY // WEBHOOKS</div>
-            <h1 className="text-3xl font-black tracking-tight">Central de Webhooks</h1>
-            <p className="mt-1 text-sm text-slate-500">Entrada, saída, provisionamento, segredos e telemetria em uma única área.</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Integrações</p>
+            <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">Webhooks</h1>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--althea-muted)]">Entrada, saída, provisionamento, segredos e telemetria em uma única área operacional.</p>
           </div>
-          <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.03] px-4 text-sm font-semibold disabled:opacity-50">
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''}/> Sincronizar
+          <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex h-10 items-center gap-2 self-start rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white disabled:opacity-50 lg:self-auto">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''}/> Atualizar
           </button>
-        </header>
+        </section>
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             ['Entradas', inbound.length],
             ['Saídas', outbound.length],
             ['Eventos processados', processedEvents],
             ['Entregas com falha', failedDeliveries],
           ].map(([label, value]) => (
-            <article key={String(label)} className="rounded-2xl border border-white/10 bg-white/[.025] p-5">
-              <span className="text-[10px] uppercase tracking-widest text-slate-500">{label}</span>
-              <strong className="mt-2 block text-2xl font-black">{value}</strong>
+            <article key={String(label)} className="min-h-[112px] rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
+              <span className="text-[10px] text-[var(--althea-muted)]">{label}</span>
+              <strong className="mt-4 block text-[24px] font-semibold tracking-[-.035em] text-white">{value}</strong>
             </article>
           ))}
         </section>
 
         {(error || message) && (
-          <div className={`rounded-xl border p-4 text-sm ${error ? 'border-red-400/20 bg-red-400/5 text-red-300' : 'border-emerald-400/20 bg-emerald-400/5 text-emerald-300'}`}>
+          <div className={`rounded-xl border p-4 text-sm ${error ? 'border-red-400/20 bg-red-400/5 text-red-300' : 'border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.05)] text-[#8edca5]'}`}>
             {error || message}
           </div>
         )}
 
         <section className="grid gap-5 xl:grid-cols-[1fr_1fr]">
-          <form onSubmit={createWebhook} className="rounded-2xl border border-white/10 bg-white/[.02] p-5">
-            <div className="flex items-center gap-3"><Link2 size={19} className="text-emerald-400"/><div><h2 className="font-black">Novo webhook de saída</h2><p className="text-xs text-slate-600">Provisionado pelo backend e assinado por segredo.</p></div></div>
+          <form onSubmit={createWebhook} className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5">
+            <div className="flex items-center gap-3"><Link2 size={19} className="text-[var(--althea-brand)]"/><div><h2 className="font-black">Novo webhook de saída</h2><p className="text-xs text-[var(--althea-muted)]">Provisionado pelo backend e assinado por segredo.</p></div></div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <input required value={name} onChange={event => setName(event.target.value)} placeholder="Nome do endpoint" className="min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 text-sm outline-none" />
               <input required type="url" value={endpoint} onChange={event => setEndpoint(event.target.value)} placeholder="https://sua-api.com/webhooks/althea" className="min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 font-mono text-xs outline-none" />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {EVENTS.map(item => (
-                <button key={item} type="button" onClick={() => setSelectedEvents(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])} className={`min-h-10 rounded-full border px-3 text-[10px] font-bold ${selectedEvents.includes(item) ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300' : 'border-white/10 text-slate-500'}`}>{item}</button>
+                <button key={item} type="button" onClick={() => setSelectedEvents(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])} className={`min-h-10 rounded-full border px-3 text-[10px] font-bold ${selectedEvents.includes(item) ? 'border-[rgba(29,184,84,.22)] bg-[rgba(29,184,84,.08)] text-[#8edca5]' : 'border-white/10 text-[var(--althea-muted)]'}`}>{item}</button>
               ))}
             </div>
-            <button type="submit" disabled={saving || selectedEvents.length === 0} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 text-xs font-black text-black disabled:opacity-50">
+            <button type="submit" disabled={saving || selectedEvents.length === 0} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--althea-brand)] px-4 text-xs font-black text-black disabled:opacity-50">
               {saving ? <RefreshCw size={15} className="animate-spin"/> : <Check size={15}/>} {saving ? 'Provisionando...' : 'Cadastrar endpoint'}
             </button>
-            <div className="mt-4 rounded-xl border border-white/[.07] bg-black/20 p-3">
+            <div className="mt-4 rounded-xl border border-white/[.045] bg-black/20 p-3">
               <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 truncate font-mono text-xs text-slate-500">{secret && showSecret ? secret : MASK}</code>
+                <code className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--althea-muted)]">{secret && showSecret ? secret : MASK}</code>
                 {secret && <><button type="button" onClick={() => setShowSecret(value => !value)} className="grid h-10 w-10 place-items-center text-slate-400">{showSecret ? <EyeOff size={15}/> : <Eye size={15}/>}</button><button type="button" onClick={() => void copySecret()} className="grid h-10 w-10 place-items-center text-slate-400"><Copy size={15}/></button></>}
               </div>
-              <p className="mt-2 text-[10px] text-slate-600">O segredo só aparece após criação ou rotação; não é lido de volta do banco.</p>
+              <p className="mt-2 text-[10px] text-[var(--althea-muted)]">O segredo só aparece após criação ou rotação; não é lido de volta do banco.</p>
             </div>
           </form>
 
-          <section className="rounded-2xl border border-white/10 bg-white/[.02] p-5">
-            <div className="mb-5 flex items-center gap-3"><ArrowDownToLine size={19} className="text-emerald-400"/><div><h2 className="font-black">Webhooks de entrada</h2><p className="text-xs text-slate-600">Integrações que recebem eventos externos.</p></div></div>
-            {inbound.length === 0 ? <p className="py-10 text-center text-sm text-slate-600">Nenhuma integração de entrada cadastrada.</p> : <div className="space-y-2">{inbound.map(item => <div key={item.id} className="rounded-xl border border-white/[.07] bg-black/10 p-4"><div className="flex items-start justify-between gap-3"><div><b className="text-sm">{item.name}</b><p className="mt-1 font-mono text-[11px] text-slate-600">{item.endpoint_key}</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><div className="mt-3 grid grid-cols-3 gap-2 text-[10px] text-slate-500"><span>Eventos <b className="block text-slate-300">{item.event_count ?? 0}</b></span><span>Último <b className="block text-slate-300">{fmt(item.last_event_at)}</b></span><span>Prefixo <b className="block text-slate-300">{item.secret_prefix || '—'}</b></span></div></div>)}</div>}
+          <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5">
+            <div className="mb-5 flex items-center gap-3"><ArrowDownToLine size={19} className="text-[var(--althea-brand)]"/><div><h2 className="font-black">Webhooks de entrada</h2><p className="text-xs text-[var(--althea-muted)]">Integrações que recebem eventos externos.</p></div></div>
+            {inbound.length === 0 ? <p className="py-10 text-center text-sm text-[var(--althea-muted)]">Nenhuma integração de entrada cadastrada.</p> : <div className="space-y-2">{inbound.map(item => <div key={item.id} className="rounded-xl border border-white/[.045] bg-[var(--althea-bg)] p-4"><div className="flex items-start justify-between gap-3"><div><b className="text-sm">{item.name}</b><p className="mt-1 font-mono text-[11px] text-[var(--althea-muted)]">{item.endpoint_key}</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><div className="mt-3 grid grid-cols-3 gap-2 text-[10px] text-[var(--althea-muted)]"><span>Eventos <b className="block text-slate-300">{item.event_count ?? 0}</b></span><span>Último <b className="block text-slate-300">{fmt(item.last_event_at)}</b></span><span>Prefixo <b className="block text-slate-300">{item.secret_prefix || '—'}</b></span></div></div>)}</div>}
           </section>
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-white/[.02] p-5">
-          <div className="mb-5 flex items-center gap-3"><ArrowUpFromLine size={19} className="text-emerald-400"/><div><h2 className="font-black">Webhooks de saída</h2><p className="text-xs text-slate-600">Gerencie os endpoints que recebem eventos da Althea.</p></div></div>
-          {outbound.length === 0 ? <p className="py-10 text-center text-sm text-slate-600">Nenhum webhook de saída cadastrado.</p> : <div className="grid gap-3 xl:grid-cols-2">{outbound.map(item => <article key={item.id} className="rounded-xl border border-white/[.07] bg-black/10 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="text-sm">{item.name}</b><p className="mt-1 truncate font-mono text-[11px] text-slate-600">{item.endpoint_url}</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><div className="mt-3 flex flex-wrap gap-2">{item.events.map(event => <span key={event} className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-slate-500">{event}</span>)}</div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => void toggle(item)} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{item.status === 'active' ? 'Desativar' : 'Ativar'}</button><button type="button" onClick={() => void rotate(item.id)} disabled={rotating === item.id} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{rotating === item.id ? 'Rotacionando...' : 'Rotacionar segredo'}</button><button type="button" onClick={() => void remove(item.id)} className="ml-auto grid h-10 w-10 place-items-center rounded-lg border border-red-400/20 text-red-300" aria-label="Remover webhook"><Trash2 size={14}/></button></div></article>)}</div>}
+        <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5">
+          <div className="mb-5 flex items-center gap-3"><ArrowUpFromLine size={19} className="text-[var(--althea-brand)]"/><div><h2 className="font-black">Webhooks de saída</h2><p className="text-xs text-[var(--althea-muted)]">Gerencie os endpoints que recebem eventos da Althea.</p></div></div>
+          {outbound.length === 0 ? <p className="py-10 text-center text-sm text-[var(--althea-muted)]">Nenhum webhook de saída cadastrado.</p> : <div className="grid gap-3 xl:grid-cols-2">{outbound.map(item => <article key={item.id} className="rounded-xl border border-white/[.045] bg-[var(--althea-bg)] p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="text-sm">{item.name}</b><p className="mt-1 truncate font-mono text-[11px] text-[var(--althea-muted)]">{item.endpoint_url}</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><div className="mt-3 flex flex-wrap gap-2">{item.events.map(event => <span key={event} className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-[var(--althea-muted)]">{event}</span>)}</div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => void toggle(item)} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{item.status === 'active' ? 'Desativar' : 'Ativar'}</button><button type="button" onClick={() => void rotate(item.id)} disabled={rotating === item.id} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{rotating === item.id ? 'Rotacionando...' : 'Rotacionar segredo'}</button><button type="button" onClick={() => void remove(item.id)} className="ml-auto grid h-10 w-10 place-items-center rounded-lg border border-red-400/20 text-red-300" aria-label="Remover webhook"><Trash2 size={14}/></button></div></article>)}</div>}
         </section>
 
         <section className="grid gap-5 xl:grid-cols-2">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.02]">
-            <div className="flex items-center gap-3 border-b border-white/10 p-5"><Activity size={19} className="text-emerald-400"/><div><h2 className="font-black">Entregas recentes</h2><p className="text-xs text-slate-600">Telemetria do dispatcher de saída.</p></div></div>
-            {deliveries.slice(0, 12).length === 0 ? <p className="py-10 text-center text-sm text-slate-600">Nenhuma entrega registrada.</p> : <div className="divide-y divide-white/[.06]">{deliveries.slice(0, 12).map(item => <div key={item.id} className="p-4"><div className="flex items-center justify-between gap-3"><span><b className="block text-sm">{item.event_type}</b><small className="text-slate-600">{fmt(item.created_at)}</small></span><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><p className="mt-2 text-xs text-slate-500">HTTP {item.response_code ?? '—'} · {item.response_time_ms ?? '—'}ms · tentativa {item.attempt}</p>{item.error_message && <p className="mt-1 truncate text-xs text-red-300">{item.error_message}</p>}</div>)}</div>}
+          <div className="overflow-hidden rounded-2xl border border-white/[.055] bg-[var(--althea-surface)]">
+            <div className="flex items-center gap-3 border-b border-white/10 p-5"><Activity size={19} className="text-[var(--althea-brand)]"/><div><h2 className="font-black">Entregas recentes</h2><p className="text-xs text-[var(--althea-muted)]">Telemetria do dispatcher de saída.</p></div></div>
+            {deliveries.slice(0, 12).length === 0 ? <p className="py-10 text-center text-sm text-[var(--althea-muted)]">Nenhuma entrega registrada.</p> : <div className="divide-y divide-white/[.06]">{deliveries.slice(0, 12).map(item => <div key={item.id} className="p-4"><div className="flex items-center justify-between gap-3"><span><b className="block text-sm">{item.event_type}</b><small className="text-[var(--althea-muted)]">{fmt(item.created_at)}</small></span><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><p className="mt-2 text-xs text-[var(--althea-muted)]">HTTP {item.response_code ?? '—'} · {item.response_time_ms ?? '—'}ms · tentativa {item.attempt}</p>{item.error_message && <p className="mt-1 truncate text-xs text-red-300">{item.error_message}</p>}</div>)}</div>}
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[.02] p-5">
-            <div className="mb-4 flex items-center gap-3"><ShieldCheck size={19} className="text-emerald-400"/><div><h2 className="font-black">Eventos de integração</h2><p className="text-xs text-slate-600">Fila normalizada de eventos recebidos.</p></div></div>
-            {events.length === 0 ? <p className="py-8 text-center text-sm text-slate-600">Nenhum evento recebido.</p> : <div className="space-y-2">{events.slice(0, 12).map(item => <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[.07] p-3"><span><b className="text-xs">{item.event_type}</b><small className="ml-2 text-[10px] text-slate-600">{fmt(item.created_at)}</small></span><span className="flex items-center gap-2 text-[10px] text-slate-500">{item.status === 'processed' ? <CheckCircle2 size={14} className="text-emerald-400"/> : item.status === 'failed' || item.status === 'dead_letter' ? <XCircle size={14} className="text-red-400"/> : <Activity size={14}/>} {item.status} · retry {item.retry_count ?? 0}</span></div>)}</div>}
+          <div className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5">
+            <div className="mb-4 flex items-center gap-3"><ShieldCheck size={19} className="text-[var(--althea-brand)]"/><div><h2 className="font-black">Eventos de integração</h2><p className="text-xs text-[var(--althea-muted)]">Fila normalizada de eventos recebidos.</p></div></div>
+            {events.length === 0 ? <p className="py-8 text-center text-sm text-[var(--althea-muted)]">Nenhum evento recebido.</p> : <div className="space-y-2">{events.slice(0, 12).map(item => <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[.045] p-3"><span><b className="text-xs">{item.event_type}</b><small className="ml-2 text-[10px] text-[var(--althea-muted)]">{fmt(item.created_at)}</small></span><span className="flex items-center gap-2 text-[10px] text-[var(--althea-muted)]">{item.status === 'processed' ? <CheckCircle2 size={14} className="text-[var(--althea-brand)]"/> : item.status === 'failed' || item.status === 'dead_letter' ? <XCircle size={14} className="text-red-400"/> : <Activity size={14}/>} {item.status} · retry {item.retry_count ?? 0}</span></div>)}</div>}
           </div>
         </section>
-      </div>
-    </main>
+    </div>
   )
 }

@@ -19,6 +19,36 @@
   --althea-content-bottom: 128px;
   --althea-content-max: 1280px;
 
+  /* Legacy names now resolve to the canonical contract instead of redefining it. */
+  --althea-ink: var(--althea-bg);
+  --althea-forest: var(--althea-surface);
+  --althea-deep: var(--althea-inner);
+  --althea-green: var(--althea-brand);
+  --althea-silver: var(--althea-muted);
+  --althea-white: #F5F7F6;
+  --althea-line: rgba(29, 184, 84, 0.14);
+
+  --background-deep: var(--althea-bg);
+  --surface-card: var(--althea-surface);
+  --brand-vibrant: var(--althea-brand);
+  --brand-accent: var(--althea-gold);
+  --text-primary: var(--althea-white);
+  --text-muted: var(--althea-muted);
+  --font-space: var(--font-space-grotesk, 'Space Grotesk'), sans-serif;
+  --border: var(--althea-border);
+  --shadow: 0 20px 70px rgba(0, 0, 0, 0.24);
+
+  --ap-bg: var(--althea-bg);
+  --ap-panel: rgba(15, 26, 22, 0.78);
+  --ap-panel-2: rgba(15, 26, 22, 0.92);
+  --ap-line: rgba(29, 184, 84, 0.10);
+  --ap-green: var(--althea-brand);
+  --ap-gold: var(--althea-gold);
+  --ap-text: var(--althea-white);
+  --ap-muted: var(--althea-muted);
+  --althea-green-line: rgba(29, 184, 84, 0.22);
+  --althea-green-glow: rgba(29, 184, 84, 0.16);
+
   /* Canonical aliases retained for existing v2 utility consumers. */
   --althea-bg-base: var(--althea-bg);
   --althea-bg-surface: var(--althea-surface);
@@ -157,84 +187,10 @@ a { -webkit-user-select: none; user-select: none; }
 .brand-lockup-pay,
 .brand-lockup-tag b { color: var(--althea-brand); }
 
-/* Compatibility normalization for older dashboard modules. */
-.althea-page-content [class*="bg-[#020203]"] { background: var(--althea-bg) !important; }
-.althea-page-content [class*="bg-[#0a0a0c]"] { background: var(--althea-surface) !important; }
-.althea-page-content [class*="bg-[#0B0B0D]"] { background: var(--althea-bg) !important; }
-.althea-page-content [class*="bg-[#0F1A16]"] { background: var(--althea-surface) !important; }
-.althea-page-content [class*="bg-[#060608]"] { background: var(--althea-bg) !important; }
-.althea-page-content [class*="bg-[#070A09]"] { background: var(--althea-bg) !important; }
-.althea-page-content [class*="bg-[#0b0b0f]"] { background: var(--althea-surface) !important; }
-.althea-page-content [class*="bg-[#0c0c0e]"] { background: var(--althea-surface) !important; }
-.althea-page-content [class*="bg-[#121214]"] { background: var(--althea-inner) !important; }
-.althea-page-content [class~="bg-neutral-950"] { background: var(--althea-surface) !important; }
-.althea-page-content [class~="bg-neutral-900"] { background: var(--althea-inner) !important; }
-.althea-page-content [class*="border-[#191921]"] { border-color: var(--althea-border) !important; }
-.althea-page-content [class*="border-white/[0.12]"] { border-color: var(--althea-border) !important; }
-.althea-page-content [class*="border-white/10"] { border-color: var(--althea-border) !important; }
-.althea-page-content [class*="text-emerald-"] { color: var(--althea-brand) !important; }
-.althea-page-content [class~="bg-emerald-500"] { background-color: var(--althea-brand) !important; }
-.althea-page-content [class~="bg-emerald-500/5"] { background-color: rgba(29,184,84,.05) !important; }
-.althea-page-content [class~="bg-emerald-500/10"] { background-color: rgba(29,184,84,.10) !important; }
-.althea.page-content [class~="bg-emerald-500/20"] { background-color: rgba(29,184,84,.20) !important; }
-.althea-page-content [class~="bg-emerald-500/20"] { background-color: rgba(29,184,84,.20) !important; }
-.althea-page-content [class~="bg-emerald-900/20"],
-.althea-page-content [class~="bg-emerald-950/20"] { background-color: rgba(13,54,45,.20) !important; }
-.althea-page-content [class*="border-emerald-"] { border-color: rgba(29,184,84,0.25) !important; }
-.althea-page-content [class*="text-zinc-500"],
-.althea-page-content [class*="text-zinc-400"],
-.althea-page-content [class*="text-slate-600"],
-.althea-page-content [class*="text-slate-500"],
-.althea-page-content [class*="text-slate-400"] { color: var(--althea-muted) !important; }
-.althea-page-content [class*="text-zinc-300"],
-.althea-page-content [class*="text-zinc-200"],
-.althea-page-content [class*="text-zinc-100"],
-.althea-page-content [class*="text-slate-100"] { color: #F5F7F6 !important; }
-.althea-page-content [class*="border-white/[0.08]"] { border-color: var(--althea-border) !important; }
-.althea-page-content [class*="divide-white/[0.08]"] > :not([hidden]) ~ :not([hidden]) { border-color: var(--althea-border) !important; }
-
-/* IA — remove the private near-black palette and inherit Dashboard surfaces. */
-.althea-page-content [class*="bg-[#060706]"],
-.althea-page-content [class*="bg-[#0b0d0c]"],
-.althea-page-content [class*="bg-[#0d110f]"],
-.althea-page-content [class*="bg-[#101311]"],
-.althea-page-content [class*="bg-[#0a110d]"],
-.althea-page-content [class*="bg-[#0a0d0b]"] { background: var(--althea-surface) !important; }
-.althea-page-content [class*="bg-[#060706]"] { background: var(--althea-bg) !important; }
-.althea-page-content [class*="border-[#1DBB54]"] { border-color: rgba(29,184,84,.22) !important; }
-.althea-page-content [class*="text-[#1DBB54]"],
-.althea-page-content [class*="bg-[#1DBB54]"] { color: var(--althea-brand) !important; }
-.althea-page-content [class*="bg-[#1DBB54]"] { background-color: var(--althea-brand) !important; }
-
-/* CRM/Chat — every CRM surface inherits the Dashboard hierarchy. */
-.althea-page-content [class*="bg-[#070A09]"] { background: var(--althea-bg) !important; }
-.althea-page-content [class*="bg-[#0B0F0D]"] { background: var(--althea-surface) !important; }
-.althea-page-content [class*="bg-[#090C0B]"] { background: var(--althea-surface) !important; }
-.althea-page-content [class*="bg-[#102218]"] { background: var(--althea-inner) !important; }
-.althea-page-content [class*="bg-[#12351F]"] { background: var(--althea-inner) !important; }
-.althea-page-content [class*="bg-white/[.025]"] { background: rgba(13,54,45,.20) !important; }
-.althea-page-content [class*="bg-white/[.045]"] { background: rgba(255,255,255,.045) !important; }
-.althea-page-content [class*="bg-white/[.03]"] { background: rgba(255,255,255,.03) !important; }
-.althea-page-content [class*="border-white/10"] { border-color: var(--althea-border) !important; }
-
-/* Settings — page-specific shell keeps behavior but cannot introduce a second theme. */
-.althea-page-content .settings-shell { min-height: 100dvh; background: var(--althea-bg) !important; color: #F5F7F6 !important; }
-.althea-page-content .settings-header,
-.althea-page-content .settings-tabs,
-.althea-page-content .settings-card { background: var(--althea-surface) !important; border-color: var(--althea-border) !important; color: #F5F7F6 !important; }
-.althea-page-content .settings-card { border-radius: var(--althea-card-radius) !important; box-shadow: none !important; }
-.althea-page-content .settings-tabs { background: transparent !important; }
-.althea-page-content .settings-tab { color: var(--althea-muted) !important; background: transparent !important; border-color: transparent !important; }
-.althea-page-content .settings-tab.active { color: var(--althea-brand) !important; background: var(--althea-brand-glance) !important; border-color: rgba(29,184,84,.22) !important; }
-.althea-page-content .settings-loading { color: var(--althea-muted) !important; }
-.althea-page-content .settings-card input,
-.althea-page-content .settings-card select,
-.althea-page-content .settings-card textarea { background: rgba(13,54,45,.40) !important; color: #F5F7F6 !important; border-color: var(--althea-border) !important; }
-.althea-page-content .settings-card input:focus,
-.althea-page-content .settings-card select:focus,
-.althea-page-content .settings-card textarea:focus { border-color: rgba(29,184,84,.40) !important; box-shadow: 0 0 0 3px rgba(29,184,84,.08) !important; }
-.althea-page-content .settings-message { background: rgba(29,184,84,.08) !important; border-color: rgba(29,184,84,.22) !important; color: #A6CDB5 !important; }
-.althea-page-content .settings-error { background: rgba(120,35,35,.16) !important; border-color: rgba(233,100,100,.22) !important; color: #E9A2A2 !important; }
+/* Dashboard modules now consume the canonical tokens directly.
+ * Do not re-introduce global class-string overrides here: the primary shell
+ * and each module own their visual state explicitly.
+ */
 
 @media (max-width: 767px) {
   :root { --althea-content-bottom: 128px; }

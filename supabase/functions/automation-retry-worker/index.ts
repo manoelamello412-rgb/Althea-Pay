@@ -5,7 +5,14 @@ const json=(x:unknown,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{
 const automationBackoffMs=(attemptCount:number)=>Math.min(3600000,30000*Math.pow(2,Math.max(0,attemptCount-1)));
 Deno.serve(async req=>{
  if(req.method!=="POST")return json({error:"method_not_allowed"},405);
- const secret=Deno.env.get("ALTHEA_INTERNAL_SECRET")||"";if(!secret||req.headers.get("x-internal-secret")!==secret)return json({error:"unauthorized"},401);
+ const supplied=req.headers.get("x-internal-secret")??req.headers.get("x-althea-internal-secret")??"";
+ if(!supplied)return json({error:"unauthorized"},401);
+ const verified=await db.rpc("verify_althea_internal_secret",{p_secret:supplied});
+ if(verified.error)return json({error:"internal_auth_unavailable"},500);
+ if(verified.data!==true)return json({error:"unauthorized"},401);
+ const canonical=await db.rpc("get_althea_internal_secret");
+ if(canonical.error||typeof canonical.data!=="string"||!canonical.data)return json({error:"internal_auth_unavailable"},500);
+ const secret=canonical.data;
  try{
   const b=await req.json().catch(()=>({}));const limit=Math.max(1,Math.min(Number(b.limit||25),100));
   const retry=await db.rpc("crm_claim_automation_retries",{p_limit:limit});if(retry.error)throw retry.error;

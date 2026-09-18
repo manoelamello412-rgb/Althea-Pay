@@ -3,13 +3,19 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const internalSecret = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
 const db = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
-  if (!internalSecret || req.headers.get("x-internal-secret") !== internalSecret) return json({ ok: false, error: "unauthorized" }, 401);
+  const suppliedSecret = req.headers.get("x-internal-secret") ?? req.headers.get("x-althea-internal-secret") ?? "";
+  if (!suppliedSecret) return json({ ok: false, error: "unauthorized" }, 401);
+  const verified = await db.rpc("verify_althea_internal_secret", { p_secret: suppliedSecret });
+  if (verified.error) return json({ ok: false, error: "internal_auth_unavailable" }, 500);
+  if (verified.data !== true) return json({ ok: false, error: "unauthorized" }, 401);
+  const canonical = await db.rpc("get_althea_internal_secret");
+  if (canonical.error || typeof canonical.data !== "string" || !canonical.data) return json({ ok: false, error: "internal_auth_unavailable" }, 500);
+  const internalSecret = canonical.data;
   try {
     const body = await req.json().catch(() => ({})) as Record<string, unknown>;
     const limit = Math.min(Math.max(Number(body.limit ?? 10), 1), 50);

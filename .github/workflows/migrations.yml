@@ -62,7 +62,7 @@ jobs:
         if: steps.credentials.outputs.available == 'true'
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.117.0
 
       - name: Compare local and remote migration history
         if: steps.credentials.outputs.available == 'true'

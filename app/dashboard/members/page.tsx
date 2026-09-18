@@ -127,43 +127,38 @@ export default function MembersPage() {
   const organizationCount = organizations.length
 
   return (
-    <main className="min-h-screen bg-[#07090d] px-4 pb-32 pt-6 text-white sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-white/45">
-              <UsersRound className="h-4 w-4" /> Membros e acessos
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Acessos da organização</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
-              Visão operacional dos membros que possuem vínculo real com as organizações acessíveis pela sua sessão. Os papéis são provenientes do modelo de acesso persistido no banco.
-            </p>
-          </div>
-          <button onClick={() => void refresh()} disabled={refreshing || loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50">
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Atualizar
-          </button>
-        </header>
+    <div className="w-full space-y-5">
+      <section className="flex flex-col gap-5 border-b border-white/[.055] pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Administração</p>
+          <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">Membros e acessos</h1>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--althea-muted)]">Visão dos membros e papéis realmente vinculados às organizações acessíveis pela sua sessão.</p>
+        </div>
+        <button onClick={() => void refresh()} disabled={refreshing || loading} className="inline-flex h-10 items-center gap-2 self-start rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50 lg:self-auto">
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} /> Atualizar
+        </button>
+      </section>
 
         <section className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"><p className="text-xs text-white/45">Membros</p><p className="mt-2 text-2xl font-semibold">{memberships.length}</p></div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"><p className="text-xs text-white/45">Organizações</p><p className="mt-2 text-2xl font-semibold">{organizationCount}</p></div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"><p className="text-xs text-white/45">Owners / admins</p><p className="mt-2 text-2xl font-semibold">{ownerCount + adminCount}</p></div>
+          <div className="min-h-[112px] rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4"><p className="text-xs text-[var(--althea-muted)]">Membros</p><p className="mt-2 text-2xl font-semibold">{memberships.length}</p></div>
+          <div className="min-h-[112px] rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4"><p className="text-xs text-[var(--althea-muted)]">Organizações</p><p className="mt-2 text-2xl font-semibold">{organizationCount}</p></div>
+          <div className="min-h-[112px] rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4"><p className="text-xs text-[var(--althea-muted)]">Owners / admins</p><p className="mt-2 text-2xl font-semibold">{ownerCount + adminCount}</p></div>
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por membro, organização ou papel..." className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/25" />
+        <section className="min-h-[112px] rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por membro, organização ou papel..." className="h-11 w-full rounded-xl border border-white/[.055] bg-[var(--althea-bg)] px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/25" />
         </section>
 
         {error && <section className="rounded-2xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-red-200">{error}</section>}
 
-        <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025]">
-          <div className="hidden grid-cols-[1.4fr_1.2fr_.8fr_1fr] gap-4 border-b border-white/10 px-5 py-3 text-[11px] font-medium uppercase tracking-wider text-white/35 md:grid">
+        <section className="overflow-hidden rounded-2xl border border-white/[.055] bg-[var(--althea-surface)]">
+          <div className="hidden grid-cols-[1.4fr_1.2fr_.8fr_1fr] gap-4 border-b border-white/[.055] px-5 py-3 text-[11px] font-medium uppercase tracking-wider text-[var(--althea-muted)] md:grid">
             <span>Membro</span><span>Organização</span><span>Papel</span><span>Vínculo</span>
           </div>
           {loading ? (
-            <div className="p-8 text-sm text-white/45">Carregando acessos reais...</div>
+            <div className="p-8 text-sm text-[var(--althea-muted)]">Carregando acessos reais...</div>
           ) : filteredMemberships.length === 0 ? (
-            <div className="p-8 text-sm text-white/45">Nenhum vínculo encontrado para os filtros atuais.</div>
+            <div className="p-8 text-sm text-[var(--althea-muted)]">Nenhum vínculo encontrado para os filtros atuais.</div>
           ) : (
             <div className="divide-y divide-white/10">
               {filteredMemberships.map((membership) => {
@@ -174,14 +169,14 @@ export default function MembersPage() {
                   <div key={`${membership.organization_id}:${membership.user_id}`} className="grid gap-3 px-5 py-4 md:grid-cols-[1.4fr_1.2fr_.8fr_1fr] md:items-center">
                     <div className="min-w-0">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-xs font-semibold text-white/70">{(profile?.display_name ?? membership.user_id).slice(0, 2).toUpperCase()}</div>
-                        <div className="min-w-0"><p className="truncate text-sm font-medium">{profile?.display_name || 'Membro sem nome'}</p><p className="truncate text-xs text-white/35">{membership.user_id}</p></div>
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[.055] bg-white/[0.06] text-xs font-semibold text-white/70">{(profile?.display_name ?? membership.user_id).slice(0, 2).toUpperCase()}</div>
+                        <div className="min-w-0"><p className="truncate text-sm font-medium">{profile?.display_name || 'Membro sem nome'}</p><p className="truncate text-xs text-[var(--althea-muted)]">{membership.user_id}</p></div>
                       </div>
-                      {isCurrent && <span className="mt-2 inline-flex rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/55">Sessão atual</span>}
+                      {isCurrent && <span className="mt-2 inline-flex rounded-full border border-white/[.055] px-2 py-0.5 text-[10px] text-white/55">Sessão atual</span>}
                     </div>
-                    <div><p className="text-sm text-white/75">{organization?.name || 'Organização'}</p><p className="text-xs text-white/35">{organization?.slug || membership.organization_id}</p></div>
-                    <div><span className="inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-white/70">{roleLabel[membership.role]}</span></div>
-                    <div className="text-xs text-white/40">{new Date(membership.created_at).toLocaleDateString('pt-BR')}</div>
+                    <div><p className="text-sm text-white/75">{organization?.name || 'Organização'}</p><p className="text-xs text-[var(--althea-muted)]">{organization?.slug || membership.organization_id}</p></div>
+                    <div><span className="inline-flex rounded-full border border-white/[.055] bg-white/[0.04] px-2.5 py-1 text-xs text-white/70">{roleLabel[membership.role]}</span></div>
+                    <div className="text-xs text-[var(--althea-muted)]">{new Date(membership.created_at).toLocaleDateString('pt-BR')}</div>
                   </div>
                 )
               })}
@@ -189,11 +184,10 @@ export default function MembersPage() {
           )}
         </section>
 
-        <section className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.025] p-4 text-sm text-white/50">
+        <section className="flex gap-3 rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4 text-sm text-white/50">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-white/60" />
           <p>O controle de acesso permanece vinculado ao modelo de membros e RLS da organização. Esta tela não inventa convites, alteração de papel ou permissões que ainda não estejam expostos por uma operação segura do backend.</p>
         </section>
-      </div>
-    </main>
+    </div>
   )
 }
