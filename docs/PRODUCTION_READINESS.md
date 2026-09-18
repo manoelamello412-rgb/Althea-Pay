@@ -49,7 +49,7 @@ Retired compatibility functions are intentionally absent from the repository. Th
 - Canonical CRM retry/predictive workers are scheduled in Supabase `pg_cron` every five minutes and are active.
 - Funnel gateway binding INSERT/UPDATE policies now prove that both referenced funnel and gateway belong to the binding `organization_id`; the previous tautological organization checks were removed.
 - Duplicate permissive SELECT policies on gateway transactions/attempts are consolidated, and the tenant-scoped supporting indexes are present.
-- Direct anonymous execution of `get_checkout_transaction_status` is revoked because checkout status polling now goes through the validated server route.
+- Direct `anon` and `authenticated` execution of `get_checkout_transaction_status` is revoked; the RPC is now `service_role`-only because checkout status polling goes through the validated server route.
 - The live Supabase migration history records the audit corrections under the exact remote versions documented in `docs/MIGRATION_RECONCILIATION.md`.
 
 ## YELLOW — environment/E2E validation still required
