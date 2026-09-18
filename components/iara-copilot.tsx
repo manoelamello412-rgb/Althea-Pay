@@ -26,6 +26,7 @@ export default function IaraCopilot() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [assistantName, setAssistantName] = useState('IARA')
   const [initializing, setInitializing] = useState(true)
 
   useEffect(() => {
@@ -41,16 +42,32 @@ export default function IaraCopilot() {
           return
         }
 
-        const { data: session, error: sessionError } = await db
-          .from('chat_sessions')
-          .select('id')
-          .eq('user_id', auth.user.id)
-          .eq('title', 'IARA')
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
+        const [{ data: session, error: sessionError }, { data: settingsRow, error: settingsError }] = await Promise.all([
+          db
+            .from('chat_sessions')
+            .select('id')
+            .eq('user_id', auth.user.id)
+            .eq('title', 'IARA')
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          db
+            .from('platform_settings')
+            .select('data')
+            .eq('user_id', auth.user.id)
+            .maybeSingle(),
+        ])
 
         if (sessionError) throw sessionError
+        if (settingsError) throw settingsError
+        const settingsData = settingsRow?.data && typeof settingsRow.data === 'object'
+          ? settingsRow.data as Record<string, unknown>
+          : {}
+        const iaraSettings = settingsData.iara && typeof settingsData.iara === 'object'
+          ? settingsData.iara as Record<string, unknown>
+          : {}
+        const configuredName = typeof iaraSettings.name === 'string' ? iaraSettings.name.trim() : ''
+        if (active) setAssistantName(configuredName || 'IARA')
         if (!session?.id) {
           if (active) {
             setSessionId(null)
@@ -150,7 +167,7 @@ export default function IaraCopilot() {
       <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-[920px] flex-col overflow-hidden rounded-[24px] border border-[#1DBB54]/20 bg-[#07110d] shadow-[0_30px_100px_rgba(0,0,0,0.45)]">
         <header className="flex items-center gap-3 border-b border-white/[0.055] bg-[#08120e]/95 px-5 py-4 backdrop-blur-xl sm:px-6">
           <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[#1DBB54]/20 bg-[#1DBB54]/[0.10] text-[#1DBB54] shadow-[0_0_28px_rgba(29,184,84,0.10)]"><Bot className="h-6 w-6" strokeWidth={1.8} /></div>
-          <div className="min-w-0"><h1 className="text-[19px] font-semibold tracking-[-0.02em] text-white">IARA</h1><p className="mt-0.5 flex items-center gap-1.5 text-sm text-[#8a9891]"><span className="h-2 w-2 rounded-full bg-[#1DBB54] shadow-[0_0_10px_rgba(29,184,84,0.7)]" /> Inteligência da Althea Pay</p></div>
+          <div className="min-w-0"><h1 className="text-[19px] font-semibold tracking-[-0.02em] text-white">{assistantName}</h1><p className="mt-0.5 flex items-center gap-1.5 text-sm text-[#8a9891]"><span className="h-2 w-2 rounded-full bg-[#1DBB54] shadow-[0_0_10px_rgba(29,184,84,0.7)]" /> Inteligência da Althea Pay</p></div>
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-7">
@@ -165,13 +182,13 @@ export default function IaraCopilot() {
               <div className="flex items-start gap-3">
                 <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#1DBB54]/20 bg-[#0a3326] text-[#1DBB54]"><Bot className="h-5 w-5" /></div>
                 <div className="max-w-[88%] rounded-[20px] rounded-bl-md border border-white/[0.055] bg-[#101917] px-5 py-4 text-[15px] leading-[1.65] text-[#e5ebe7] shadow-[0_16px_45px_rgba(0,0,0,0.18)]">
-                  <p>Olá. Eu sou a IARA, a inteligência da <span className="text-[#1DBB54]">Althea Pay</span>.</p><p className="mt-3">Posso analisar os dados reais da sua operação, incluindo funis, vendas, clientes, pagamentos, checkouts e gateways.</p><p className="mt-3">Como posso te ajudar?</p>
+                  <p>Olá. Eu sou {assistantName}, a inteligência da <span className="text-[#1DBB54]">Althea Pay</span>.</p><p className="mt-3">Posso analisar os dados reais da sua operação, incluindo funis, vendas, clientes, pagamentos, checkouts e gateways.</p><p className="mt-3">Como posso te ajudar?</p>
                 </div>
               </div>
               <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3">{quickActions.map(({ label, icon: Icon, prompt }) => <button key={label} type="button" disabled={sending} onClick={() => void askIara(undefined, prompt)} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#1DBB54]/25 bg-[#07150f] px-3 text-xs font-medium text-[#d9e3dc] transition hover:border-[#1DBB54]/50 hover:bg-[#0a2117] disabled:opacity-50"><Icon size={17} className="text-[#1DBB54]" strokeWidth={1.8} /><span>{label}</span></button>)}</div>
             </div>
           ) : (
-            <div className="mx-auto flex max-w-3xl flex-col gap-5">{messages.map((message) => <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>{message.sender === 'iara' && <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#1DBB54]/20 bg-[#0a3326] text-[#1DBB54]"><Bot className="h-5 w-5" /></div>}<div className={message.sender === 'user' ? 'max-w-[82%] rounded-[20px] rounded-br-md bg-[#0cbd55] px-5 py-3.5 text-[15px] leading-6 text-white shadow-[0_12px_35px_rgba(29,184,84,0.12)]' : 'max-w-[88%] rounded-[20px] rounded-bl-md border border-white/[0.055] bg-[#101917] px-5 py-4 text-[15px] leading-6 text-[#e5ebe7]'}>{message.sender === 'iara' && <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1DBB54]">IARA</div>}<p className="whitespace-pre-wrap">{message.content}</p></div></div>)}{sending && <div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-full border border-[#1DBB54]/20 bg-[#0a3326] text-[#1DBB54]"><Bot className="h-5 w-5" /></div><div className="rounded-[20px] rounded-bl-md border border-white/[0.055] bg-[#101917] px-5 py-4 text-xs text-[#87938c]">IARA está analisando…</div></div>}</div>
+            <div className="mx-auto flex max-w-3xl flex-col gap-5">{messages.map((message) => <div key={message.id} className={`flex items-start gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>{message.sender === 'iara' && <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#1DBB54]/20 bg-[#0a3326] text-[#1DBB54]"><Bot className="h-5 w-5" /></div>}<div className={message.sender === 'user' ? 'max-w-[82%] rounded-[20px] rounded-br-md bg-[#0cbd55] px-5 py-3.5 text-[15px] leading-6 text-white shadow-[0_12px_35px_rgba(29,184,84,0.12)]' : 'max-w-[88%] rounded-[20px] rounded-bl-md border border-white/[0.055] bg-[#101917] px-5 py-4 text-[15px] leading-6 text-[#e5ebe7]'}>{message.sender === 'iara' && <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1DBB54]">{assistantName}</div>}<p className="whitespace-pre-wrap">{message.content}</p></div></div>)}{sending && <div className="flex items-start gap-3"><div className="grid h-10 w-10 place-items-center rounded-full border border-[#1DBB54]/20 bg-[#0a3326] text-[#1DBB54]"><Bot className="h-5 w-5" /></div><div className="rounded-[20px] rounded-bl-md border border-white/[0.055] bg-[#101917] px-5 py-4 text-xs text-[#87938c]">{assistantName} está analisando…</div></div>}</div>
           )}
         </div>
 
@@ -179,7 +196,7 @@ export default function IaraCopilot() {
 
         <form onSubmit={(event) => void askIara(event)} className="border-t border-white/[0.055] bg-[#07110d] p-3 sm:p-4">
           <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-[30px] border border-[#1DBB54]/35 bg-[#0b1512] p-1.5 shadow-[0_0_25px_rgba(29,184,84,0.05)] focus-within:border-[#1DBB54]/60">
-            <Bot className="ml-3 h-5 w-5 shrink-0 text-[#738079]" /><input value={command} onChange={(event) => setCommand(event.target.value)} disabled={sending || initializing} placeholder="Pergunte qualquer coisa à IARA..." aria-label="Mensagem para a IARA" className="min-w-0 flex-1 bg-transparent px-1 py-3 text-[15px] text-white outline-none placeholder:text-[#68756e]" /><button type="submit" disabled={!command.trim() || sending || initializing} aria-label="Enviar mensagem" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#0cbd55] text-white shadow-[0_0_25px_rgba(29,184,84,0.25)] transition hover:scale-[1.03] disabled:opacity-30"><Send className="h-5 w-5 -rotate-1" /></button>
+            <Bot className="ml-3 h-5 w-5 shrink-0 text-[#738079]" /><input value={command} onChange={(event) => setCommand(event.target.value)} disabled={sending || initializing} placeholder={`Pergunte qualquer coisa à ${assistantName}...`} aria-label={`Mensagem para ${assistantName}`} className="min-w-0 flex-1 bg-transparent px-1 py-3 text-[15px] text-white outline-none placeholder:text-[#68756e]" /><button type="submit" disabled={!command.trim() || sending || initializing} aria-label="Enviar mensagem" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#0cbd55] text-white shadow-[0_0_25px_rgba(29,184,84,0.25)] transition hover:scale-[1.03] disabled:opacity-30"><Send className="h-5 w-5 -rotate-1" /></button>
           </div>
         </form>
       </div>
