@@ -214,7 +214,7 @@ export default function CheckoutsPage() {
     if (!organizationId) return
     setCursor(null)
     void loadPage(false)
-  }, [funnelId, organizationId, query, status]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [funnelId, organizationId, query, status])
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
