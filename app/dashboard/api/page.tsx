@@ -40,10 +40,9 @@ export default function ApiPage() {
     void db.auth.getUser().then(({ data }) => {
       if (cancelled || !data.user) return
       const uid = data.user.id
-      for (const table of ['api_keys', 'api_request_logs']) {
-        const channel = db.channel(`api-${table}-${uid}`).on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${uid}` }, () => void load()).subscribe()
-        channels.push(channel)
-      }
+      const keysChannel = db.channel('api-keys-org').on('postgres_changes', { event: '*', schema: 'public', table: 'api_keys' }, () => void load()).subscribe()
+      const logsChannel = db.channel(`api-request-logs-${uid}`).on('postgres_changes', { event: '*', schema: 'public', table: 'api_request_logs', filter: `user_id=eq.${uid}` }, () => void load()).subscribe()
+      channels.push(keysChannel, logsChannel)
     })
     return () => { cancelled = true; channels.forEach(channel => { void db.removeChannel(channel) }) }
   }, [db, load])
