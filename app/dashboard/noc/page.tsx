@@ -155,6 +155,8 @@ export default function NOCPage() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
   const [minutes, setMinutes] = useState<WindowMinutes>(60)
   const [payload, setPayload] = useState<Payload | null>(null)
+  const [organizationId, setOrganizationId] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -189,9 +191,53 @@ export default function NOCPage() {
   useEffect(() => { void load(true) }, [load])
 
   useEffect(() => {
+    let active = true
+    void db.auth.getUser().then(async ({ data }) => {
+      if (!active || !data.user) return
+      setUserId(data.user.id)
+      const profile = await db.from('profiles')
+        .select('default_organization_id')
+        .eq('id', data.user.id)
+        .single()
+      if (active && !profile.error && profile.data?.default_organization_id) {
+        setOrganizationId(String(profile.data.default_organization_id))
+      }
+    })
+    return () => { active = false }
+  }, [db])
+
+  useEffect(() => {
     const id = window.setInterval(() => void load(false), 30_000)
     return () => window.clearInterval(id)
   }, [load])
+
+  useEffect(() => {
+    if (!organizationId || !userId) return
+    let timer: number | null = null
+    const refresh = () => {
+      if (timer !== null) return
+      timer = window.setTimeout(() => {
+        timer = null
+        void load(false)
+      }, 600)
+    }
+
+    const channel = db.channel(`noc-${organizationId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'integration_events', filter: `organization_id=eq.${organizationId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_webhook_events', filter: `organization_id=eq.${organizationId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recovery_events', filter: `organization_id=eq.${organizationId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'funnel_command_targets', filter: `organization_id=eq.${organizationId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reconciliation_items', filter: `organization_id=eq.${organizationId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'automation_executions', filter: `user_id=eq.${userId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_channel_message_outbox', filter: `user_id=eq.${userId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'api_request_logs', filter: `user_id=eq.${userId}` }, refresh)
+      .subscribe()
+
+    return () => {
+      if (timer !== null) window.clearTimeout(timer)
+      void db.removeChannel(channel)
+    }
+  }, [db, load, organizationId, userId])
 
   const metrics = payload?.metrics ?? EMPTY
   const meta = stateMeta[payload?.status ?? 'operational']
