@@ -113,11 +113,9 @@ export class AltheaAiInferenceProcessor {
 
   constructor() {
     const engineBaseUrl = env('ALTHEA_AI_ENGINE_URL').replace(/\/$/, '')
-    this.llmEndpoint = engineBaseUrl
-      ? `${engineBaseUrl}/v1/chat/completions`
-      : env('ALTHEA_AI_BASE_URL')
-    this.aiApiKey = env('ALTHEA_AI_ENGINE_KEY') || env('ALTHEA_AI_API_KEY')
-    this.aiModel = env('ALTHEA_AI_ENGINE_MODEL') || env('ALTHEA_AI_MODEL') || 'althea-reasoning'
+    this.llmEndpoint = engineBaseUrl ? `${engineBaseUrl}/v1/chat/completions` : ''
+    this.aiApiKey = env('ALTHEA_AI_ENGINE_KEY')
+    this.aiModel = env('ALTHEA_AI_ENGINE_MODEL') || 'althea-reasoning'
     if (!this.llmEndpoint || !this.aiApiKey) throw new Error('AI_INFERENCE_ERR: motor privado da ALTHEA não configurado.')
   }
 
