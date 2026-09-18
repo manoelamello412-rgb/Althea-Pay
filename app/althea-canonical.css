@@ -19,6 +19,36 @@
   --althea-content-bottom: 128px;
   --althea-content-max: 1280px;
 
+  /* Legacy names now resolve to the canonical contract instead of redefining it. */
+  --althea-ink: var(--althea-bg);
+  --althea-forest: var(--althea-surface);
+  --althea-deep: var(--althea-inner);
+  --althea-green: var(--althea-brand);
+  --althea-silver: var(--althea-muted);
+  --althea-white: #F5F7F6;
+  --althea-line: rgba(29, 184, 84, 0.14);
+
+  --background-deep: var(--althea-bg);
+  --surface-card: var(--althea-surface);
+  --brand-vibrant: var(--althea-brand);
+  --brand-accent: var(--althea-gold);
+  --text-primary: var(--althea-white);
+  --text-muted: var(--althea-muted);
+  --font-space: var(--font-space-grotesk, 'Space Grotesk'), sans-serif;
+  --border: var(--althea-border);
+  --shadow: 0 20px 70px rgba(0, 0, 0, 0.24);
+
+  --ap-bg: var(--althea-bg);
+  --ap-panel: rgba(15, 26, 22, 0.78);
+  --ap-panel-2: rgba(15, 26, 22, 0.92);
+  --ap-line: rgba(29, 184, 84, 0.10);
+  --ap-green: var(--althea-brand);
+  --ap-gold: var(--althea-gold);
+  --ap-text: var(--althea-white);
+  --ap-muted: var(--althea-muted);
+  --althea-green-line: rgba(29, 184, 84, 0.22);
+  --althea-green-glow: rgba(29, 184, 84, 0.16);
+
   /* Canonical aliases retained for existing v2 utility consumers. */
   --althea-bg-base: var(--althea-bg);
   --althea-bg-surface: var(--althea-surface);
