@@ -78,6 +78,10 @@ Retired compatibility functions are intentionally absent from the repository. Th
 - Public API key authentication was repaired to use `extensions.digest` explicitly inside the hardened SECURITY DEFINER function; the Edge route parser was also corrected for the hosted function-name prefix.
 - A controlled public-API E2E using a temporary scoped API key returned HTTP 200 and the expected payment event from the operational timeline. All temporary key, funnel, event, rate-limit and log fixtures were removed afterwards and verified at zero.
 - `althea-public-api` and `crm-channel-outbox-dispatcher` deployed sources were re-compared with GitHub and matched exactly after these changes.
+- Gateway health snapshots are now tenant-aware: `record_gateway_health` resolves the owning user from the canonical gateway `circuit_id`, persists `user_id`, and the health table now enforces non-null tenant ownership.
+- The authenticated dashboard can read gateway health through owner-scoped RLS, and the health lookup has a tenant+circuit+time index matching the routing query.
+- `gateway-connection-test` now records health/latency on provider success, provider HTTP failure and runtime timeout/error; configuration errors that never contact the provider are not misclassified as provider-health failures.
+- The per-funnel operational mirror surfaces the latest health state of each active bound gateway without replaying every health snapshot, including circuit state, latency, failure count and primary-binding metadata.
 - The live Supabase migration history records the audit corrections under the exact remote versions documented in `docs/MIGRATION_RECONCILIATION.md`.
 
 ## YELLOW — environment/E2E validation still required
