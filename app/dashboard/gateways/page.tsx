@@ -15,7 +15,7 @@ interface GatewayRow { id: string; display_name?: string | null; provider?: stri
 const normalizeProvider = (value: string | null | undefined) => value?.trim() || 'Gateway';
 const normalizeStatus = (value: string | null | undefined): GatewayStatus => {
   const normalized = value?.trim().toLowerCase();
-  return normalized === 'connected' || normalized === 'degraded' ? 'OPERACIONAL' : 'INDISPONÍVEL';
+  return ['active', 'connected', 'degraded'].includes(normalized || '') ? 'OPERACIONAL' : 'INDISPONÍVEL';
 };
 const formatTime = (value: string | Date) => {
   const date = typeof value === 'string' ? new Date(value) : value;
@@ -82,6 +82,17 @@ export default function GatewaysManagementPage() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'gateways' }, payload => {
           const row = (payload.new ?? payload.old) as GatewayRow;
           if (!row?.id) return;
+          if (payload.eventType === 'DELETE') {
+            setGateways(current => current.filter(item => item.id !== row.id));
+            appendLog({
+              id: `gateway-${row.id}-deleted-${Date.now()}`,
+              timestamp: formatTime(new Date()),
+              provider: normalizeProvider(row.display_name ?? row.provider),
+              message: 'REGISTRO REMOVIDO',
+              type: 'CRITICAL',
+            });
+            return;
+          }
           const next: GatewayState = {
             id: row.id,
             name: normalizeProvider(row.display_name),
