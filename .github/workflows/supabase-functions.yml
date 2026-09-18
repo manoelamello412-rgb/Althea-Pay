@@ -47,4 +47,4 @@ jobs:
           set -euo pipefail
           # The repository is the canonical function inventory. --prune removes remote
           # functions that were intentionally retired and are no longer versioned here.
-          supabase functions deploy --project-ref "hkraryqoziravulvqkid" --prune
+          printf 'y\n' | supabase functions deploy --project-ref "hkraryqoziravulvqkid" --prune
