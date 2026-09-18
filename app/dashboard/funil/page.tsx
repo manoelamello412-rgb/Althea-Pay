@@ -117,6 +117,26 @@ export default function FunilDominioPage() {
   const [webhookEndpoint, setWebhookEndpoint] = useState('')
   const [copied, setCopied] = useState('')
 
+  useEffect(() => {
+    const raw = window.sessionStorage.getItem('althea:funnel-provision-handoff')
+    if (!raw) return
+    window.sessionStorage.removeItem('althea:funnel-provision-handoff')
+    try {
+      const handoff = JSON.parse(raw) as Record<string, unknown>
+      const funnelId = stringValue(handoff.funnelId)
+      if (funnelId) setSelectedFunnelId(funnelId)
+      setOneTimeToken(stringValue(handoff.token))
+      setOneTimeEndpoint(stringValue(handoff.eventEndpoint))
+      setWebhookSecret(stringValue(handoff.webhookSecret))
+      setWebhookEndpoint(stringValue(handoff.webhookEndpoint))
+      const warning = stringValue(handoff.warning)
+      if (warning) setError(warning)
+      else if (funnelId) setSuccess('Funil criado e vinculado ao produto e gateway selecionados.')
+    } catch {
+      // Handoff é apenas para exibir segredos uma única vez; a operação já está persistida.
+    }
+  }, [])
+
   const loadConfiguration = useCallback(async () => {
     const { data: auth, error: authError } = await supabase.auth.getUser()
     if (authError || !auth.user) throw new Error('Sessão expirada. Faça login novamente.')
@@ -342,6 +362,20 @@ export default function FunilDominioPage() {
         </section>
       )}
 
+      {funnels.length === 0 && (
+        <section className="grid min-h-[280px] place-items-center rounded-2xl border border-dashed border-white/[.06] bg-[var(--althea-surface)] p-8 text-center">
+          <div className="max-w-md">
+            <Layers className="mx-auto h-7 w-7 text-[var(--althea-brand)]" />
+            <h2 className="mt-4 text-sm font-semibold text-white">Nenhum funil cadastrado</h2>
+            <p className="mt-2 text-[10px] leading-5 text-[var(--althea-muted)]">Crie o primeiro funil pelo fluxo canônico, já vinculando produto e gateway sem duplicar configurações.</p>
+            <button type="button" onClick={() => router.push('/dashboard/funil/novo')} className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-[var(--althea-brand)] px-4 text-[10px] font-bold text-[#06110a]">
+              <Plus size={14} /> Criar primeiro funil
+            </button>
+          </div>
+        </section>
+      )}
+
+      {funnel && (
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,.85fr)]">
         <form onSubmit={handleSave} className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5 sm:p-6">
           <div className="flex items-start gap-3 border-b border-white/[.05] pb-4">
@@ -511,6 +545,28 @@ export default function FunilDominioPage() {
               </div>
             )}
 
+            {method === 'script' && funnel && !oneTimeToken && (
+              <button
+                type="button"
+                onClick={() => void provisionScriptCredential(funnel.id)}
+                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.05)] text-[9px] font-semibold text-[var(--althea-brand)] transition hover:bg-[rgba(29,184,84,.08)]"
+              >
+                <KeyRound size={13} /> Gerar nova credencial de ingestão
+              </button>
+            )}
+
+            {method === 'webhook' && funnel && !webhook && !webhookSecret && (
+              <button
+                type="button"
+                onClick={() => void createWebhookIntegration(funnel.id)}
+                disabled={creatingWebhook}
+                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.05)] text-[9px] font-semibold text-[var(--althea-brand)] transition hover:bg-[rgba(29,184,84,.08)] disabled:opacity-50"
+              >
+                {creatingWebhook ? <Loader2 size={13} className="animate-spin" /> : <Webhook size={13} />}
+                {creatingWebhook ? 'Criando webhook...' : 'Criar webhook deste funil'}
+              </button>
+            )}
+
             {connection?.last_error && (
               <div className="mt-4 rounded-xl border border-red-400/12 bg-red-400/[.04] p-3 text-[9px] text-red-300">
                 {connection.last_error}
@@ -532,9 +588,11 @@ export default function FunilDominioPage() {
           )}
         </div>
       </section>
+      )}
 
       {funnel && <FunnelRemoteControl funnelId={funnel.id} />}
 
+      {funnel && (
       <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4 sm:p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -567,6 +625,7 @@ export default function FunilDominioPage() {
           </div>
         )}
       </section>
+      )}
     </div>
   )
 }
