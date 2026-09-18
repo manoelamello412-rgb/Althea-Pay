@@ -127,3 +127,6 @@ verify_jwt = false
 
 [functions.funnel-provider-adapter]
 verify_jwt = false
+
+[functions.funnel-connection-control]
+verify_jwt = true
