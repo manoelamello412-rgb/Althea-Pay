@@ -32,7 +32,7 @@ Retired compatibility functions are intentionally absent from the repository. Th
 - Dependency versions are pinned and `package-lock.json` is committed.
 - TypeScript typecheck passes.
 - ESLint passes with zero warnings.
-- 23 test files / 91 tests pass; 2 integration files / 4 tests remain intentionally skipped without external fixtures.
+- 23 test files / 91 tests passed at the latest completed funnel-control checkpoint; the funnel control suite now also includes runtime-auth/ACL regression coverage. Two integration files / 4 tests remain intentionally skipped without external fixtures.
 - Next.js production build compiles and generates 57 pages.
 - Production-safe load smoke is implemented, but the last audited CI run skipped the external HTTP check because `ALTHEA_HEALTH_URL` was not configured.
 - Release preflight passes.
@@ -65,6 +65,9 @@ Retired compatibility functions are intentionally absent from the repository. Th
 - Verified gateway rollback is available from the last completed batch and restores each funnel's recorded previous remote gateway through the same preflight/verification pipeline.
 - Funnel drift detection runs every two minutes and opens/resolves drift records when the external funnel state differs from the desired/mapped gateway.
 - The funnel command retry worker runs every minute and both new cron jobs have produced successful executions in the linked Supabase project.
+- Direct HTTP verification of both funnel workers now returns HTTP 200: the command worker returns `ok:true` and the drift worker returns `ok:true`. This caught and fixed an earlier false-positive state where `pg_cron` reported success while the Edge Functions themselves returned HTTP 500.
+- Worker authentication no longer depends on a custom `ALTHEA_INTERNAL_SECRET` Edge runtime variable. Cron requests are verified against the Vault secret through a service-role-only RPC, while internal Edge-to-Edge calls use the Supabase-provided backend key.
+- Minimal `service_role` table ACLs are explicitly granted for the control-plane tables that backend workers must read/write; no equivalent grants were added for `anon`.
 - Database triggers enforce organization/funnel/gateway integrity for remote gateway mappings, command targets and drift events.
 - `types/supabase.ts` has been regenerated from the live project after the control-plane schema changes.
 - The live Supabase migration history records the audit corrections under the exact remote versions documented in `docs/MIGRATION_RECONCILIATION.md`.
