@@ -91,5 +91,30 @@ Protocol v1 persists underscore-delimited canonical event names. Legacy aliases 
 
 The canonical ingestion path is `funnel-events`. Browser telemetry and Public API event writes must feed this same pipeline instead of creating independent projections.
 
+
+## Recovery contact consent
+
+Automatic checkout recovery is opt-in at two levels:
+
+1. The merchant must enable the recovery automation in ALTHEA.
+2. The checkout/customer context must carry explicit contact consent for the channel that will be used.
+
+Accepted explicit consent fields include channel-specific values such as `whatsapp_opt_in`, `email_opt_in`, `sms_opt_in`, `whatsapp_consent`, `email_consent`, `sms_consent`, or an explicit general recovery/contact consent such as `recovery_consent`, `contact_consent` or `marketing_consent`.
+
+These values may be supplied under `customer` or checkout metadata, including nested `consent`, `consents`, `permissions` or `preferences` objects. ALTHEA only treats explicit affirmative values as consent.
+
+A recovery message is eligible for dispatch only when:
+
+- the checkout remains incomplete;
+- the recovery-attempt limit has not been reached;
+- the merchant automation is enabled;
+- explicit consent exists;
+- a compatible active CRM channel account exists;
+- the customer has a valid destination for that channel.
+
+If any prerequisite is missing, ALTHEA persists an operational blocker such as `blocked_consent`, `blocked_no_channel` or `blocked_no_destination` instead of reporting a successful send.
+
+The outbox/provider delivery state is the authority for whether a message was actually sent. A checkout may only be shown as `sent` after the channel outbox reports a real successful delivery attempt. A subsequently completed checkout that has prior recovery attempts is projected as `recovered`.
+
 ## Versioning
 Breaking changes require a new major contract version. Event consumers must ignore unknown fields and safely reject unsupported major versions. The current supported major version is `1`.
