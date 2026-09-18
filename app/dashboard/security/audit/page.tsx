@@ -87,17 +87,17 @@ export default function SecurityAuditPage() {
     return () => { void supabase.removeChannel(channel) }
   }, [load, supabase])
 
-  if (loading) return <main className="min-h-screen bg-[#070A09] px-4 py-8 text-slate-100"><div className="mx-auto max-w-6xl text-sm text-slate-500">Carregando trilha de auditoria…</div></main>
+  if (loading) return <div className="grid min-h-[280px] place-items-center text-sm text-[var(--althea-muted)]">Carregando trilha de auditoria…</div>
 
   return <div className="w-full space-y-5 text-slate-100">
-      <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <section className="flex flex-col gap-5 border-b border-white/[.055] pb-5 md:flex-row md:items-end md:justify-between">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[.28em] text-[var(--althea-brand)]"><ShieldCheck size={14} /> ALTHEA PAY // AUDITORIA</div>
-          <h1 className="text-3xl font-black tracking-tight">Trilha de auditoria</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-500">Registro operacional canônico das alterações protegidas pela infraestrutura do ALTHEA PAY. A visualização respeita o isolamento por organização do banco.</p>
+          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]"><ShieldCheck size={13} /> Segurança</p>
+          <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">Trilha de auditoria</h1>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--althea-muted)]">Registro canônico das alterações protegidas, respeitando o isolamento por organização.</p>
         </div>
         <button onClick={() => void load()} disabled={refreshing} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[.055] bg-white/[.03] px-4 py-3 text-sm font-semibold transition hover:bg-white/[.06] disabled:opacity-50"><RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} /> Atualizar</button>
-      </header>
+      </section>
 
       {error ? <section className="rounded-2xl border border-red-400/20 bg-red-400/[.04] p-5 text-sm text-red-200">Não foi possível carregar a auditoria: {error}</section> : logs.length === 0 ? <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-10 text-center"><Activity size={24} className="mx-auto mb-4 text-slate-600" /><h2 className="font-bold">Nenhum evento de auditoria</h2><p className="mt-2 text-sm text-slate-500">Ainda não existem alterações registradas para as organizações acessíveis nesta sessão.</p></section> : <>
         <section className="overflow-hidden rounded-2xl border border-white/[.055] bg-white/[.02]">
