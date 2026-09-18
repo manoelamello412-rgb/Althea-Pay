@@ -19,13 +19,18 @@ const text = (value: unknown): string =>
 const json = (body: Json, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: HEADERS });
 
-const constantTimeEqual = (left: string, right: string): boolean => {
-  if (!left || left.length !== right.length) return false;
-  let difference = 0;
-  for (let index = 0; index < left.length; index++) {
-    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+const adminKeyFromEnv = (): string => {
+  const raw = Deno.env.get("SUPABASE_SECRET_KEYS");
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const key = typeof parsed.default === "string" ? parsed.default.trim() : "";
+      if (key) return key;
+    } catch {
+      // Fall through to the legacy key while the project migrates key formats.
+    }
   }
-  return difference === 0;
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 };
 
 Deno.serve(async (request) => {
@@ -33,9 +38,8 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const internalSecret = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
-  if (!supabaseUrl || !serviceRole || !internalSecret) {
+  const adminKey = adminKeyFromEnv();
+  if (!supabaseUrl || !adminKey) {
     return json({ ok: false, error: "server_configuration_error" }, 500);
   }
 
@@ -44,12 +48,21 @@ Deno.serve(async (request) => {
   const requestedLimit = Number(requestBody.limit ?? 20);
   const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 20, 1), 50);
 
-  const db = createClient(supabaseUrl, serviceRole, {
+  const db = createClient(supabaseUrl, adminKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const suppliedSecret = request.headers.get("x-althea-internal-secret") ?? "";
-  const internalCaller = constantTimeEqual(internalSecret, suppliedSecret);
+  const suppliedSecret =
+    request.headers.get("x-althea-internal-secret") ??
+    request.headers.get("x-internal-secret") ??
+    "";
+  let internalCaller = false;
+  if (suppliedSecret) {
+    const verified = await db.rpc("verify_althea_internal_secret", {
+      p_secret: suppliedSecret,
+    });
+    internalCaller = !verified.error && verified.data === true;
+  }
 
   if (!internalCaller) {
     const authorization = request.headers.get("authorization") ?? "";
@@ -103,7 +116,7 @@ Deno.serve(async (request) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-althea-internal-secret": internalSecret,
+            apikey: adminKey,
           },
           body: JSON.stringify({
             connection_id: connectionId,
