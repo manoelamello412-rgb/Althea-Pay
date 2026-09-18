@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { CircleDollarSign, GitBranch, LayoutDashboard, LogOut, MessageCircle, Network, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
+import { CircleDollarSign, GitBranch, LayoutDashboard, LogOut, MessageCircle, Network, Package, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -20,6 +20,7 @@ const bottomTabs = [
 
 const menuSections: MenuSection[] = [
   { title: 'CONFIGURAÇÃO DA OPERAÇÃO', items: [
+    { label: 'Produtos', href: '/dashboard/produtos', icon: Package },
     { label: 'Gateways e conexões', href: '/dashboard/gateways', icon: Network },
     { label: 'Funis', href: '/dashboard/funil', icon: GitBranch },
     { label: 'Checkouts', href: '/dashboard/checkouts', icon: CircleDollarSign },
@@ -54,6 +55,7 @@ function sectionLabel(pathname: string): string {
   if (pathname.startsWith('/dashboard/vendas')) return 'VENDAS'
   if (pathname.startsWith('/dashboard/crm')) return 'CRM'
   if (pathname.startsWith('/dashboard/ia')) return 'IA'
+  if (pathname.startsWith('/dashboard/produtos')) return 'PRODUTOS'
   if (pathname.startsWith('/dashboard/gateways')) return 'GATEWAYS'
   if (pathname.startsWith('/dashboard/checkouts')) return 'CHECKOUTS'
   if (pathname.startsWith('/dashboard/pagamentos')) return 'PAGAMENTOS'
