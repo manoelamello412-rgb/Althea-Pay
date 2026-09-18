@@ -1,6 +1,3 @@
-// Generated from the live Althea Pay Supabase project during the 2026-09-17 audit.
-// Regenerate after reviewed schema changes. Do not edit by hand.
-
 export type Json =
   | string
   | number
@@ -9203,44 +9200,25 @@ export type Database = {
         Args: { p_depth?: number; p_node: Json; p_path?: string[] }
         Returns: boolean
       }
-      gateway_runtime_route_candidates:
-        | {
-            Args: {
-              p_amount: number
-              p_currency: string
-              p_environment: string
-              p_gateway_ids: string[]
-              p_user_id: string
-            }
-            Returns: {
-              approval_rate: number
-              circuit_state: string
-              cost_bps: number
-              gateway_id: string
-              healthy: boolean
-              latency_ms: number
-              routing_score: number
-            }[]
-          }
-        | {
-            Args: {
-              p_amount: number
-              p_card_brand?: string
-              p_currency: string
-              p_environment: string
-              p_gateway_ids: string[]
-              p_user_id: string
-            }
-            Returns: {
-              approval_rate: number
-              circuit_state: string
-              cost_bps: number
-              gateway_id: string
-              healthy: boolean
-              latency_ms: number
-              routing_score: number
-            }[]
-          }
+      gateway_runtime_route_candidates: {
+        Args: {
+          p_amount: number
+          p_card_brand?: string
+          p_currency: string
+          p_environment: string
+          p_gateway_ids: string[]
+          p_user_id: string
+        }
+        Returns: {
+          approval_rate: number
+          circuit_state: string
+          cost_bps: number
+          gateway_id: string
+          healthy: boolean
+          latency_ms: number
+          routing_score: number
+        }[]
+      }
       gateway_token_link_runtime_context: {
         Args: { p_link_id: string; p_user_id: string }
         Returns: Json
@@ -9948,6 +9926,10 @@ export type Database = {
         Args: { p_name?: string; p_secret: string }
         Returns: string
       }
+      switch_all_funnel_primary_gateways: {
+        Args: { p_gateway_id: string }
+        Returns: Json
+      }
       switch_funnel_gateway: {
         Args: { p_funnel_id: string; p_gateway_id: string }
         Returns: Json
@@ -10334,3 +10316,4 @@ export const Constants = {
     },
   },
 } as const
+

@@ -73,3 +73,14 @@ This does **not** resolve the older historical migration drift. Automatic `supab
 Edge Function source has been reconciled independently from database migration history.
 
 The GitHub repository now contains the canonical Edge Function inventory. Retired production-only stubs are intentionally absent and the main-branch function deployment uses `--prune` to remove them after merge.
+
+## Continuation on 2026-09-18
+
+Applied and verified forward migrations, mirrored using actual remote versions:
+
+- `20260918034336_canonical_gateway_runtime_ranking.sql`
+- `20260918034600_remove_ambiguous_gateway_ranking_overload.sql`
+
+The earlier local draft timestamps for these two repairs were replaced with the
+actual remote versions; the SQL remains in Git history. Historical drift remains
+open. See `AUDIT_CONTINUATION_2026-09-18.md` for evidence and remaining blockers.

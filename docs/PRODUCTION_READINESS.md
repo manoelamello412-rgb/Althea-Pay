@@ -1,5 +1,10 @@
 # ALTHEA PAY — Production Readiness
 
+> Current continuation: see [AUDIT_CONTINUATION_2026-09-18.md](AUDIT_CONTINUATION_2026-09-18.md).
+> Earlier GREEN results are historical evidence, not full audit sign-off. Runtime
+> ranking defects were subsequently reproduced and repaired; fallback safety and
+> live E2E remain open. Do not merge based solely on the GREEN list below.
+
 ## Canonical architecture
 
 Althea Pay is the control/orchestration layer. It does not hold funds and does not replace the connected payment provider.
