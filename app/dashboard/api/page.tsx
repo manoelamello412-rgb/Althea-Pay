@@ -9,7 +9,7 @@ type RequestLog = { id: string; api_key_id: string | null; request_id: string; m
 
 const fmt = (value: string | null) => value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(value)) : '—'
 const statusOf = (key: ApiKey) => key.revoked_at ? 'revogada' : key.expires_at && new Date(key.expires_at).getTime() <= Date.now() ? 'expirada' : 'ativa'
-const statusClass = (status: string) => status === 'ativa' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-red-400/20 bg-red-400/10 text-red-300'
+const statusClass = (status: string) => status === 'ativa' ? 'border-[rgba(29,184,84,.20)] bg-[rgba(29,184,84,.10)] text-[#8edca5]' : 'border-red-400/20 bg-red-400/10 text-red-300'
 
 export default function ApiPage() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
