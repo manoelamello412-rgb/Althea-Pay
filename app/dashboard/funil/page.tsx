@@ -131,7 +131,7 @@ export default function FunilDominioPage() {
       setWebhookEndpoint(stringValue(handoff.webhookEndpoint))
       const warning = stringValue(handoff.warning)
       if (warning) setProvisionWarning(warning)
-      else if (funnelId) setSuccess('Funil criado e vinculado ao produto e gateway selecionados.')
+      else if (funnelId) setSuccess('Funil conectado. A credencial de ingestão é exibida somente agora; produto e gateway podem ser configurados quando fizer sentido.')
     } catch {
       // Handoff é apenas para exibir segredos uma única vez; a operação já está persistida.
     }
@@ -386,7 +386,7 @@ export default function FunilDominioPage() {
           <div className="max-w-md">
             <Layers className="mx-auto h-7 w-7 text-[var(--althea-brand)]" />
             <h2 className="mt-4 text-sm font-semibold text-white">Nenhum funil cadastrado</h2>
-            <p className="mt-2 text-[10px] leading-5 text-[var(--althea-muted)]">Crie o primeiro funil pelo fluxo canônico, já vinculando produto e gateway sem duplicar configurações.</p>
+            <p className="mt-2 text-[10px] leading-5 text-[var(--althea-muted)]">Crie o primeiro funil pelo fluxo canônico. A conexão e a credencial de ingestão são provisionadas primeiro; produto e gateway permanecem opcionais.</p>
             <button type="button" onClick={() => router.push('/dashboard/funil/novo')} className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-[var(--althea-brand)] px-4 text-[10px] font-bold text-[#06110a]">
               <Plus size={14} /> Criar primeiro funil
             </button>
