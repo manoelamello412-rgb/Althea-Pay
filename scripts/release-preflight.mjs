@@ -53,6 +53,11 @@ const orphanComponents=[...incoming.entries()]
   .map(([file])=>relative(root,file))
   .sort()
 console.log(`Release preflight: unreferenced component candidates (${orphanComponents.length}): ${orphanComponents.join(", ")||"none"}`)
+const orphanLib=[...incoming.entries()]
+  .filter(([file,refs])=>file.includes(`${sep}lib${sep}`)&&refs.length===0)
+  .map(([file])=>relative(root,file))
+  .sort()
+console.log(`Release preflight: unreferenced lib candidates (${orphanLib.length}): ${orphanLib.join(", ")||"none"}`)
 console.log(`Release preflight: checked ${checked.length} source/config files.`)
 if(failures.length){console.error("Release preflight FAILED:");for(const failure of failures)console.error(`- ${failure}`);process.exit(1)}
 console.log("Release preflight PASSED: canonical release components, browser secrets, raw-card assignments, webhook Vault access, timer cleanup, async payment calls, internal guards, CRM/Iara components and retired duplicate, legacy navigation and duplicate-route checks are clear.")
