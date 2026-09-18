@@ -34,7 +34,7 @@ const duplicateRoutes=[
   "app/dashboard/crm/mobile/page.tsx",
 ]
 for(const file of duplicateRoutes)if(source.has(join(root,file)))failures.push(`Duplicate route surface still present: ${file}`)
-try{await access(join(root,"docs","PRODUCTION_READINESS.md"))}catch{failures.push("Production readiness document missing")}
+for(const required of ["docs/PRODUCTION_READINESS.md","docs/MIGRATION_RECONCILIATION.md","types/supabase.ts"]){try{await access(join(root,required))}catch{failures.push(`Required audit artifact missing: ${required}`)}}
 const tsFiles=checked.filter(file=>/\.(ts|tsx)$/.test(file))
 const incoming=new Map(tsFiles.map(file=>[normalize(file),[]]))
 for(const file of tsFiles){
