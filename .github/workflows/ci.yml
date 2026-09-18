@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, fix/supabase-github-audit-20260917, 'feat/revenue-os-control-plane-*']
+    branches: [main, fix/supabase-github-audit-20260917, 'feat/revenue-os-*']
   pull_request:
     branches: [main]
   workflow_dispatch:
