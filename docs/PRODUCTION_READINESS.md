@@ -32,7 +32,7 @@ Retired compatibility functions are intentionally absent from the repository. Th
 - Dependency versions are pinned and `package-lock.json` is committed.
 - TypeScript typecheck passes.
 - ESLint passes with zero warnings.
-- 27 test files / 117 tests passed at the latest completed operational-mirror checkpoint; 2 integration files / 4 tests remain intentionally skipped without external fixtures.
+- 29 test files / 127 tests passed at the latest completed operational-mirror and public-API privacy checkpoint; 2 integration files / 4 tests remain intentionally skipped without external fixtures.
 - Next.js production build compiles and generates 58 pages.
 - Production-safe load smoke is implemented, but the last audited CI run skipped the external HTTP check because `ALTHEA_HEALTH_URL` was not configured.
 - Release preflight passes.
