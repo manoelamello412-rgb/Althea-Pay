@@ -101,7 +101,7 @@ export default function IaraCopilot() {
   const askIara = useCallback(async (event?: FormEvent, forcedText?: string) => {
     event?.preventDefault()
     const text = (forcedText ?? command).trim()
-    if (!text || sending) return
+    if (!text || sending || initializing) return
     setCommand('')
     setSending(true)
     setError(null)
@@ -141,7 +141,7 @@ export default function IaraCopilot() {
     } finally {
       setSending(false)
     }
-  }, [command, createIaraSession, db, router, sending])
+  }, [command, createIaraSession, db, initializing, router, sending])
 
   const empty = !initializing && messages.length === 0
 
@@ -179,7 +179,7 @@ export default function IaraCopilot() {
 
         <form onSubmit={(event) => void askIara(event)} className="border-t border-white/[0.055] bg-[#07110d] p-3 sm:p-4">
           <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-[30px] border border-[#1DBB54]/35 bg-[#0b1512] p-1.5 shadow-[0_0_25px_rgba(29,184,84,0.05)] focus-within:border-[#1DBB54]/60">
-            <Bot className="ml-3 h-5 w-5 shrink-0 text-[#738079]" /><input value={command} onChange={(event) => setCommand(event.target.value)} disabled={sending} placeholder="Pergunte qualquer coisa à IARA..." aria-label="Mensagem para a IARA" className="min-w-0 flex-1 bg-transparent px-1 py-3 text-[15px] text-white outline-none placeholder:text-[#68756e]" /><button type="submit" disabled={!command.trim() || sending} aria-label="Enviar mensagem" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#0cbd55] text-white shadow-[0_0_25px_rgba(29,184,84,0.25)] transition hover:scale-[1.03] disabled:opacity-30"><Send className="h-5 w-5 -rotate-1" /></button>
+            <Bot className="ml-3 h-5 w-5 shrink-0 text-[#738079]" /><input value={command} onChange={(event) => setCommand(event.target.value)} disabled={sending || initializing} placeholder="Pergunte qualquer coisa à IARA..." aria-label="Mensagem para a IARA" className="min-w-0 flex-1 bg-transparent px-1 py-3 text-[15px] text-white outline-none placeholder:text-[#68756e]" /><button type="submit" disabled={!command.trim() || sending || initializing} aria-label="Enviar mensagem" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#0cbd55] text-white shadow-[0_0_25px_rgba(29,184,84,0.25)] transition hover:scale-[1.03] disabled:opacity-30"><Send className="h-5 w-5 -rotate-1" /></button>
           </div>
         </form>
       </div>
