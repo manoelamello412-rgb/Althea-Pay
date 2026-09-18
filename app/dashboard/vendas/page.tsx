@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, CheckCircle2, CreditCard, RefreshCw, Search, XCircle } from 'lucide-react'
+import { CalendarDays, CreditCard, RefreshCw, Search } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { amountOf, customerNameOf, dateOf, normalizeStatus, todayInSaoPaulo, type AnalyticsSale } from '@/lib/analytics/sales'
 
@@ -47,6 +47,7 @@ export default function VendasPage() {
   const db = useMemo(() => createSupabaseBrowserClient(), [])
   const today = todayInSaoPaulo()
   const [sales, setSales] = useState<Sale[]>([])
+  const [organizationId, setOrganizationId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
   const [startDate, setStartDate] = useState(shiftDays(today, -29))
@@ -59,10 +60,23 @@ export default function VendasPage() {
     const { data: auth, error: authError } = await db.auth.getUser()
     if (authError || !auth.user) throw new Error('Sessão expirada. Faça login novamente.')
 
+    const { data: profile, error: profileError } = await db
+      .from('profiles')
+      .select('default_organization_id')
+      .eq('id', auth.user.id)
+      .single()
+
+    if (profileError || !profile?.default_organization_id) {
+      throw new Error('Organização ativa não encontrada para esta conta.')
+    }
+
+    const activeOrganizationId = String(profile.default_organization_id)
+    setOrganizationId(activeOrganizationId)
+
     const result = await db
       .from('sales')
       .select('id,amount,status,currency,data,gateway_id,external_id,transaction_id,occurred_at,created_at')
-      .eq('user_id', auth.user.id)
+      .eq('organization_id', activeOrganizationId)
       .order('occurred_at', { ascending: false })
       .limit(5000)
 
@@ -86,25 +100,23 @@ export default function VendasPage() {
   useEffect(() => { void refresh() }, [refresh])
 
   useEffect(() => {
+    if (!organizationId) return
     let active = true
-    let channel: ReturnType<typeof db.channel> | null = null
-    void db.auth.getUser().then(({ data }) => {
-      if (!active || !data.user) return
-      channel = db
-        .channel(`sales-dashboard-${data.user.id}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'sales',
-          filter: `user_id=eq.${data.user.id}`,
-        }, () => { if (active) void load() })
-        .subscribe()
-    })
+    const channel = db
+      .channel(`sales-dashboard-${organizationId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'sales',
+        filter: `organization_id=eq.${organizationId}`,
+      }, () => { if (active) void load() })
+      .subscribe()
+
     return () => {
       active = false
-      if (channel) void db.removeChannel(channel)
+      void db.removeChannel(channel)
     }
-  }, [db, load])
+  }, [db, load, organizationId])
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
