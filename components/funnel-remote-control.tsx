@@ -9,6 +9,10 @@ type RemoteControl = {
   gateway_set_path?: string
   gateway_response_path?: string
   gateway_set_body?: Record<string, unknown>
+  chat_enabled?: boolean
+  chat_send_path?: string
+  chat_message_id_path?: string
+  chat_send_body?: Record<string, unknown>
 }
 
 type ConnectionState = {
@@ -99,6 +103,10 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
   const [setPath, setSetPath] = useState('/funnels/{{remote_funnel_id}}/gateway')
   const [responsePath, setResponsePath] = useState('gateway_id')
   const [setBody, setSetBody] = useState('{"gateway_id":"{{target_remote_gateway_ref}}"}')
+  const [chatEnabled, setChatEnabled] = useState(false)
+  const [chatSendPath, setChatSendPath] = useState('/funnels/{{remote_funnel_id}}/conversations/{{remote_conversation_id}}/messages')
+  const [chatMessageIdPath, setChatMessageIdPath] = useState('message_id')
+  const [chatSendBody, setChatSendBody] = useState('{"message":"{{message_body}}"}')
   const [writeEnabled, setWriteEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -152,6 +160,10 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
         setSetPath(next.remote_control?.gateway_set_path || next.remote_control?.gateway_get_path || '/funnels/{{remote_funnel_id}}/gateway')
         setResponsePath(next.remote_control?.gateway_response_path || 'gateway_id')
         setSetBody(JSON.stringify(next.remote_control?.gateway_set_body || { gateway_id: '{{target_remote_gateway_ref}}' }, null, 2))
+        setChatEnabled(Boolean(next.remote_control?.chat_enabled))
+        setChatSendPath(next.remote_control?.chat_send_path || '/funnels/{{remote_funnel_id}}/conversations/{{remote_conversation_id}}/messages')
+        setChatMessageIdPath(next.remote_control?.chat_message_id_path || 'message_id')
+        setChatSendBody(JSON.stringify(next.remote_control?.chat_send_body || { message: '{{message_body}}' }, null, 2))
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Falha ao carregar o controle remoto.')
@@ -178,6 +190,7 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
       if (!connection?.has_credential && !token.trim()) throw new Error('Informe a credencial da API.')
 
       const bodyTemplate = parseObject(setBody, 'Body da alteração')
+      const chatBodyTemplate = parseObject(chatSendBody, 'Body do envio de chat')
       const credential = token.trim()
         ? { token: token.trim(), auth_header: 'Authorization', auth_prefix: 'Bearer' }
         : {}
@@ -197,6 +210,11 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
             gateway_set_method: 'PATCH',
             gateway_response_path: responsePath.trim(),
             gateway_set_body: bodyTemplate,
+            chat_enabled: chatEnabled,
+            chat_send_path: chatSendPath.trim(),
+            chat_send_method: 'POST',
+            chat_message_id_path: chatMessageIdPath.trim(),
+            chat_send_body: chatBodyTemplate,
             idempotency_header: 'Idempotency-Key',
             timeout_ms: 15000,
           },
@@ -330,6 +348,14 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
           <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Endpoint para trocar gateway</span><input value={setPath} onChange={event => setSetPath(event.target.value)} className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-zinc-300 outline-none" /></label>
           <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Caminho da gateway na resposta</span><input value={responsePath} onChange={event => setResponsePath(event.target.value)} placeholder="gateway_id" className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-zinc-300 outline-none" /></label>
           <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Body da alteração</span><textarea value={setBody} onChange={event => setSetBody(event.target.value)} rows={4} className="w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] p-3 text-[9px] font-mono text-zinc-300 outline-none" /></label>
+          <div className="border-t border-white/[.045] pt-3">
+            <p className="mb-2 text-[8px] font-bold uppercase tracking-wider text-zinc-500">Chat remoto</p>
+            <div className="space-y-3">
+              <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Endpoint para responder no chat</span><input value={chatSendPath} onChange={event => setChatSendPath(event.target.value)} className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-zinc-300 outline-none" /></label>
+              <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Caminho do ID da mensagem na resposta</span><input value={chatMessageIdPath} onChange={event => setChatMessageIdPath(event.target.value)} placeholder="message_id" className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-zinc-300 outline-none" /></label>
+              <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Body do envio de chat</span><textarea value={chatSendBody} onChange={event => setChatSendBody(event.target.value)} rows={4} className="w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] p-3 text-[9px] font-mono text-zinc-300 outline-none" /></label>
+            </div>
+          </div>
         </div>
       </details>
 
@@ -339,6 +365,14 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
           <span className="text-[8px] text-zinc-600">Autoriza a Althea a trocar a gateway pela API deste funil.</span>
         </div>
         <button type="button" role="switch" aria-checked={writeEnabled} onClick={() => setWriteEnabled(value => !value)} className={'h-5 w-9 rounded-full p-0.5 transition ' + (writeEnabled ? 'bg-[var(--althea-brand)]' : 'bg-zinc-800')}><span className={'block h-4 w-4 rounded-full bg-white shadow transition-transform ' + (writeEnabled ? 'translate-x-4' : '')} /></button>
+      </div>
+
+      <div className="flex items-center justify-between rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 py-3">
+        <div>
+          <span className="block text-[10px] font-semibold text-zinc-200">Permitir respostas pelo chat</span>
+          <span className="text-[8px] text-zinc-600">Envia a resposta do atendente para a conversa correspondente na API externa do funil.</span>
+        </div>
+        <button type="button" role="switch" aria-checked={chatEnabled} onClick={() => setChatEnabled(value => !value)} className={'h-5 w-9 rounded-full p-0.5 transition ' + (chatEnabled ? 'bg-[var(--althea-brand)]' : 'bg-zinc-800')}><span className={'block h-4 w-4 rounded-full bg-white shadow transition-transform ' + (chatEnabled ? 'translate-x-4' : '')} /></button>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
