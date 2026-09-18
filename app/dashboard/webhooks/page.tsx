@@ -106,10 +106,10 @@ export default function WebhooksPage() {
       }
       const uid = auth.user.id
       const [i, o, d, e] = await Promise.all([
-        db.from('webhook_integrations').select('id,name,provider,endpoint_key,status,secret_prefix,last_used_at,last_event_at,event_count,funnel_id').eq('user_id', uid).order('created_at', { ascending: false }).limit(200),
+        db.from('webhook_integrations').select('id,name,provider,endpoint_key,status,secret_prefix,last_used_at,last_event_at,event_count,funnel_id').order('created_at', { ascending: false }).limit(200),
         db.from('outbound_webhooks').select('id,name,endpoint_url,events,status,max_attempts,created_at,updated_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(200),
         db.from('outbound_webhook_deliveries').select('id,webhook_id,event_type,status,attempt,response_code,response_time_ms,error_message,created_at,delivered_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(100),
-        db.from('integration_events').select('id,event_type,status,created_at,processed_at,retry_count').eq('user_id', uid).order('created_at', { ascending: false }).limit(100),
+        db.from('integration_events').select('id,event_type,status,created_at,processed_at,retry_count').order('created_at', { ascending: false }).limit(100),
       ])
       if (i.error) throw i.error
       if (o.error) throw o.error
