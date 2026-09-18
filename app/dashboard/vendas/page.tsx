@@ -82,7 +82,7 @@ export default function VendasPage() {
 
     if (result.error) throw result.error
     setSales((result.data ?? []) as Sale[])
-  }, [db])
+  }, [db, setOrganizationId, setSales])
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
