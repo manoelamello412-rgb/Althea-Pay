@@ -65,6 +65,16 @@ describe('funnel operational mirror', () => {
     expect(migration).toContain('revoke all on public.v_funnel_operational_timeline from anon')
   })
 
+  test('includes outbound webhook delivery failures linked by integration event', () => {
+    const migration = source('supabase/migrations/20260918153812_funnel_operational_outbound_webhook_v15.sql')
+    expect(migration).toContain('from public.outbound_webhook_deliveries d')
+    expect(migration).toContain('join public.integration_events e')
+    expect(migration).toContain("source_event_id")
+    expect(migration).toContain("response_time_ms")
+    expect(migration).toContain('grant select on public.outbound_webhook_deliveries to authenticated')
+    expect(migration).toContain('revoke all on public.v_funnel_operational_timeline from anon')
+  })
+
   test('mirror exposes payment, checkout, chat, health and control filters', () => {
     const component = source('components/funnel-operational-mirror.tsx')
     expect(component).toContain("v_funnel_operational_timeline")
