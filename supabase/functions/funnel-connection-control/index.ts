@@ -87,6 +87,55 @@ Deno.serve(async (request) => {
   if (connectionResult.error) return json({ ok: false, error: "connection_lookup_failed" }, 500);
   const current = connectionResult.data;
 
+  if (action === "state") {
+    const mappings = current?.id
+      ? await db
+          .from("funnel_connection_gateway_mappings")
+          .select("id,gateway_id,remote_gateway_ref,status")
+          .eq("connection_id", current.id)
+          .eq("organization_id", organizationId)
+          .order("created_at", { ascending: true })
+      : { data: [], error: null };
+
+    if (mappings.error) return json({ ok: false, error: "mapping_lookup_failed" }, 500);
+
+    const gateways = await db
+      .from("gateways")
+      .select("id,display_name,provider,environment,status")
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false });
+
+    if (gateways.error) return json({ ok: false, error: "gateway_lookup_failed" }, 500);
+
+    return json({
+      ok: true,
+      connection: current
+        ? {
+            id: current.id,
+            funnel_id: current.funnel_id,
+            adapter_key: current.adapter_key,
+            remote_base_url: current.remote_base_url,
+            remote_funnel_id: current.remote_funnel_id,
+            capabilities: current.capabilities,
+            write_enabled: current.write_enabled,
+            desired_gateway_id: current.desired_gateway_id,
+            observed_gateway_id: current.observed_gateway_id,
+            last_verified_at: current.last_verified_at,
+            last_command_at: current.last_command_at,
+            control_status: current.control_status,
+            health_status: current.health_status,
+            last_error: current.last_error,
+            has_credential: Boolean(current.credential_secret_id),
+            remote_control: isObject(current.config) && isObject(current.config.remote_control)
+              ? current.config.remote_control
+              : {},
+          }
+        : null,
+      mappings: mappings.data ?? [],
+      gateways: gateways.data ?? [],
+    });
+  }
+
   if (action === "configure") {
     const remoteBaseUrl = text(body.remote_base_url);
     const remoteFunnelId = text(body.remote_funnel_id);
