@@ -4,11 +4,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, RefreshCw, Zap } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { DynamicGatewayConnector } from '@/components/dynamic-gateway-connector';
+import { GlobalFunnelGatewaySwitch } from '@/components/global-funnel-gateway-switch';
 
 type GatewayStatus = 'OPERACIONAL' | 'INDISPONÍVEL';
 type LogType = 'SUCCESS' | 'CRITICAL';
 
-interface GatewayState { id: string; name: string; provider: string; environment: string; status: GatewayStatus }
+interface GatewayState { id: string; name: string; provider: string; environment: string; status: GatewayStatus; rawStatus: string }
 interface NetworkLogEvent { id: string; timestamp: string; provider: string; message: string; type: LogType }
 interface GatewayRow { id: string; display_name?: string | null; provider?: string | null; environment?: string | null; status?: string | null }
 
@@ -53,6 +54,7 @@ export default function GatewaysManagementPage() {
         provider: normalizeProvider(row.provider),
         environment: row.environment?.trim() || 'production',
         status: normalizeStatus(row.status),
+        rawStatus: row.status?.trim().toLowerCase() || 'unknown',
       })));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido';
@@ -99,6 +101,7 @@ export default function GatewaysManagementPage() {
             provider: normalizeProvider(row.provider),
             environment: row.environment?.trim() || 'production',
             status: normalizeStatus(row.status),
+            rawStatus: row.status?.trim().toLowerCase() || 'unknown',
           };
           setGateways(current => {
             const exists = current.some(item => item.id === row.id);
@@ -126,6 +129,8 @@ export default function GatewaysManagementPage() {
   return (
     <main className="mx-auto w-full max-w-[1400px] space-y-7 px-0 py-2 pb-24 sm:px-2 sm:py-4 lg:px-0">
       <DynamicGatewayConnector />
+
+      <GlobalFunnelGatewaySwitch gateways={gateways.map((gateway) => ({ id: gateway.id, name: gateway.name, provider: gateway.provider, rawStatus: gateway.rawStatus }))} />
 
       <section className="space-y-2">
         <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-zinc-100">
