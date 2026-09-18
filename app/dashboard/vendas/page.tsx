@@ -31,10 +31,10 @@ const statusLabel = (value: string | null) => {
 
 const statusClass = (value: string | null) => {
   const normalized = normalizeStatus(value)
-  if (normalized === 'approved') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
-  if (normalized === 'pending') return 'border-amber-400/20 bg-amber-400/10 text-amber-300'
-  if (['failed', 'cancelled', 'chargeback'].includes(normalized)) return 'border-rose-400/20 bg-rose-400/10 text-rose-300'
-  return 'border-white/10 bg-white/[0.04] text-zinc-300'
+  if (normalized === 'approved') return 'border-[rgba(29,184,84,.18)] bg-[rgba(29,184,84,.08)] text-[#7bdc9b]'
+  if (normalized === 'pending') return 'border-[rgba(212,175,55,.18)] bg-[rgba(212,175,55,.07)] text-[#D4AF37]'
+  if (['failed', 'cancelled', 'chargeback'].includes(normalized)) return 'border-red-400/15 bg-red-400/[.06] text-red-300'
+  return 'border-white/[.06] bg-white/[.025] text-[var(--althea-muted)]'
 }
 
 function shiftDays(value: string, days: number) {
@@ -82,7 +82,7 @@ export default function VendasPage() {
 
     if (result.error) throw result.error
     setSales((result.data ?? []) as Sale[])
-  }, [db, setOrganizationId, setSales])
+  }, [db])
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -95,7 +95,7 @@ export default function VendasPage() {
       setRefreshing(false)
       setLoading(false)
     }
-  }, [load, setError, setLoading, setRefreshing])
+  }, [load])
 
   useEffect(() => { void refresh() }, [refresh])
 
@@ -153,102 +153,116 @@ export default function VendasPage() {
   }, [filtered])
 
   return (
-    <main className="min-h-screen bg-[#070A09] px-4 py-6 text-slate-100 lg:px-8">
-      <div className="mx-auto max-w-[1500px] space-y-6">
-        <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="mb-2 text-[10px] font-black uppercase tracking-[.28em] text-emerald-400">ALTHEA PAY // VENDAS</p>
-            <h1 className="text-3xl font-black tracking-tight">Vendas</h1>
-            <p className="mt-1 text-sm text-slate-500">Transações reais registradas pela operação. Nenhum dado é simulado.</p>
-          </div>
-          <button type="button" onClick={() => void refresh()} disabled={refreshing} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.03] px-4 text-sm font-semibold hover:bg-white/[.06] disabled:opacity-50">
-            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} /> Sincronizar
-          </button>
-        </header>
+    <div className="w-full space-y-5">
+      <section className="flex flex-col gap-5 border-b border-white/[.055] pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Operação comercial</p>
+          <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">Vendas</h1>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--althea-muted)]">
+            Acompanhe as transações reais registradas na operação, com filtros por período, status, cliente e gateway.
+          </p>
+        </div>
+        <button type="button" onClick={() => void refresh()} disabled={refreshing} className="inline-flex h-10 items-center justify-center gap-2 self-start rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white disabled:opacity-50 lg:self-auto">
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          Atualizar
+        </button>
+      </section>
 
-        {error && <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{error}</div>}
+      {error && <div role="alert" className="rounded-xl border border-red-400/15 bg-red-400/[.05] px-4 py-3 text-xs text-red-200">{error}</div>}
 
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric label="Receita aprovada" value={money(metrics.volume)} />
-          <Metric label="Aprovadas" value={String(metrics.approved)} />
-          <Metric label="Pendentes" value={String(metrics.pending)} />
-          <Metric label="Falhas / canceladas" value={String(metrics.failed)} />
-        </section>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="Receita aprovada" value={money(metrics.volume)} />
+        <Metric label="Aprovadas" value={String(metrics.approved)} />
+        <Metric label="Pendentes" value={String(metrics.pending)} />
+        <Metric label="Falhas / canceladas" value={String(metrics.failed)} />
+      </section>
 
-        <section className="rounded-2xl border border-white/10 bg-white/[.02] p-4 sm:p-5">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_170px_170px_190px]">
-            <label className="flex h-11 min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3">
-              <Search size={16} className="shrink-0 text-slate-500" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar cliente, transação ou gateway..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-600" />
-            </label>
-            <label className="flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3">
-              <CalendarDays size={15} className="text-slate-500" />
-              <input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none [color-scheme:dark]" aria-label="Data inicial" />
-            </label>
-            <label className="flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3">
-              <CalendarDays size={15} className="text-slate-500" />
-              <input type="date" value={endDate} min={startDate} max={today} onChange={(event) => setEndDate(event.target.value)} className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none [color-scheme:dark]" aria-label="Data final" />
-            </label>
-            <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 rounded-xl border border-white/10 bg-[#111513] px-3 text-sm text-white outline-none">
-              <option value="all">Todos os status</option>
-              <option value="approved">Aprovadas</option>
-              <option value="pending">Pendentes</option>
-              <option value="failed">Falhas</option>
-              <option value="cancelled">Canceladas</option>
-              <option value="refunded">Reembolsadas</option>
-              <option value="chargeback">Chargebacks</option>
-            </select>
-          </div>
+      <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4 sm:p-5">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_170px_170px_190px]">
+          <label className="flex h-10 min-w-0 items-center gap-2 rounded-xl border border-white/[.055] bg-[var(--althea-bg)] px-3">
+            <Search size={14} className="shrink-0 text-[var(--althea-muted)]" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar cliente, transação ou gateway..." className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-[#56645d]" />
+          </label>
+          <label className="flex h-10 items-center gap-2 rounded-xl border border-white/[.055] bg-[var(--althea-bg)] px-3">
+            <CalendarDays size={14} className="text-[var(--althea-muted)]" />
+            <input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} className="min-w-0 flex-1 bg-transparent text-[10px] text-white outline-none [color-scheme:dark]" aria-label="Data inicial" />
+          </label>
+          <label className="flex h-10 items-center gap-2 rounded-xl border border-white/[.055] bg-[var(--althea-bg)] px-3">
+            <CalendarDays size={14} className="text-[var(--althea-muted)]" />
+            <input type="date" value={endDate} min={startDate} max={today} onChange={(event) => setEndDate(event.target.value)} className="min-w-0 flex-1 bg-transparent text-[10px] text-white outline-none [color-scheme:dark]" aria-label="Data final" />
+          </label>
+          <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-xl border border-white/[.055] bg-[var(--althea-bg)] px-3 text-[10px] text-white outline-none">
+            <option value="all">Todos os status</option>
+            <option value="approved">Aprovadas</option>
+            <option value="pending">Pendentes</option>
+            <option value="failed">Falhas</option>
+            <option value="cancelled">Canceladas</option>
+            <option value="refunded">Reembolsadas</option>
+            <option value="chargeback">Chargebacks</option>
+          </select>
+        </div>
 
-          <div className="mt-5 overflow-x-auto">
-            {loading ? (
-              <div className="space-y-3 py-4">{[1, 2, 3, 4].map((item) => <div key={item} className="h-16 animate-pulse rounded-xl bg-white/[.03]" />)}</div>
-            ) : filtered.length === 0 ? (
-              <div className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed border-white/10 px-6 text-center">
-                <CreditCard size={26} className="mb-3 text-slate-600" />
-                <p className="text-sm font-semibold text-white">Nenhuma venda encontrada</p>
-                <p className="mt-1 max-w-md text-xs text-slate-600">Quando transações reais forem registradas — ou quando os filtros encontrarem resultados — elas aparecerão aqui.</p>
+        <div className="mt-5 overflow-x-auto">
+          {loading ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4].map((item) => <div key={item} className="h-16 animate-pulse rounded-xl bg-[var(--althea-bg)]" />)}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="grid min-h-[260px] place-items-center rounded-xl border border-dashed border-white/[.06] bg-[var(--althea-bg)] px-6 text-center">
+              <div className="max-w-md">
+                <CreditCard size={25} className="mx-auto text-[var(--althea-brand)] opacity-60" />
+                <p className="mt-3 text-sm font-medium text-white">Nenhuma venda encontrada</p>
+                <p className="mt-1 text-[10px] leading-4 text-[var(--althea-muted)]">
+                  Quando transações reais forem registradas — ou quando os filtros encontrarem resultados — elas aparecerão aqui.
+                </p>
               </div>
-            ) : (
-              <table className="w-full min-w-[900px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/[.06] text-[10px] font-bold uppercase tracking-[.16em] text-slate-600">
-                    <th className="px-3 py-3">Cliente</th>
-                    <th className="px-3 py-3">Transação</th>
-                    <th className="px-3 py-3">Gateway</th>
-                    <th className="px-3 py-3">Valor</th>
-                    <th className="px-3 py-3">Status</th>
-                    <th className="px-3 py-3">Data</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((sale) => {
-                    const data = obj(sale.data)
-                    const customer = obj(data.customer)
-                    return (
-                      <tr key={sale.id} className="border-b border-white/[.04] last:border-0 hover:bg-white/[.02]">
-                        <td className="px-3 py-4">
-                          <p className="font-medium text-white">{customerNameOf(sale)}</p>
-                          <p className="mt-0.5 text-xs text-slate-600">{text(customer.email) || 'Contato não informado'}</p>
-                        </td>
-                        <td className="px-3 py-4 font-mono text-xs text-slate-400">{sale.external_id || sale.transaction_id || sale.id.slice(0, 12)}</td>
-                        <td className="px-3 py-4 text-slate-400">{sale.gateway_id || '—'}</td>
-                        <td className="px-3 py-4 font-semibold text-white">{money(amountOf(sale))}</td>
-                        <td className="px-3 py-4"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(sale.status)}`}>{statusLabel(sale.status)}</span></td>
-                        <td className="px-3 py-4 text-xs text-slate-500">{new Date(sale.occurred_at ?? sale.created_at ?? '').toLocaleString('pt-BR')}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </section>
-      </div>
-    </main>
+            </div>
+          ) : (
+            <table className="w-full min-w-[900px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-white/[.05] text-[9px] text-[var(--althea-muted)]">
+                  <th className="pb-3 pr-4 font-medium">Cliente</th>
+                  <th className="pb-3 pr-4 font-medium">Transação</th>
+                  <th className="pb-3 pr-4 font-medium">Gateway</th>
+                  <th className="pb-3 pr-4 font-medium">Valor</th>
+                  <th className="pb-3 pr-4 font-medium">Status</th>
+                  <th className="pb-3 font-medium">Data</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((sale) => {
+                  const data = obj(sale.data)
+                  const customer = obj(data.customer)
+                  return (
+                    <tr key={sale.id} className="border-b border-white/[.035] last:border-0">
+                      <td className="py-3.5 pr-4">
+                        <p className="text-[10px] font-semibold text-white">{customerNameOf(sale)}</p>
+                        <p className="mt-1 max-w-[220px] truncate text-[9px] text-[var(--althea-muted)]">{text(customer.email) || 'Contato não informado'}</p>
+                      </td>
+                      <td className="py-3.5 pr-4 font-mono text-[9px] text-[var(--althea-muted)]">{sale.external_id || sale.transaction_id || sale.id.slice(0, 12)}</td>
+                      <td className="py-3.5 pr-4 text-[10px] text-[var(--althea-muted)]">{sale.gateway_id || '—'}</td>
+                      <td className="py-3.5 pr-4 text-[10px] font-semibold text-white">{money(amountOf(sale))}</td>
+                      <td className="py-3.5 pr-4">
+                        <span className={`inline-flex rounded-full border px-2 py-1 text-[8px] font-semibold ${statusClass(sale.status)}`}>{statusLabel(sale.status)}</span>
+                      </td>
+                      <td className="py-3.5 text-[9px] text-[var(--althea-muted)]">{new Date(sale.occurred_at ?? sale.created_at ?? '').toLocaleString('pt-BR')}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+    </div>
   )
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <article className="rounded-2xl border border-white/10 bg-white/[.025] p-5"><span className="text-[10px] uppercase tracking-widest text-slate-500">{label}</span><strong className="mt-2 block text-2xl font-black">{value}</strong></article>
+  return (
+    <article className="min-h-[112px] rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
+      <span className="text-[10px] text-[var(--althea-muted)]">{label}</span>
+      <strong className="mt-4 block text-[24px] font-semibold tracking-[-.035em] text-white">{value}</strong>
+    </article>
+  )
 }
