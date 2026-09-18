@@ -122,7 +122,9 @@ async function sendMeta(account: Account, identity: Identity, body: string): Pro
       }),
     });
     const payload = await responseJson(response);
-    return { externalId: text((payload.messages as unknown[] | undefined)?.[0] && (payload.messages as Json[])[0]?.id ?? payload.message_id), provider: account.provider };
+    const messages = Array.isArray(payload.messages) ? payload.messages : [];
+    const firstMessage = isObject(messages[0]) ? messages[0] : {};
+    return { externalId: text(firstMessage.id ?? payload.message_id), provider: account.provider };
   }
 
   const page = String(meta(account, "page_id", account.external_account_id || ""));
