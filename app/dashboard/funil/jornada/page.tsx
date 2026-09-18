@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react'
 import JourneyClient from './journey-client'
 
 function Loading() {
-  return <main className="min-h-screen grid place-items-center bg-[#020203] text-white"><Loader2 className="h-6 w-6 animate-spin text-emerald-400" /></main>
+  return <div className="grid min-h-[320px] place-items-center text-white"><Loader2 className="h-6 w-6 animate-spin text-[var(--althea-brand)]" /></div>
 }
 
 export default async function FunnelJourneyPage({ searchParams }: { searchParams: Promise<{ funnel?: string }> }) {
