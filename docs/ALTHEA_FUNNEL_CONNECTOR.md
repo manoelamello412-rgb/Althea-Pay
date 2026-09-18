@@ -128,6 +128,32 @@ Funnel/client credentials use a database-backed distributed rate limit. Current 
 
 Clients must preserve the same `event_id` when retrying the same business event.
 
+
+## Recovery-ready checkout identity
+
+External funnels that want ALTHEA automatic recovery should pass a customer identity and explicit channel consent into the checkout/session context. Example:
+
+```json
+{
+  "customer": {
+    "name": "Cliente",
+    "email": "cliente@example.com",
+    "phone_e164": "+5511999999999",
+    "consent": {
+      "email_opt_in": true,
+      "whatsapp_opt_in": true
+    }
+  },
+  "metadata": {
+    "recovery_url": "https://produto.example/checkout/continuar"
+  }
+}
+```
+
+Consent is not inferred from the presence of an e-mail address or telephone number. Without explicit consent, an active compatible channel account and a valid destination, Recovery remains blocked and ALTHEA records the blocker instead of simulating a send.
+
+The preferred resume target is `metadata.recovery_url`. `checkout_url`, `return_url`, `resume_url` and finally the funnel URL may be used as fallbacks.
+
 ## White-label boundary
 
 Customer-facing pages must not render ALTHEA branding unless the merchant explicitly chooses to do so. ALTHEA remains the private operating layer behind the external funnel.
