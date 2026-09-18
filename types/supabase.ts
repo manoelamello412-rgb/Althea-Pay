@@ -9166,6 +9166,20 @@ export type Database = {
         }
         Returns: Json
       }
+      crm_ingest_funnel_chat_message: {
+        Args: {
+          p_body: string
+          p_buyer_email?: string
+          p_buyer_name?: string
+          p_customer_id?: string
+          p_external_message_id: string
+          p_funnel_id: string
+          p_metadata?: Json
+          p_remote_conversation_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       crm_mark_automation_dead_letter: {
         Args: { p_error: string; p_execution_id: string }
         Returns: {
