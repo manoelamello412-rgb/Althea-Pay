@@ -78,7 +78,7 @@ function statusMeta(value: string | null | undefined) {
   if (status === 'syncing') return { label: 'SINCRONIZANDO', tone: 'text-sky-400', dot: 'bg-sky-500' }
   if (status === 'degraded') return { label: 'VALIDAR', tone: 'text-amber-400', dot: 'bg-amber-500' }
   if (status === 'error') return { label: 'ERRO', tone: 'text-rose-400', dot: 'bg-rose-500' }
-  return { label: 'SOMENTE LEITURA', tone: 'text-zinc-400', dot: 'bg-zinc-500' }
+  return { label: 'SOMENTE LEITURA', tone: 'text-[var(--althea-muted)]', dot: 'bg-zinc-500' }
 }
 
 function parseObject(value: string, label: string): Record<string, unknown> {
@@ -292,7 +292,7 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
   if (loading) {
     return (
       <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
-        <div className="flex items-center gap-2 text-xs text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando controle remoto...</div>
+        <div className="flex items-center gap-2 text-xs text-[var(--althea-muted)]"><Loader2 className="h-4 w-4 animate-spin" /> Carregando controle remoto...</div>
       </section>
     )
   }
@@ -305,8 +305,8 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
         <div className="flex items-start gap-2">
           <Network className="mt-0.5 h-4 w-4 text-[var(--althea-brand)]" />
           <div>
-            <h3 className="text-xs font-bold text-zinc-200">Controle remoto do funil</h3>
-            <p className="mt-1 text-[9px] leading-relaxed text-zinc-500">A Althea lê, altera e consulta novamente a API externa antes de confirmar uma troca.</p>
+            <h3 className="text-xs font-bold text-white">Controle remoto do funil</h3>
+            <p className="mt-1 text-[9px] leading-relaxed text-[var(--althea-muted)]">A Althea lê, altera e consulta novamente a API externa antes de confirmar uma troca.</p>
           </div>
         </div>
         <span className={'flex shrink-0 items-center gap-1.5 text-[8px] font-bold ' + meta.tone}>
@@ -314,46 +314,46 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
         </span>
       </div>
 
-      {message && <div className="flex items-start gap-2 rounded-xl border border-[rgba(29,184,84,.14)] bg-[rgba(29,184,84,.045)] p-3 text-[10px] text-emerald-300"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />{message}</div>}
+      {message && <div className="flex items-start gap-2 rounded-xl border border-[rgba(29,184,84,.14)] bg-[rgba(29,184,84,.045)] p-3 text-[10px] text-[#8edca5]"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />{message}</div>}
       {error && <div className="flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-950/15 p-3 text-[10px] text-rose-300"><XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{error}</div>}
 
       <label className="block space-y-1">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">URL base da API</span>
+        <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">URL base da API</span>
         <div className="relative">
           <Link2 className="absolute left-3 top-3 h-3.5 w-3.5 text-zinc-600" />
-          <input value={remoteBaseUrl} onChange={event => setRemoteBaseUrl(event.target.value)} placeholder="https://api.seufunil.com" className="h-10 w-full rounded-xl border border-white/[.045] bg-[var(--althea-bg)] pl-9 pr-3 text-xs font-mono text-zinc-200 outline-none focus:border-[rgba(29,184,84,.32)]" />
+          <input value={remoteBaseUrl} onChange={event => setRemoteBaseUrl(event.target.value)} placeholder="https://api.seufunil.com" className="h-10 w-full rounded-xl border border-white/[.045] bg-[var(--althea-bg)] pl-9 pr-3 text-xs font-mono text-white outline-none focus:border-[rgba(29,184,84,.32)]" />
         </div>
       </label>
 
       <label className="block space-y-1">
-        <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">ID remoto do funil</span>
-        <input value={remoteFunnelId} onChange={event => setRemoteFunnelId(event.target.value)} placeholder="Ex.: scarcity_8472" className="h-10 w-full rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 text-xs font-mono text-zinc-200 outline-none focus:border-[rgba(29,184,84,.32)]" />
+        <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">ID remoto do funil</span>
+        <input value={remoteFunnelId} onChange={event => setRemoteFunnelId(event.target.value)} placeholder="Ex.: scarcity_8472" className="h-10 w-full rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 text-xs font-mono text-white outline-none focus:border-[rgba(29,184,84,.32)]" />
       </label>
 
       <label className="block space-y-1">
-        <span className="flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+        <span className="flex items-center justify-between text-[9px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">
           <span>Token / chave da API</span>
           {connection?.has_credential && <span className="text-[var(--althea-brand)]">PROTEGIDA NO VAULT</span>}
         </span>
         <div className="relative">
           <KeyRound className="absolute left-3 top-3 h-3.5 w-3.5 text-zinc-600" />
-          <input type="password" value={token} onChange={event => setToken(event.target.value)} placeholder={connection?.has_credential ? 'Deixe vazio para manter a credencial atual' : 'Cole a credencial da API'} autoComplete="off" className="h-10 w-full rounded-xl border border-white/[.045] bg-[var(--althea-bg)] pl-9 pr-3 text-xs font-mono text-zinc-200 outline-none focus:border-[rgba(29,184,84,.32)]" />
+          <input type="password" value={token} onChange={event => setToken(event.target.value)} placeholder={connection?.has_credential ? 'Deixe vazio para manter a credencial atual' : 'Cole a credencial da API'} autoComplete="off" className="h-10 w-full rounded-xl border border-white/[.045] bg-[var(--althea-bg)] pl-9 pr-3 text-xs font-mono text-white outline-none focus:border-[rgba(29,184,84,.32)]" />
         </div>
       </label>
 
       <details className="rounded-xl border border-white/[.045] bg-[var(--althea-bg)]">
-        <summary className="cursor-pointer px-3 py-2.5 text-[9px] font-bold uppercase tracking-wider text-zinc-500">Contrato avançado da API</summary>
+        <summary className="cursor-pointer px-3 py-2.5 text-[9px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Contrato avançado da API</summary>
         <div className="space-y-3 border-t border-white/[.045] p-3">
-          <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Endpoint para ler gateway</span><input value={getPath} onChange={event => setGetPath(event.target.value)} className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-zinc-300 outline-none" /></label>
-          <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Endpoint para trocar gateway</span><input value={setPath} onChange={event => setSetPath(event.target.value)} className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-zinc-300 outline-none" /></label>
-          <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Caminho da gateway na resposta</span><input value={responsePath} onChange={event => setResponsePath(event.target.value)} placeholder="gateway_id" className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-zinc-300 outline-none" /></label>
-          <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Body da alteração</span><textarea value={setBody} onChange={event => setSetBody(event.target.value)} rows={4} className="w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] p-3 text-[9px] font-mono text-zinc-300 outline-none" /></label>
+          <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Endpoint para ler gateway</span><input value={getPath} onChange={event => setGetPath(event.target.value)} className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-[#c8d2cc] outline-none" /></label>
+          <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Endpoint para trocar gateway</span><input value={setPath} onChange={event => setSetPath(event.target.value)} className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-[#c8d2cc] outline-none" /></label>
+          <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Caminho da gateway na resposta</span><input value={responsePath} onChange={event => setResponsePath(event.target.value)} placeholder="gateway_id" className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-[#c8d2cc] outline-none" /></label>
+          <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Body da alteração</span><textarea value={setBody} onChange={event => setSetBody(event.target.value)} rows={4} className="w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] p-3 text-[9px] font-mono text-[#c8d2cc] outline-none" /></label>
           <div className="border-t border-white/[.045] pt-3">
-            <p className="mb-2 text-[8px] font-bold uppercase tracking-wider text-zinc-500">Chat remoto</p>
+            <p className="mb-2 text-[8px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Chat remoto</p>
             <div className="space-y-3">
-              <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Endpoint para responder no chat</span><input value={chatSendPath} onChange={event => setChatSendPath(event.target.value)} className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-zinc-300 outline-none" /></label>
-              <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Caminho do ID da mensagem na resposta</span><input value={chatMessageIdPath} onChange={event => setChatMessageIdPath(event.target.value)} placeholder="message_id" className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-zinc-300 outline-none" /></label>
-              <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Body do envio de chat</span><textarea value={chatSendBody} onChange={event => setChatSendBody(event.target.value)} rows={4} className="w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] p-3 text-[9px] font-mono text-zinc-300 outline-none" /></label>
+              <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Endpoint para responder no chat</span><input value={chatSendPath} onChange={event => setChatSendPath(event.target.value)} className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-[#c8d2cc] outline-none" /></label>
+              <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Caminho do ID da mensagem na resposta</span><input value={chatMessageIdPath} onChange={event => setChatMessageIdPath(event.target.value)} placeholder="message_id" className="h-9 w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] px-3 text-[10px] font-mono text-[#c8d2cc] outline-none" /></label>
+              <label className="block space-y-1"><span className="text-[8px] uppercase text-zinc-600">Body do envio de chat</span><textarea value={chatSendBody} onChange={event => setChatSendBody(event.target.value)} rows={4} className="w-full rounded-lg border border-white/[.045] bg-[var(--althea-bg)] p-3 text-[9px] font-mono text-[#c8d2cc] outline-none" /></label>
             </div>
           </div>
         </div>
@@ -361,7 +361,7 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
 
       <div className="flex items-center justify-between rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 py-3">
         <div>
-          <span className="block text-[10px] font-semibold text-zinc-200">Permitir controle remoto</span>
+          <span className="block text-[10px] font-semibold text-white">Permitir controle remoto</span>
           <span className="text-[8px] text-zinc-600">Autoriza a Althea a trocar a gateway pela API deste funil.</span>
         </div>
         <button type="button" role="switch" aria-checked={writeEnabled} onClick={() => setWriteEnabled(value => !value)} className={'h-5 w-9 rounded-full p-0.5 transition ' + (writeEnabled ? 'bg-[var(--althea-brand)]' : 'bg-zinc-800')}><span className={'block h-4 w-4 rounded-full bg-white shadow transition-transform ' + (writeEnabled ? 'translate-x-4' : '')} /></button>
@@ -369,7 +369,7 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
 
       <div className="flex items-center justify-between rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 py-3">
         <div>
-          <span className="block text-[10px] font-semibold text-zinc-200">Permitir respostas pelo chat</span>
+          <span className="block text-[10px] font-semibold text-white">Permitir respostas pelo chat</span>
           <span className="text-[8px] text-zinc-600">Envia a resposta do atendente para a conversa correspondente na API externa do funil.</span>
         </div>
         <button type="button" role="switch" aria-checked={chatEnabled} onClick={() => setChatEnabled(value => !value)} className={'h-5 w-9 rounded-full p-0.5 transition ' + (chatEnabled ? 'bg-[var(--althea-brand)]' : 'bg-zinc-800')}><span className={'block h-4 w-4 rounded-full bg-white shadow transition-transform ' + (chatEnabled ? 'translate-x-4' : '')} /></button>
@@ -377,7 +377,7 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
 
       <div className="grid grid-cols-2 gap-2">
         <button type="button" onClick={() => void save()} disabled={saving} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-[var(--althea-brand)] text-[10px] font-bold text-black disabled:opacity-40">{saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} SALVAR</button>
-        <button type="button" onClick={() => void test()} disabled={testing || !connection?.has_credential} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/[.06] bg-[var(--althea-bg)] text-[10px] font-bold text-zinc-300 disabled:opacity-40">{testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />} TESTAR API</button>
+        <button type="button" onClick={() => void test()} disabled={testing || !connection?.has_credential} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/[.06] bg-[var(--althea-bg)] text-[10px] font-bold text-[#c8d2cc] disabled:opacity-40">{testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />} TESTAR API</button>
       </div>
 
       {gateways.length > 0 && (
@@ -385,7 +385,7 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
           <div className="flex items-start gap-2">
             <ShieldCheck className="mt-0.5 h-4 w-4 text-[var(--althea-brand)]" />
             <div>
-              <h4 className="text-[10px] font-bold text-zinc-200">Mapeamento das gateways neste funil</h4>
+              <h4 className="text-[10px] font-bold text-white">Mapeamento das gateways neste funil</h4>
               <p className="mt-1 text-[8px] leading-relaxed text-zinc-600">Informe o identificador que a API externa usa para cada gateway.</p>
             </div>
           </div>
@@ -394,10 +394,10 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
             {gateways.map(gateway => (
               <label key={gateway.id} className="grid gap-2 rounded-xl border border-white/[.045] bg-[var(--althea-bg)] p-3 sm:grid-cols-[1fr_1fr] sm:items-center">
                 <span className="min-w-0">
-                  <b className="block truncate text-[10px] text-zinc-200">{gateway.display_name || gateway.provider}</b>
+                  <b className="block truncate text-[10px] text-white">{gateway.display_name || gateway.provider}</b>
                   <small className="text-[8px] font-mono uppercase text-zinc-600">{gateway.provider} · {gateway.environment}</small>
                 </span>
-                <input value={mappingRefs[gateway.id] || ''} onChange={event => setMappingRefs(current => ({ ...current, [gateway.id]: event.target.value }))} placeholder="ID da gateway no funil externo" className="h-9 w-full rounded-lg border border-white/[.045] bg-black/20 px-3 text-[9px] font-mono text-zinc-300 outline-none focus:border-[rgba(29,184,84,.32)]" />
+                <input value={mappingRefs[gateway.id] || ''} onChange={event => setMappingRefs(current => ({ ...current, [gateway.id]: event.target.value }))} placeholder="ID da gateway no funil externo" className="h-9 w-full rounded-lg border border-white/[.045] bg-black/20 px-3 text-[9px] font-mono text-[#c8d2cc] outline-none focus:border-[rgba(29,184,84,.32)]" />
               </label>
             ))}
           </div>
@@ -411,7 +411,7 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
       {drifts.length > 0 && (
         <div className="space-y-2 border-t border-white/[.045] pt-4">
           <div className="flex items-center justify-between">
-            <h4 className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Drift remoto</h4>
+            <h4 className="text-[9px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Drift remoto</h4>
             <span className="text-[8px] font-mono text-zinc-700">{drifts.filter(item => item.status === 'open').length} aberto(s)</span>
           </div>
           {drifts.slice(0, 3).map(item => (
@@ -422,7 +422,7 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
                 </span>
                 <span className="text-[8px] font-mono text-zinc-700">{item.correlation_id}</span>
               </div>
-              <p className="mt-1 text-[9px] text-zinc-500">
+              <p className="mt-1 text-[9px] text-[var(--althea-muted)]">
                 Esperada: {item.expected_gateway_id || '—'} · Observada: {item.observed_gateway_id || item.observed_remote_gateway_ref || 'não mapeada'}
               </p>
               <p className="mt-1 text-[8px] text-zinc-700">Última leitura: {new Date(item.last_seen_at).toLocaleString('pt-BR')}</p>
@@ -434,7 +434,7 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
       {commands.length > 0 && (
         <div className="space-y-2 border-t border-white/[.045] pt-4">
           <div className="flex items-center justify-between">
-            <h4 className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Histórico de comandos</h4>
+            <h4 className="text-[9px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Histórico de comandos</h4>
             <span className="text-[8px] text-zinc-700">últimos {Math.min(commands.length, 5)}</span>
           </div>
           {commands.map(item => {
@@ -448,7 +448,7 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
                   </span>
                   <span className="text-[8px] font-mono text-zinc-700">{item.correlation_id}</span>
                 </div>
-                <p className="mt-1 text-[9px] text-zinc-500">
+                <p className="mt-1 text-[9px] text-[var(--althea-muted)]">
                   {item.previous_gateway_id ? item.previous_gateway_id + ' → ' : ''}{item.target_gateway_id}
                 </p>
                 {item.last_error_message && <p className="mt-1 text-[8px] text-rose-300">{item.last_error_message}</p>}
@@ -462,7 +462,7 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
       )}
 
       {connection?.last_error && <div className="rounded-xl border border-rose-500/15 bg-rose-950/10 p-3 text-[9px] text-rose-300">{connection.last_error}</div>}
-      <button type="button" onClick={() => void load()} className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-wider text-zinc-600 hover:text-zinc-300"><RefreshCw className="h-3 w-3" /> Atualizar estado</button>
+      <button type="button" onClick={() => void load()} className="flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-wider text-zinc-600 hover:text-[#c8d2cc]"><RefreshCw className="h-3 w-3" /> Atualizar estado</button>
     </section>
   )
 }
