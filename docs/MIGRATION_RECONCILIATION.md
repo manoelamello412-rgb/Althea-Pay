@@ -7,8 +7,8 @@ Audit date: 2026-09-17/18.
 The live Supabase project and the GitHub repository do **not** share a reproducible migration history.
 
 Verified counts at audit time:
-- Live Supabase migration history: **578** rows in `supabase_migrations.schema_migrations`.
-- GitHub audit branch: **345** SQL migration files after the audit hardening migrations.
+- Live Supabase migration history: **580** rows in `supabase_migrations.schema_migrations`.
+- GitHub audit branch: **347** SQL migration files after the audit hardening migrations.
 - Comparing migration names before the final audit migration:
   - **282** remote migration names had no matching local migration file.
   - **49** local migration names had no matching remote history row.
@@ -49,7 +49,7 @@ The safe long-term cleanup is:
 4. Keep only new forward migrations after that baseline in the active migration chain.
 5. Test a clean database created from the new baseline plus forward migrations before changing the production workflow.
 
-Do not attempt to reconstruct the 578-row production history by guessing SQL from object names.
+Do not attempt to reconstruct the 580-row production history by guessing SQL from object names.
 
 ## Audit forward migrations applied and reconciled
 
@@ -97,13 +97,30 @@ The following reviewed forward migrations were applied to the linked Supabase pr
 - `20260918043540_funnel_gateway_rollback_and_drift_foundation_v5.sql`
 - `20260918043924_schedule_funnel_drift_worker_v6.sql`
 - `20260918044600_funnel_control_tenant_integrity_v7.sql`
+- `20260918050052_fix_funnel_worker_runtime_auth_v8.sql`
+- `20260918050607_grant_funnel_control_service_acl_v9.sql`
 
 These migrations add the durable external-funnel command plane, two-phase verified gateway switching, service-only lockdown of the former local-only global switch, retry and drift workers, rollback state, RLS-protected drift records, and database-level tenant-integrity enforcement.
 
 Current reconciled counts at this continuation checkpoint:
-- Live migration history: **578**
-- Local SQL migration files: **345**
+- Live migration history: **580**
+- Local SQL migration files: **347**
 - Remote logical names without a local name match: **282**
 - Local logical names without a remote name match: **49**
 
 Historical drift remains open. These updated counts do not make the old migration chain safely replayable from zero; automatic production `supabase db push` remains forbidden.
+
+
+### Runtime verification follow-up
+
+The v8/v9 follow-up fixed two runtime-only issues that ordinary schema checks did not expose:
+
+- Cron invocations previously depended on a custom Edge runtime secret that was present in Vault but not injected as an Edge Function environment variable.
+- New control-plane tables had correct RLS but lacked the explicit `service_role` table ACLs required by PostgREST-backed Edge workers.
+
+After applying `20260918050052_fix_funnel_worker_runtime_auth_v8.sql`, deploying the corrected functions, and applying `20260918050607_grant_funnel_control_service_acl_v9.sql`, controlled `pg_net` invocations returned:
+
+- `funnel-command-worker`: HTTP 200, `ok:true`
+- `funnel-drift-worker`: HTTP 200, `ok:true`
+
+This is stronger evidence than the cron scheduler status alone because it validates the actual Edge Function HTTP response.
