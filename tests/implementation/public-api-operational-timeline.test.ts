@@ -33,6 +33,16 @@ describe('public funnel operational API', () => {
     expect(migration).toContain('to service_role')
   })
 
+  test('deduplicates public API incident summary by transaction or checkout identity', () => {
+    const api = source('supabase/functions/althea-public-api/index.ts')
+    expect(api).toContain('const incidentKey')
+    expect(api).toContain('"transaction:"')
+    expect(api).toContain('"checkout:"')
+    expect(api).toContain('incidents:new Set(')
+    expect(api).toContain('errors:new Set(')
+    expect(api).toContain('warnings:new Set(')
+  })
+
   test('security-invoker timeline has the minimal backend read ACLs required by the public API', () => {
     const migration = source('supabase/migrations/20260918154709_grant_operational_timeline_service_acl_v17.sql')
     expect(migration).toContain('grant select on public.checkout_events to service_role')
