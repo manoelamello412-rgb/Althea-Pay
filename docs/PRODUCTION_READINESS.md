@@ -18,6 +18,10 @@ Canonical runtime surfaces:
 - `althea-public-api` — public API surface.
 - `althea-webhook` — canonical external integration webhook.
 - `funnel-events` — canonical funnel event ingestion.
+- `funnel-provider-adapter` — internal HTTPS-only remote funnel API boundary with SSRF protection and Vault-backed credentials.
+- `funnel-connection-control` — authenticated management surface for remote funnel API configuration and gateway mappings.
+- `funnel-command-worker` — durable two-phase remote command executor with idempotency, retry, remote re-read and verification.
+- `funnel-drift-worker` — detects when a remote funnel gateway diverges from Althea's desired state.
 - CRM omnichannel workers/functions listed in `supabase/config.toml`.
 - Iara functions listed in `supabase/config.toml`, using the configured private Althea AI engine.
 
@@ -28,7 +32,7 @@ Retired compatibility functions are intentionally absent from the repository. Th
 - Dependency versions are pinned and `package-lock.json` is committed.
 - TypeScript typecheck passes.
 - ESLint passes with zero warnings.
-- 21 test files / 77 tests pass.
+- 23 test files / 91 tests pass; 2 integration files / 4 tests remain intentionally skipped without external fixtures.
 - Next.js production build compiles and generates 57 pages.
 - Production-safe load smoke is implemented, but the last audited CI run skipped the external HTTP check because `ALTHEA_HEALTH_URL` was not configured.
 - Release preflight passes.
@@ -55,11 +59,22 @@ Retired compatibility functions are intentionally absent from the repository. Th
 - Funnel gateway binding INSERT/UPDATE policies now prove that both referenced funnel and gateway belong to the binding `organization_id`; the previous tautological organization checks were removed.
 - Duplicate permissive SELECT policies on gateway transactions/attempts are consolidated, and the tenant-scoped supporting indexes are present.
 - Direct `anon` and `authenticated` execution of `get_checkout_transaction_status` is revoked; the RPC is now `service_role`-only because checkout status polling goes through the validated server route.
+- Global gateway switching now uses a durable two-phase remote command flow: preflight every eligible funnel, mutate the external funnel API, re-read the remote state, and only then update Althea's local primary binding.
+- The former authenticated global switch that changed only Althea's local binding is revoked from `authenticated` and retained service-role-only for controlled internal compatibility.
+- Remote funnel connector credentials are stored in Supabase Vault and are never returned to the browser; browser state only exposes whether a credential exists.
+- Verified gateway rollback is available from the last completed batch and restores each funnel's recorded previous remote gateway through the same preflight/verification pipeline.
+- Funnel drift detection runs every two minutes and opens/resolves drift records when the external funnel state differs from the desired/mapped gateway.
+- The funnel command retry worker runs every minute and both new cron jobs have produced successful executions in the linked Supabase project.
+- Database triggers enforce organization/funnel/gateway integrity for remote gateway mappings, command targets and drift events.
+- `types/supabase.ts` has been regenerated from the live project after the control-plane schema changes.
 - The live Supabase migration history records the audit corrections under the exact remote versions documented in `docs/MIGRATION_RECONCILIATION.md`.
 
 ## YELLOW — environment/E2E validation still required
 
 These checks require live provider credentials, live external systems or a deployable preview environment:
+- Real remote funnel gateway switch against at least one external scarcity-funnel API, proving A → B mutation and B re-read before `verified`.
+- Real rollback of that remote funnel back to its previously observed gateway.
+- Deliberate out-of-band remote gateway change proving drift detection opens and resolves the expected event.
 - End-to-end checkout with a real supported provider.
 - Real PIX creation, QR/copy-paste payload, provider confirmation and webhook transition.
 - Controlled technical-failure test proving safe failover behavior without ambiguous duplicate charging.
