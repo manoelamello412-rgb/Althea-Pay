@@ -81,7 +81,7 @@ function statusMeta(connection: FunnelConnection | null): { label: string; tone:
   if (health === 'healthy') return { label: 'OPERACIONAL', tone: 'text-[var(--althea-brand)]', dot: 'bg-[var(--althea-brand)]' }
   if (health === 'degraded') return { label: 'DEGRADADO', tone: 'text-amber-400', dot: 'bg-amber-500' }
   if (health === 'unhealthy' || health === 'error') return { label: 'INSTÁVEL', tone: 'text-rose-400', dot: 'bg-rose-500' }
-  return { label: 'AGUARDANDO EVENTO', tone: 'text-zinc-400', dot: 'bg-zinc-500' }
+  return { label: 'AGUARDANDO EVENTO', tone: 'text-[var(--althea-muted)]', dot: 'bg-zinc-500' }
 }
 
 export default function FunilDominioPage() {
