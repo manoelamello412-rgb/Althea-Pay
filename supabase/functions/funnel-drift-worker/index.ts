@@ -6,27 +6,38 @@ const isObject = (value: unknown): value is Json => !!value && typeof value === 
 const text = (value: unknown): string => typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
 const json = (body: Json, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
-function constantTimeEqual(left: string, right: string): boolean {
-  if (!left || left.length !== right.length) return false;
-  let difference = 0;
-  for (let index = 0; index < left.length; index++) difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
-  return difference === 0;
-}
+const adminKeyFromEnv = (): string => {
+  const raw = Deno.env.get("SUPABASE_SECRET_KEYS");
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const key = typeof parsed.default === "string" ? parsed.default.trim() : "";
+      if (key) return key;
+    } catch {
+      // Fall through to the legacy key while the project migrates key formats.
+    }
+  }
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+};
 
 Deno.serve(async request => {
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const internalSecret = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
-  const suppliedSecret = request.headers.get("x-internal-secret") ?? "";
-  if (!supabaseUrl || !serviceRole || !internalSecret) return json({ ok: false, error: "server_configuration_error" }, 500);
-  if (!constantTimeEqual(internalSecret, suppliedSecret)) return json({ ok: false, error: "unauthorized" }, 401);
+  const adminKey = adminKeyFromEnv();
+  const suppliedSecret =
+    request.headers.get("x-althea-internal-secret") ??
+    request.headers.get("x-internal-secret") ??
+    "";
+  if (!supabaseUrl || !adminKey) return json({ ok: false, error: "server_configuration_error" }, 500);
 
   const body = await request.json().catch(() => ({})) as Json;
   const requestedLimit = Number(body.limit ?? 50);
   const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 50, 1), 100);
-  const db = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false, autoRefreshToken: false } });
+  const db = createClient(supabaseUrl, adminKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const verified = await db.rpc("verify_althea_internal_secret", { p_secret: suppliedSecret });
+  if (verified.error) return json({ ok: false, error: "internal_auth_unavailable" }, 500);
+  if (verified.data !== true) return json({ ok: false, error: "unauthorized" }, 401);
 
   const connections = await db
     .from("funnel_connections")
@@ -48,7 +59,7 @@ Deno.serve(async request => {
     try {
       const response = await fetch(supabaseUrl.replace(/\/$/, "") + "/functions/v1/funnel-provider-adapter", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-althea-internal-secret": internalSecret },
+        headers: { "Content-Type": "application/json", apikey: adminKey },
         body: JSON.stringify({ connection_id: connection.id, operation: "get_gateway" }),
         redirect: "error",
         signal: AbortSignal.timeout(35_000),
