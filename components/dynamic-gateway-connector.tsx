@@ -399,7 +399,7 @@ export const DynamicGatewayConnector: React.FC = () => {
     const setSource = target === 'webhook' ? setWebhookValues : setValues
     return (
       <label key={credential.name} className="block space-y-1.5">
-        <span className="text-[10px] font-mono uppercase text-neutral-400">
+        <span className="text-[10px] font-mono uppercase text-[var(--althea-muted)]">
           {credential.label}{credential.required ? ' *' : ''}
         </span>
         <input
@@ -407,28 +407,28 @@ export const DynamicGatewayConnector: React.FC = () => {
           value={source[credential.name] ?? ''}
           onChange={event => setSource(current => ({ ...current, [credential.name]: event.target.value }))}
           autoComplete="off"
-          className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm text-white outline-none focus:border-emerald-700"
+          className="w-full rounded-lg border border-white/[.055] bg-[var(--althea-bg)] p-3 text-sm text-white outline-none focus:border-emerald-700"
         />
       </label>
     )
   }
 
   return (
-    <section className="w-full rounded-xl border border-neutral-800 bg-neutral-950 p-5 md:p-6 space-y-5">
-      <header className="flex items-center justify-between gap-3 border-b border-neutral-900 pb-4">
+    <section className="w-full space-y-5 rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5 md:p-6">
+      <header className="flex items-center justify-between gap-3 border-b border-white/[.045] pb-4">
         <div className="flex items-center gap-3">
           <Cpu className="h-4 w-4 text-[#1DB854]" />
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider font-mono text-white">Central de Gateways</h3>
-            <p className="mt-1 text-[11px] text-neutral-500">Conecte, teste, edite e desative gateways sem alterar código.</p>
+            <p className="mt-1 text-[11px] text-[var(--althea-muted)]">Conecte, teste, edite e desative gateways sem alterar código.</p>
           </div>
         </div>
-        <button type="button" onClick={() => void load()} disabled={loading} className="rounded-lg border border-neutral-800 p-2 text-neutral-400">
+        <button type="button" onClick={() => void load()} disabled={loading} className="rounded-lg border border-white/[.055] p-2 text-[var(--althea-muted)]">
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </header>
 
-      {message && <div className="flex items-center gap-2 rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 text-xs text-emerald-400"><CheckCircle2 className="h-4 w-4" />{message}</div>}
+      {message && <div className="flex items-center gap-2 rounded-lg border border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.05)] p-3 text-xs text-[var(--althea-brand)]"><CheckCircle2 className="h-4 w-4" />{message}</div>}
       {lastCompletedBatchId && (
         <button
           type="button"
@@ -444,35 +444,35 @@ export const DynamicGatewayConnector: React.FC = () => {
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-[10px] font-medium uppercase tracking-wide text-neutral-400">Gateways conectados</h4>
-          <span className="text-[9px] font-mono text-neutral-600">{gateways.length} conexão(ões)</span>
+          <h4 className="text-[10px] font-medium uppercase tracking-wide text-[var(--althea-muted)]">Gateways conectados</h4>
+          <span className="text-[9px] font-mono text-[#5f6e66]">{gateways.length} conexão(ões)</span>
         </div>
         {gateways.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-neutral-800 p-4 text-xs text-neutral-500">Nenhum gateway cadastrado. Adicione uma conexão abaixo.</div>
+          <div className="rounded-lg border border-dashed border-white/[.055] p-4 text-xs text-[var(--althea-muted)]">Nenhum gateway cadastrado. Adicione uma conexão abaixo.</div>
         ) : (
           <div className="space-y-2">
             {gateways.map(gateway => (
-              <div key={gateway.id} className="flex flex-col gap-3 rounded-lg border border-neutral-800 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div key={gateway.id} className="flex flex-col gap-3 rounded-lg border border-white/[.055] p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="truncate text-xs font-semibold text-white">{gateway.display_name || 'Gateway sem nome'}</div>
-                  <div className="mt-1 text-[9px] font-mono uppercase text-neutral-500">{gateway.provider} · {gateway.environment} · {statusLabel(gateway.status)}</div>
+                  <div className="mt-1 text-[9px] font-mono uppercase text-[var(--althea-muted)]">{gateway.provider} · {gateway.environment} · {statusLabel(gateway.status)}</div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className={`h-2 w-2 rounded-full ${['connected', 'degraded'].includes(gateway.status.toLowerCase()) ? 'bg-emerald-500' : 'bg-neutral-600'}`} />
+                  <span className={`h-2 w-2 rounded-full ${['connected', 'degraded'].includes(gateway.status.toLowerCase()) ? 'bg-[var(--althea-brand)]' : 'bg-neutral-600'}`} />
                   {['connected', 'degraded'].includes(gateway.status.toLowerCase()) && (
                     <button
                       type="button"
                       onClick={() => void switchAllFunnels(gateway)}
                       disabled={testing !== null || switchingAll !== null}
-                      className="rounded-md border border-emerald-800/70 bg-emerald-950/30 px-2.5 py-2 text-[9px] font-bold font-mono text-emerald-400 disabled:opacity-40"
+                      className="rounded-md border border-[rgba(29,184,84,.2)] bg-[rgba(29,184,84,.06)] px-2.5 py-2 text-[9px] font-bold font-mono text-[var(--althea-brand)] disabled:opacity-40"
                     >
                       {switchingAll === gateway.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'TODOS OS FUNIS'}
                     </button>
                   )}
-                  <button type="button" onClick={() => edit(gateway)} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button type="button" onClick={() => void test(gateway.id)} disabled={testing !== null} className="rounded-md border border-neutral-700 px-2.5 py-2 text-[9px] font-bold font-mono text-white">{testing === gateway.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'TESTAR'}</button>
-                  <button type="button" onClick={() => void toggle(gateway)} disabled={testing !== null || !gateway.credential_id} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Power className="h-3.5 w-3.5" /></button>
-                  <button type="button" onClick={() => void disconnect(gateway)} disabled={testing !== null} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Unplug className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => edit(gateway)} className="rounded-md border border-white/[.07] p-2 text-[#c8d2cc]"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => void test(gateway.id)} disabled={testing !== null} className="rounded-md border border-white/[.07] px-2.5 py-2 text-[9px] font-bold font-mono text-white">{testing === gateway.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'TESTAR'}</button>
+                  <button type="button" onClick={() => void toggle(gateway)} disabled={testing !== null || !gateway.credential_id} className="rounded-md border border-white/[.07] p-2 text-[#c8d2cc]"><Power className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => void disconnect(gateway)} disabled={testing !== null} className="rounded-md border border-white/[.07] p-2 text-[#c8d2cc]"><Unplug className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
             ))}
@@ -481,31 +481,31 @@ export const DynamicGatewayConnector: React.FC = () => {
       </div>
 
       {!loading && (
-        <form onSubmit={submit} className="space-y-5 border-t border-neutral-900 pt-5">
+        <form onSubmit={submit} className="space-y-5 border-t border-white/[.045] pt-5">
           <div className="flex items-center justify-between">
             <div>
               <h4 className="text-[10px] font-medium uppercase tracking-wide text-neutral-200">{editing ? 'Editar conexão' : 'Nova conexão de gateway'}</h4>
-              <p className="mt-1 text-[10px] text-neutral-600">Providers nativos pedem só credenciais. A opção HTTP genérica libera configuração avançada de API.</p>
+              <p className="mt-1 text-[10px] text-[#5f6e66]">Providers nativos pedem só credenciais. A opção HTTP genérica libera configuração avançada de API.</p>
             </div>
-            {editing && <button type="button" onClick={reset} className="text-neutral-500"><X className="h-4 w-4" /></button>}
+            {editing && <button type="button" onClick={reset} className="text-[var(--althea-muted)]"><X className="h-4 w-4" /></button>}
           </div>
 
           <label className="block space-y-1.5">
-            <span className="text-[10px] font-mono uppercase text-neutral-400">Nome do gateway</span>
-            <input value={name} onChange={event => setName(event.target.value)} placeholder="Ex.: Minha conexão de pagamentos" className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm text-white outline-none" />
+            <span className="text-[10px] font-mono uppercase text-[var(--althea-muted)]">Nome do gateway</span>
+            <input value={name} onChange={event => setName(event.target.value)} placeholder="Ex.: Minha conexão de pagamentos" className="w-full rounded-lg border border-white/[.055] bg-[var(--althea-bg)] p-3 text-sm text-white outline-none" />
           </label>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="space-y-1.5">
-              <span className="text-[10px] font-mono uppercase text-neutral-400">Provedor / Adapter</span>
-              <select value={providerKey} onChange={event => setProviderKey(event.target.value)} disabled={!!editing} className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm text-white outline-none">
+              <span className="text-[10px] font-mono uppercase text-[var(--althea-muted)]">Provedor / Adapter</span>
+              <select value={providerKey} onChange={event => setProviderKey(event.target.value)} disabled={!!editing} className="w-full rounded-lg border border-white/[.055] bg-[var(--althea-bg)] p-3 text-sm text-white outline-none">
                 <option value="">Selecione o provedor...</option>
                 {providers.map(provider => <option key={provider.id} value={provider.provider_key}>{adapterName(provider)}</option>)}
               </select>
             </label>
             <label className="space-y-1.5">
-              <span className="text-[10px] font-mono uppercase text-neutral-400">Ambiente</span>
-              <select value={environment} onChange={event => setEnvironment(event.target.value as 'sandbox' | 'production')} className="w-full rounded-lg border border-neutral-800 bg-neutral-900 p-3 text-sm text-white outline-none">
+              <span className="text-[10px] font-mono uppercase text-[var(--althea-muted)]">Ambiente</span>
+              <select value={environment} onChange={event => setEnvironment(event.target.value as 'sandbox' | 'production')} className="w-full rounded-lg border border-white/[.055] bg-[var(--althea-bg)] p-3 text-sm text-white outline-none">
                 <option value="production">Produção</option>
                 <option value="sandbox">Sandbox / Testes</option>
               </select>
@@ -513,30 +513,30 @@ export const DynamicGatewayConnector: React.FC = () => {
           </div>
 
           {active && credentialFields.length > 0 && (
-            <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+            <div className="space-y-4 rounded-xl border border-white/[.055] bg-[var(--althea-bg)]/40 p-4">
               <div>
                 <h5 className="text-xs font-semibold uppercase tracking-wide text-white">{isGenericHttp ? 'Credenciais e configuração avançada da API' : 'Credenciais da conexão'}</h5>
-                <p className="mt-1 text-[10px] text-neutral-500">{isGenericHttp ? 'A URL base e os endpoints ficam configuráveis porque este provider representa uma API ainda não nativa.' : 'O transporte técnico é herdado do adapter canônico do provider.'}</p>
+                <p className="mt-1 text-[10px] text-[var(--althea-muted)]">{isGenericHttp ? 'A URL base e os endpoints ficam configuráveis porque este provider representa uma API ainda não nativa.' : 'O transporte técnico é herdado do adapter canônico do provider.'}</p>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{credentialFields.map(credential => renderField(credential))}</div>
             </div>
           )}
 
           {active && webhookFields.length > 0 && (
-            <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+            <div className="space-y-4 rounded-xl border border-white/[.055] bg-[var(--althea-bg)]/40 p-4">
               <div>
                 <h5 className="text-xs font-semibold uppercase tracking-wide text-white">Webhook / assinatura</h5>
-                <p className="mt-1 text-[10px] text-neutral-500">Segredo usado para validar eventos assinados do provedor.</p>
+                <p className="mt-1 text-[10px] text-[var(--althea-muted)]">Segredo usado para validar eventos assinados do provedor.</p>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{webhookFields.map(credential => renderField(credential, 'webhook'))}</div>
             </div>
           )}
 
           {active && credentialFields.length === 0 && webhookFields.length === 0 && (
-            <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-4 text-xs text-neutral-500">Este provider não exige credenciais manuais. A configuração técnica é resolvida pelo adapter.</div>
+            <div className="rounded-xl border border-white/[.055] bg-[var(--althea-bg)]/40 p-4 text-xs text-[var(--althea-muted)]">Este provider não exige credenciais manuais. A configuração técnica é resolvida pelo adapter.</div>
           )}
 
-          <button type="submit" disabled={!active || saving} className="w-full rounded-lg border border-emerald-800 bg-emerald-950/30 p-3 text-xs font-bold uppercase tracking-wider text-emerald-400 disabled:opacity-40">
+          <button type="submit" disabled={!active || saving} className="w-full rounded-lg border border-emerald-800 bg-[rgba(29,184,84,.06)] p-3 text-xs font-bold uppercase tracking-wider text-[var(--althea-brand)] disabled:opacity-40">
             {saving ? 'SALVANDO...' : editing ? 'SALVAR ALTERAÇÕES' : 'CADASTRAR GATEWAY'}
           </button>
         </form>
