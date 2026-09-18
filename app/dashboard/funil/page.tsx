@@ -95,7 +95,6 @@ export default function FunilDominioPage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
   const [funnels, setFunnels] = useState<Funnel[]>([])
   const [selectedFunnelId, setSelectedFunnelId] = useState('')
-  const [creatingNewFunnel, setCreatingNewFunnel] = useState(false)
   const [funnel, setFunnel] = useState<Funnel | null>(null)
   const [connection, setConnection] = useState<FunnelConnection | null>(null)
   const [events, setEvents] = useState<IntegrationEvent[]>([])
@@ -127,7 +126,7 @@ export default function FunilDominioPage() {
 
     const list = (funnelRows ?? []) as Funnel[]
     setFunnels(list)
-    const activeId = creatingNewFunnel ? '' : selectedFunnelId && list.some((item) => item.id === selectedFunnelId) ? selectedFunnelId : list[0]?.id ?? ''
+    const activeId = selectedFunnelId && list.some((item) => item.id === selectedFunnelId) ? selectedFunnelId : list[0]?.id ?? ''
     setSelectedFunnelId(activeId)
     const selected = list.find((item) => item.id === activeId) ?? null
     setFunnel(selected)
@@ -157,7 +156,7 @@ export default function FunilDominioPage() {
     setPixelId(stringValue(config.pixel_id))
     setChatEnabled(booleanValue(config.chat_enabled, true))
     setMethod(stringValue(config.connection_method) === 'webhook' ? 'webhook' : 'script')
-  }, [creatingNewFunnel, selectedFunnelId, supabase])
+  }, [selectedFunnelId, supabase])
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -188,17 +187,6 @@ export default function FunilDominioPage() {
       }).subscribe()
     return () => { active = false; void supabase.removeChannel(channel) }
   }, [selectedFunnelId, supabase])
-
-  function cancelNewFunnel() {
-    setCreatingNewFunnel(false)
-    setOneTimeToken('')
-    setOneTimeEndpoint('')
-    setWebhookSecret('')
-    setWebhookEndpoint('')
-    setError('')
-    setSuccess('')
-    void refresh()
-  }
 
   async function copyValue(label: string, value: string) {
     if (!value) return
@@ -233,35 +221,25 @@ export default function FunilDominioPage() {
     if (saving) return
     setSaving(true); setError(''); setSuccess('')
     const name = funnelName.trim(); const url = normalizeUrl(pageLink); const externalFunnelId = externalId.trim()
+    if (!selectedFunnelId || !funnel) { setError('Selecione um funil existente ou crie um novo funil.'); setSaving(false); return }
     if (!name) { setError('Informe o nome do funil.'); setSaving(false); return }
-    if (!creatingNewFunnel && !externalFunnelId) { setError('Informe o ID do funil externo.'); setSaving(false); return }
+    if (!externalFunnelId) { setError('Informe o ID do funil externo.'); setSaving(false); return }
     if (url) { try { new URL(url) } catch { setError('O link informado não é uma URL válida.'); setSaving(false); return } }
 
     try {
-      let funnelId = selectedFunnelId
-      if (!funnelId) {
-        const response = await fetch('/api/funnels/provision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store', body: JSON.stringify({ name, url: url || null, connection_type: method }) })
-        const body: unknown = await response.json().catch(() => ({})); const payload = asRecord(body)
-        if (!response.ok) throw new Error(stringValue(payload.error) || 'Não foi possível criar o funil.')
-        const provisionedFunnel = asRecord(payload.funnel); const ingestion = asRecord(payload.ingestion)
-        funnelId = stringValue(provisionedFunnel.id)
-        if (!funnelId) throw new Error('O provisionamento não retornou o ID do funil.')
-        setCreatingNewFunnel(false); setSelectedFunnelId(funnelId); setOneTimeToken(stringValue(ingestion.token)); setOneTimeEndpoint(stringValue(ingestion.event_endpoint || ingestion.endpoint || provisionedFunnel.endpoint))
-      }
-
+      const funnelId = selectedFunnelId
       const { data: auth } = await supabase.auth.getUser()
       if (!auth.user) throw new Error('Sessão expirada. Faça login novamente.')
 
-      const { error: saveError } = await supabase.rpc('save_funnel_domain_connection', { p_funnel_id: funnelId, p_name: name, p_url: url || null, p_external_funnel_id: externalFunnelId || null, p_pixel_id: pixelId.trim() || null, p_chat_enabled: chatEnabled })
+      const { error: saveError } = await supabase.rpc('save_funnel_domain_connection', { p_funnel_id: funnelId, p_name: name, p_url: url || null, p_external_funnel_id: externalFunnelId, p_pixel_id: pixelId.trim() || null, p_chat_enabled: chatEnabled })
       if (saveError) throw saveError
 
       const existingConfig = asRecord(connection?.config)
-      const { error: metadataError } = await supabase.from('funnel_connections').update({ connection_type: method, config: { ...existingConfig, connection_method: method, external_funnel_id: externalFunnelId || null, pixel_id: pixelId.trim() || null, chat_enabled: chatEnabled, updated_from: 'funnel_workspace' }, updated_at: new Date().toISOString() }).eq('funnel_id', funnelId).eq('user_id', auth.user.id)
+      const { error: metadataError } = await supabase.from('funnel_connections').update({ connection_type: method, config: { ...existingConfig, connection_method: method, external_funnel_id: externalFunnelId, pixel_id: pixelId.trim() || null, chat_enabled: chatEnabled, updated_from: 'funnel_workspace' }, updated_at: new Date().toISOString() }).eq('funnel_id', funnelId).eq('user_id', auth.user.id)
       if (metadataError) throw metadataError
 
-      setSuccess('Funil criado e ativado. A integração está persistida no backend.')
+      setSuccess('Configuração do funil atualizada com sucesso.')
       await refresh()
-      if (method === 'script' && !oneTimeToken) await provisionScriptCredential(funnelId)
       if (method === 'webhook' && !webhook) await createWebhookIntegration(funnelId)
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao salvar o funil.') } finally { setSaving(false) }
   }
@@ -335,7 +313,7 @@ export default function FunilDominioPage() {
         <MetricCard label="Erros" value={String(totalErrors)} tone={totalErrors > 0 ? 'warning' : 'muted'} />
       </section>
 
-      {!creatingNewFunnel && funnels.length > 0 && (
+      {funnels.length > 0 && (
         <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4 sm:p-5">
           <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)_auto] lg:items-center">
             <div>
@@ -371,10 +349,8 @@ export default function FunilDominioPage() {
               <ShieldCheck size={16} />
             </span>
             <div>
-              <h2 className="text-sm font-semibold text-white">{creatingNewFunnel ? 'Criar novo funil' : 'Configuração do funil'}</h2>
-              <p className="mt-1 text-[10px] leading-4 text-[var(--althea-muted)]">
-                {creatingNewFunnel ? 'Crie o registro e prepare a conexão de eventos.' : 'Altere identidade, conexão, tracking e recursos do funil selecionado.'}
-              </p>
+              <h2 className="text-sm font-semibold text-white">Configuração do funil</h2>
+              <p className="mt-1 text-[10px] leading-4 text-[var(--althea-muted)]">Altere identidade, conexão, tracking e recursos do funil selecionado.</p>
             </div>
           </div>
 
@@ -405,20 +381,18 @@ export default function FunilDominioPage() {
               </div>
             </Field>
 
-            {!creatingNewFunnel && (
-              <Field label="ID do funil externo *">
-                <div className="relative">
-                  <span className="absolute left-3 top-3 text-xs font-bold text-[var(--althea-muted)]">#</span>
-                  <input
-                    required
-                    value={externalId}
-                    onChange={(event) => setExternalId(event.target.value)}
-                    placeholder="ID do seu curso/funil"
-                    className="althea-ds-input pl-9 text-sm"
-                  />
-                </div>
-              </Field>
-            )}
+            <Field label="ID do funil externo *">
+              <div className="relative">
+                <span className="absolute left-3 top-3 text-xs font-bold text-[var(--althea-muted)]">#</span>
+                <input
+                  required
+                  value={externalId}
+                  onChange={(event) => setExternalId(event.target.value)}
+                  placeholder="ID do seu curso/funil"
+                  className="althea-ds-input pl-9 text-sm"
+                />
+              </div>
+            </Field>
 
             <Field label="Método de conexão">
               <div className="grid grid-cols-2 gap-2">
@@ -476,13 +450,8 @@ export default function FunilDominioPage() {
                 className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--althea-brand)] px-4 text-[10px] font-bold text-[#06110a] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                {saving ? 'Salvando...' : creatingNewFunnel ? 'Criar e ativar' : 'Salvar alterações'}
+                {saving ? 'Salvando...' : 'Salvar alterações'}
               </button>
-              {creatingNewFunnel && (
-                <button type="button" onClick={cancelNewFunnel} disabled={saving} className="h-11 rounded-xl border border-white/[.06] px-4 text-[10px] font-semibold text-[var(--althea-muted)] hover:text-white">
-                  Cancelar
-                </button>
-              )}
             </div>
           </div>
         </form>
@@ -549,7 +518,7 @@ export default function FunilDominioPage() {
             )}
           </section>
 
-          {!creatingNewFunnel && funnel?.url && (
+          {funnel?.url && (
             <section className="flex items-center gap-3 rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
               <Eye className="h-4 w-4 shrink-0 text-[var(--althea-muted)]" />
               <div className="min-w-0 flex-1">
@@ -564,7 +533,7 @@ export default function FunilDominioPage() {
         </div>
       </section>
 
-      {!creatingNewFunnel && funnel && <FunnelRemoteControl funnelId={funnel.id} />}
+      {funnel && <FunnelRemoteControl funnelId={funnel.id} />}
 
       <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4 sm:p-5">
         <div className="flex items-start justify-between gap-4">
