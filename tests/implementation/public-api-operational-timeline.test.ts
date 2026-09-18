@@ -33,6 +33,18 @@ describe('public funnel operational API', () => {
     expect(migration).toContain('to service_role')
   })
 
+  test('redacts customer and chat content from funnels:read operational responses', () => {
+    const api = source('supabase/functions/althea-public-api/index.ts')
+    expect(api).toContain('OPERATIONAL_DIAGNOSTIC_KEYS')
+    expect(api).toContain('operationalDiagnostics')
+    expect(api).toContain('publicOperationalRow')
+    expect(api).toContain('event.category==="chat"')
+    expect(api).toContain('event.severity==="error"')
+    expect(api).toContain('metadata:operationalDiagnostics(event.metadata)')
+    expect(api).toContain('data:publicRows')
+    expect(api).not.toContain('data:rows,summary')
+  })
+
   test('deduplicates public API incident summary by transaction or checkout identity', () => {
     const api = source('supabase/functions/althea-public-api/index.ts')
     expect(api).toContain('const incidentKey')
