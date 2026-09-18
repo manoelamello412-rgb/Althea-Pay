@@ -5,12 +5,41 @@ import { describe, expect, test } from 'vitest'
 const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
 
 describe('funnel remote command control plane', () => {
-  test('global gateway UI uses the verified command engine, never the retired internal-only switch', () => {
-    const ui = source('components/dynamic-gateway-connector.tsx')
+  test('canonical routing UI uses the verified command engine, never the retired internal-only switch', () => {
+    const ui = source('app/dashboard/routing/page.tsx')
     expect(ui).toContain("request_global_funnel_gateway_switch")
     expect(ui).toContain("funnel-command-worker")
     expect(ui).toContain("request_funnel_gateway_rollback")
+    expect(ui).toContain("gateway_control_center_v1")
     expect(ui).not.toContain("switch_all_funnel_primary_gateways")
+  })
+
+  test('gateway connector no longer duplicates global routing commands', () => {
+    const connector = source('components/dynamic-gateway-connector.tsx')
+    expect(connector).not.toContain("request_global_funnel_gateway_switch")
+    expect(connector).not.toContain("request_funnel_gateway_rollback")
+    expect(connector).not.toContain("TODOS OS FUNIS")
+    expect(connector).toContain("register_dynamic_gateway")
+    expect(connector).toContain("gateway-connection-test")
+  })
+
+  test('routing control center is tenant-scoped, bounded and authenticated-only', () => {
+    const migration = source('supabase/migrations/20260918180253_gateway_control_center_v33.sql')
+    expect(migration).toContain('gateway_control_center_v1')
+    expect(migration).toContain('private.is_org_member(v_org)')
+    expect(migration).toContain('where b.organization_id=v_org')
+    expect(migration).toContain('limit v_limit')
+    expect(migration).toContain('limit 100')
+    expect(migration).toContain('from public,anon')
+    expect(migration).toContain('to authenticated')
+  })
+
+  test('routing UI requires a fresh successful preflight before execution', () => {
+    const ui = source('app/dashboard/routing/page.tsx')
+    expect(ui).toContain("setPreflightGatewayId(selectedGateway.id)")
+    expect(ui).toContain("preflightGatewayId === selectedGateway.id")
+    expect(ui).toContain("setPreflightGatewayId('')")
+    expect(ui).toContain("p_dry_run: dryRun")
   })
 
   test('remote worker verifies state before finalizing local gateway bindings', () => {
