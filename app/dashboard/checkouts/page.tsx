@@ -24,7 +24,7 @@ type CheckoutSession = {
 }
 
 type Funnel = { id: string; nome: string }
-type Product = { id: string; data: Record<string, unknown> | null }
+type Product = { id: string; name: string | null; data: Record<string, unknown> | null }
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -63,7 +63,7 @@ function customerName(customer: Record<string, unknown> | null): string {
 function productName(product: Product | undefined, productId: string | null): string {
   if (!product) return productId ? `Produto ${productId.slice(0, 8)}` : 'Produto não informado'
   const data = record(product.data)
-  return text(data.name ?? data.nome ?? data.title ?? data.product_name) || `Produto ${product.id.slice(0, 8)}`
+  return text(product.name) || text(data.name ?? data.nome ?? data.title ?? data.product_name) || `Produto ${product.id.slice(0, 8)}`
 }
 
 export default function CheckoutsPage() {
@@ -87,7 +87,7 @@ export default function CheckoutsPage() {
         .order('created_at', { ascending: false })
         .limit(200),
       supabase.from('funnels').select('id,nome').is('deleted_at', null),
-      supabase.from('products').select('id,data').is('deleted_at', null).limit(200),
+      supabase.from('products').select('id,name,data').is('deleted_at', null).limit(200),
     ])
 
     if (checkoutError) throw checkoutError

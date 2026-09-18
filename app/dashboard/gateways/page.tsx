@@ -113,7 +113,7 @@ export default function GatewaysManagementPage() {
   const operationalCount = gateways.filter(gateway => gateway.status === 'OPERACIONAL').length;
 
   return (
-    <main className="mx-auto w-full max-w-md px-5 py-6 pb-32 space-y-7">
+    <main className="mx-auto w-full max-w-[1400px] space-y-7 px-0 py-2 pb-24 sm:px-2 sm:py-4 lg:px-0">
       <DynamicGatewayConnector />
 
       <section className="space-y-2">
