@@ -1,42 +1,57 @@
-'use client'
-
 import Link from 'next/link'
-import { ArrowUpRight, Blocks, Bot, Cable, CreditCard, Database, Globe2, KeyRound, Webhook } from 'lucide-react'
+import {
+  ArrowUpRight,
+  Blocks,
+  Bot,
+  Database,
+  GitBranch,
+  KeyRound,
+  Network,
+  Webhook,
+} from 'lucide-react'
 
 const integrations = [
-  { title: 'Gateways', description: 'Conexões e contratos de provedores de pagamento.', href: '/dashboard/gateways', icon: CreditCard, tag: 'PAYMENTS' },
-  { title: 'Funis', description: 'Origens, conexões e ingestão de eventos dos funis.', href: '/dashboard/funil', icon: Globe2, tag: 'FUNNELS' },
-  { title: 'Webhooks', description: 'Entrada e saída de eventos para integrações externas.', href: '/dashboard/webhooks', icon: Webhook, tag: 'EVENTS' },
-  { title: 'API', description: 'Superfície de integração programática da operação.', href: '/dashboard/api', icon: KeyRound, tag: 'API' },
-  { title: 'CRM / Chat', description: 'Conversas, clientes e automações conectadas à operação.', href: '/dashboard/crm', icon: Cable, tag: 'CRM' },
-  { title: 'IA', description: 'Camada de inteligência conectada aos dados operacionais.', href: '/dashboard/ia', icon: Bot, tag: 'AI' },
+  { title: 'Gateways', description: 'Conexões, credenciais, testes e troca operacional de provedores.', href: '/dashboard/gateways', icon: Network, tag: 'PAYMENTS' },
+  { title: 'Funis', description: 'Conexão, eventos, tracking e controle remoto de funis.', href: '/dashboard/funil', icon: GitBranch, tag: 'FUNNELS' },
+  { title: 'Webhooks', description: 'Entrada, saída, segredos e telemetria de entregas.', href: '/dashboard/webhooks', icon: Webhook, tag: 'EVENTS' },
+  { title: 'API', description: 'Chaves, escopos e auditoria das chamadas da API pública.', href: '/dashboard/api', icon: KeyRound, tag: 'API' },
+  { title: 'IARA', description: 'Assistente e inteligência conectada aos dados operacionais.', href: '/dashboard/ia', icon: Bot, tag: 'AI' },
   { title: 'Configurações', description: 'Identidade, organização e controles da conta.', href: '/dashboard/settings', icon: Database, tag: 'CORE' },
 ]
 
 export default function IntegrationHubPage() {
   return (
-    <main className="min-h-screen bg-[#070A09] px-4 py-6 text-slate-100 lg:px-8">
-      <div className="mx-auto max-w-[1700px]">
-        <header className="mb-8">
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[.28em] text-emerald-400"><Blocks size={14} /> ALTHEA PAY // INTEGRATION HUB</div>
-          <h1 className="text-3xl font-black tracking-tight">Integration Hub</h1>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500">Ponto único para operar as integrações da ALTHEA PAY. Cada domínio mantém sua própria responsabilidade; este hub apenas centraliza o acesso.</p>
-        </header>
+    <div className="w-full space-y-6">
+      <section className="border-b border-white/[.055] pb-5">
+        <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">
+          <Blocks size={13} />
+          Ecossistema
+        </p>
+        <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">Integration Hub</h1>
+        <p className="mt-1 max-w-3xl text-xs leading-5 text-[var(--althea-muted)]">
+          Ponto único de acesso às integrações da Althea Pay. Cada domínio mantém sua responsabilidade e seus dados reais; o Hub apenas organiza a navegação.
+        </p>
+      </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {integrations.map(({ title, description, href, icon: Icon, tag }) => (
-            <Link key={href} href={href} className="group rounded-2xl border border-white/10 bg-white/[.025] p-5 transition hover:border-white/20 hover:bg-white/[.04]">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[.04] text-slate-300"><Icon size={19} /></div>
-                <ArrowUpRight size={17} className="text-slate-700 transition group-hover:text-slate-300" />
-              </div>
-              <div className="mt-6 text-[10px] font-black uppercase tracking-[.2em] text-slate-600">{tag}</div>
-              <h2 className="mt-1 text-lg font-black">{title}</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
-            </Link>
-          ))}
-        </section>
-      </div>
-    </main>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {integrations.map(({ title, description, href, icon: Icon, tag }) => (
+          <Link
+            key={href}
+            href={href}
+            className="group min-h-[174px] rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[rgba(29,184,84,.16)]"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <span className="grid h-10 w-10 place-items-center rounded-xl border border-[rgba(29,184,84,.10)] bg-[rgba(29,184,84,.055)] text-[var(--althea-brand)]">
+                <Icon size={17} />
+              </span>
+              <ArrowUpRight size={16} className="text-[#536159] transition group-hover:text-[var(--althea-brand)]" />
+            </div>
+            <div className="mt-5 text-[8px] font-semibold uppercase tracking-[.18em] text-[#65746c]">{tag}</div>
+            <h2 className="mt-1 text-sm font-semibold text-white">{title}</h2>
+            <p className="mt-2 text-[10px] leading-4 text-[var(--althea-muted)]">{description}</p>
+          </Link>
+        ))}
+      </section>
+    </div>
   )
 }
