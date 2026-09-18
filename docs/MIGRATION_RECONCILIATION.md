@@ -7,8 +7,8 @@ Audit date: 2026-09-17/18.
 The live Supabase project and the GitHub repository do **not** share a reproducible migration history.
 
 Verified counts at audit time:
-- Live Supabase migration history: **589** rows in `supabase_migrations.schema_migrations`.
-- GitHub audit branch: **356** SQL migration files after the audit hardening migrations.
+- Live Supabase migration history: **591** rows in `supabase_migrations.schema_migrations`.
+- GitHub audit branch: **358** SQL migration files after the audit hardening migrations.
 - Comparing migration names before the final audit migration:
   - **282** remote migration names had no matching local migration file.
   - **49** local migration names had no matching remote history row.
@@ -49,7 +49,7 @@ The safe long-term cleanup is:
 4. Keep only new forward migrations after that baseline in the active migration chain.
 5. Test a clean database created from the new baseline plus forward migrations before changing the production workflow.
 
-Do not attempt to reconstruct the 589-row production history by guessing SQL from object names.
+Do not attempt to reconstruct the 591-row production history by guessing SQL from object names.
 
 ## Audit forward migrations applied and reconciled
 
@@ -103,8 +103,8 @@ The following reviewed forward migrations were applied to the linked Supabase pr
 These migrations add the durable external-funnel command plane, two-phase verified gateway switching, service-only lockdown of the former local-only global switch, retry and drift workers, rollback state, RLS-protected drift records, and database-level tenant-integrity enforcement.
 
 Current reconciled counts at this continuation checkpoint:
-- Live migration history: **589**
-- Local SQL migration files: **356**
+- Live migration history: **591**
+- Local SQL migration files: **358**
 - Remote logical names without a local name match: **282**
 - Local logical names without a remote name match: **49**
 
@@ -143,8 +143,8 @@ Reviewed forward migrations applied to the linked Supabase project and mirrored 
 This continuation adds bidirectional remote funnel chat, the unified security-invoker operational timeline, asynchronous checkout transaction projection, chat delivery/DLQ visibility, inbound/outbound webhook health, repaired external API-key hashing, and the backend read ACLs required for the scoped public operational-timeline endpoint.
 
 Current reconciliation counts at this checkpoint:
-- Live migration history: **589**
-- Local SQL migration files: **356**
+- Live migration history: **591**
+- Local SQL migration files: **358**
 - Remote logical names without a local name match: **282**
 - Local logical names without a remote name match: **49**
 - Canonical Edge Function inventory: **44 local / 44 deployed**
@@ -152,3 +152,23 @@ Current reconciliation counts at this checkpoint:
 Controlled runtime validation also proved the public `funnels:read` API-key path can read the per-funnel operational timeline with HTTP 200 after the v16/v17 repairs. The temporary E2E fixtures were removed after the test.
 
 Historical migration drift remains open; these forward migrations do not make the old chain safe to replay from zero, and automatic production `supabase db push` remains forbidden.
+
+
+## Gateway health continuation
+
+Additional reviewed forward migrations applied to the linked Supabase project and mirrored in GitHub with exact remote versions:
+
+- `20260918155645_fix_gateway_health_tenant_projection_v18.sql`
+- `20260918155940_funnel_operational_gateway_health_v19.sql`
+
+The v18 repair makes gateway-health writes tenant-aware by resolving `user_id` from the canonical gateway `circuit_id`, backfills any resolvable historical null tenant rows, prevents future null tenant snapshots, grants authenticated read access under the existing owner RLS policy, and adds the lookup index used by runtime ranking.
+
+The v19 projection adds the latest health state of each active gateway bound to a funnel to the canonical `security_invoker` operational timeline. It intentionally does not replay every health snapshot; detailed payment-attempt history remains in the existing transaction/attempt sources.
+
+Current reconciliation counts at this checkpoint:
+- Live migration history: **591**
+- Local SQL migration files: **358**
+- Remote logical names without a local name match: **282**
+- Local logical names without a remote name match: **49**
+
+The historical migration chain remains unreconciled for clean replay from zero. Automatic production `supabase db push` remains forbidden.
