@@ -25,8 +25,8 @@ export default function AnalyticsPage() {
       if (!auth.user) { setTransactions([]); setCheckouts([]); return }
       const since = new Date(Date.now() - period * 86400000).toISOString()
       const [tx, co] = await Promise.all([
-        db.from('gateway_transactions').select('id,amount,currency,status,funnel_id,gateway_id,created_at,completed_at').eq('user_id', auth.user.id).gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
-        db.from('checkout_sessions').select('id,status,amount,created_at,completed_at').eq('user_id', auth.user.id).gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
+        db.from('gateway_transactions').select('id,amount,currency,status,funnel_id,gateway_id,created_at,completed_at').gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
+        db.from('checkout_sessions').select('id,status,amount,created_at,completed_at').gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
       ])
       if (tx.error) throw tx.error
       if (co.error) throw co.error
