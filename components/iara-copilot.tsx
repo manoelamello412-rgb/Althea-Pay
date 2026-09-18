@@ -29,6 +29,22 @@ export default function IaraCopilot() {
   const [assistantName, setAssistantName] = useState('IARA')
   const [initializing, setInitializing] = useState(true)
 
+  const reconcileMessages = useCallback(async (activeSessionId: string) => {
+    const { data: auth, error: authError } = await db.auth.getUser()
+    if (authError || !auth.user) throw authError ?? new Error('Sessão expirada.')
+    const { data: history, error: historyError } = await db
+      .from('chat_messages')
+      .select('id,sender,content')
+      .eq('session_id', activeSessionId)
+      .eq('user_id', auth.user.id)
+      .order('created_at', { ascending: true })
+      .limit(200)
+    if (historyError) throw historyError
+    setMessages((history ?? [])
+      .filter((item) => item.sender === 'user' || item.sender === 'iara')
+      .map((item) => ({ id: String(item.id), sender: item.sender as 'user' | 'iara', content: String(item.content) })))
+  }, [db])
+
   useEffect(() => {
     let active = true
 
@@ -123,9 +139,10 @@ export default function IaraCopilot() {
     setSending(true)
     setError(null)
     const localId = crypto.randomUUID()
+    let activeSessionId: string | null = null
     setMessages((current) => [...current, { id: `user-${localId}`, sender: 'user', content: text }])
     try {
-      const activeSessionId = await createIaraSession()
+      activeSessionId = await createIaraSession()
       if (!activeSessionId) throw new Error('Não foi possível iniciar a conversa com a IARA.')
       const { data: sessionState, error: sessionError } = await db.auth.getSession()
       if (sessionError || !sessionState.session?.access_token) {
@@ -153,12 +170,22 @@ export default function IaraCopilot() {
       if (data?.error) throw new Error(data.error)
       if (!data?.content || data.sender !== 'iara') throw new Error('A IARA retornou uma resposta inválida.')
       setMessages((current) => [...current, { id: data.id || `iara-${crypto.randomUUID()}`, sender: 'iara', content: data.content }])
+      await reconcileMessages(activeSessionId).catch(() => undefined)
     } catch (cause) {
+      if (activeSessionId) {
+        try {
+          await reconcileMessages(activeSessionId)
+        } catch {
+          setMessages((current) => current.filter((item) => item.id !== `user-${localId}`))
+        }
+      } else {
+        setMessages((current) => current.filter((item) => item.id !== `user-${localId}`))
+      }
       setError(cause instanceof Error ? cause.message : 'Não foi possível enviar a mensagem.')
     } finally {
       setSending(false)
     }
-  }, [command, createIaraSession, db, initializing, router, sending])
+  }, [command, createIaraSession, db, initializing, reconcileMessages, router, sending])
 
   const empty = !initializing && messages.length === 0
 
