@@ -88,7 +88,7 @@ export function ConfigTabRecuperacao({ onBack }: { onBack: () => void }) {
         <button type="button" onClick={onBack} className="inline-flex h-10 items-center gap-2 self-start rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white lg:self-auto"><ChevronLeft className="h-3.5 w-3.5 text-[var(--althea-brand)]" />Configurações</button>
       </section>
 
-      {loading ? <div className="animate-pulse space-y-3"><div className="h-5 w-48 rounded bg-[#0F1A16]" /><div className="h-28 rounded-2xl bg-[#0F1A16]" /><div className="h-32 rounded-2xl bg-[#0F1A16]" /></div> : <>
+      {loading ? <div className="animate-pulse space-y-3"><div className="h-5 w-48 rounded bg-[var(--althea-surface)]" /><div className="h-28 rounded-2xl bg-[var(--althea-surface)]" /><div className="h-32 rounded-2xl bg-[var(--althea-surface)]" /></div> : <>
         <section className="space-y-2">
           <span className="pl-1 text-[10px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Automações Assíncronas</span>
           <div className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
