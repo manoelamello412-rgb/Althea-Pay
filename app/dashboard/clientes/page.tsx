@@ -40,7 +40,7 @@ export default function ClientesPage() {
     let cancelled = false
     void db.auth.getUser().then(({ data }) => {
       if (cancelled || !data.user) return
-      channel = db.channel(`clients-${data.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'clients', filter: `user_id=eq.${data.user.id}` }, () => void load()).subscribe()
+      channel = db.channel(`clients-${data.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => void load()).subscribe()
     })
     return () => { cancelled = true; if (channel) void db.removeChannel(channel) }
   }, [db, load])
