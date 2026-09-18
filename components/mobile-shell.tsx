@@ -174,11 +174,11 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
           <button type="button" onClick={() => selectTab('dashboard')} aria-label="Ir para o Dashboard" className="flex min-w-0 items-center gap-2.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,184,84,.40)]">
             <img src="/althea-mark.png" alt="Althea Pay" className="h-6 w-6 shrink-0 object-contain" />
             <span className="h-4 w-px bg-white/[0.08]" />
-            <span className="truncate text-[12px] font-semibold tracking-tight text-zinc-100">ALTHEA PAY <span className="text-zinc-600">//</span> {sectionLabel(pathname)}</span>
+            <span className="truncate text-[12px] font-semibold tracking-tight text-white">ALTHEA PAY <span className="text-[#5f6e66]">//</span> {sectionLabel(pathname)}</span>
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
-            <button type="button" aria-label="Buscar" aria-expanded={searchOpen} onClick={() => setSearchOpen((value) => !value)} className={`grid h-9 w-9 place-items-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,184,84,.40)] ${searchOpen ? 'bg-[rgba(29,184,84,.08)] text-[var(--althea-brand)]' : 'text-zinc-500 hover:bg-white/[0.03] hover:text-white'}`}><Search size={17} strokeWidth={1.7} aria-hidden="true" /></button>
-            <button type="button" aria-label="Abrir menu de configurações" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)} className={`grid h-9 w-9 place-items-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,184,84,.40)] ${menuOpen ? 'bg-[rgba(29,184,84,.08)] text-[var(--althea-brand)]' : 'text-zinc-500 hover:bg-white/[0.03] hover:text-white'}`}><Settings2 size={18} strokeWidth={1.7} /></button>
+            <button type="button" aria-label="Buscar" aria-expanded={searchOpen} onClick={() => setSearchOpen((value) => !value)} className={`grid h-9 w-9 place-items-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,184,84,.40)] ${searchOpen ? 'bg-[rgba(29,184,84,.08)] text-[var(--althea-brand)]' : 'text-[var(--althea-muted)] hover:bg-white/[0.03] hover:text-white'}`}><Search size={17} strokeWidth={1.7} aria-hidden="true" /></button>
+            <button type="button" aria-label="Abrir menu de configurações" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)} className={`grid h-9 w-9 place-items-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(29,184,84,.40)] ${menuOpen ? 'bg-[rgba(29,184,84,.08)] text-[var(--althea-brand)]' : 'text-[var(--althea-muted)] hover:bg-white/[0.03] hover:text-white'}`}><Settings2 size={18} strokeWidth={1.7} /></button>
           </div>
         </div>
         <AnimatePresence initial={false}>
