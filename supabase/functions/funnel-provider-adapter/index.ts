@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { assertPublicHttpsUrl } from "../_shared/ssrf-guard.ts";
 
 type Json = Record<string, unknown>;
-type Operation = "health_check" | "get_gateway" | "set_gateway";
+type Operation = "health_check" | "get_gateway" | "set_gateway" | "send_chat_message";
 
 const HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -184,14 +184,22 @@ Deno.serve(async (request) => {
   const connectionId = text(body.connection_id);
   const operation = text(body.operation).toLowerCase() as Operation;
   const targetRemoteGatewayRef = text(body.target_remote_gateway_ref);
+  const remoteConversationId = text(body.remote_conversation_id);
+  const messageBody = text(body.message_body);
   const commandIdempotencyKey = text(body.idempotency_key).slice(0, 200);
 
   if (!connectionId) return json({ ok: false, error: "connection_id_required" }, 422);
-  if (!["health_check", "get_gateway", "set_gateway"].includes(operation)) {
+  if (!["health_check", "get_gateway", "set_gateway", "send_chat_message"].includes(operation)) {
     return json({ ok: false, error: "operation_not_supported" }, 422);
   }
   if (operation === "set_gateway" && !targetRemoteGatewayRef) {
     return json({ ok: false, error: "target_remote_gateway_ref_required" }, 422);
+  }
+  if (operation === "send_chat_message" && !remoteConversationId) {
+    return json({ ok: false, error: "remote_conversation_id_required" }, 422);
+  }
+  if (operation === "send_chat_message" && (!messageBody || messageBody.length > 10_000)) {
+    return json({ ok: false, error: "message_body_invalid" }, 422);
   }
 
   const db = createClient(supabaseUrl, adminKey, {
@@ -235,6 +243,10 @@ Deno.serve(async (request) => {
     return json({ ok: false, error: "gateway_write_unsupported" }, 422);
   }
 
+  if (operation === "send_chat_message" && !capabilities.includes("chat:write")) {
+    return json({ ok: false, error: "chat_write_unsupported" }, 422);
+  }
+
   if (text(connection.adapter_key) !== "generic_http_json") {
     return json({ ok: false, error: "funnel_adapter_not_supported" }, 422);
   }
@@ -258,6 +270,8 @@ Deno.serve(async (request) => {
     funnel_id: connection.funnel_id,
     remote_funnel_id: connection.remote_funnel_id,
     target_remote_gateway_ref: targetRemoteGatewayRef || null,
+    remote_conversation_id: remoteConversationId || null,
+    message_body: messageBody || null,
     idempotency_key: commandIdempotencyKey || null,
   };
 
@@ -268,6 +282,9 @@ Deno.serve(async (request) => {
     const gatewayGetPath =
       text(remoteControl.gateway_get_path) || "/funnels/{{remote_funnel_id}}/gateway";
     const gatewaySetPath = text(remoteControl.gateway_set_path) || gatewayGetPath;
+    const chatSendPath =
+      text(remoteControl.chat_send_path) ||
+      "/funnels/{{remote_funnel_id}}/conversations/{{remote_conversation_id}}/messages";
     const healthPath = text(remoteControl.health_path) || gatewayGetPath;
 
     const selectedPath =
@@ -275,6 +292,8 @@ Deno.serve(async (request) => {
         ? healthPath
         : operation === "set_gateway"
         ? gatewaySetPath
+        : operation === "send_chat_message"
+        ? chatSendPath
         : gatewayGetPath;
 
     const targetUrl = await buildTarget(rawBaseUrl, selectedPath, context);
@@ -283,6 +302,8 @@ Deno.serve(async (request) => {
         ? method(remoteControl.health_method, "GET")
         : operation === "set_gateway"
         ? method(remoteControl.gateway_set_method, "PATCH")
+        : operation === "send_chat_message"
+        ? method(remoteControl.chat_send_method, "POST")
         : method(remoteControl.gateway_get_method, "GET");
 
     const headers = safeHeaders(credential, context);
@@ -309,6 +330,14 @@ Deno.serve(async (request) => {
       headers["Content-Type"] = "application/json";
     }
 
+    if (operation === "send_chat_message" && !["GET", "DELETE"].includes(selectedMethod)) {
+      const template = isObject(remoteControl.chat_send_body)
+        ? remoteControl.chat_send_body
+        : { message: "{{message_body}}" };
+      init.body = JSON.stringify(interpolate(template, context));
+      headers["Content-Type"] = "application/json";
+    }
+
     const startedAt = performance.now();
     const externalResponse = await fetch(targetUrl, init);
     const payload = await parseJson(externalResponse);
@@ -329,6 +358,36 @@ Deno.serve(async (request) => {
         },
         externalResponse.status >= 500 ? 502 : 422,
       );
+    }
+
+    if (operation === "send_chat_message") {
+      const chatMessageIdPath =
+        text(remoteControl.chat_message_id_path) || "message_id";
+      const externalMessageValue = getPath(payload, chatMessageIdPath);
+      const externalMessageId =
+        externalMessageValue == null ? "" : String(externalMessageValue).trim();
+
+      if (!externalMessageId) {
+        return json(
+          {
+            ok: false,
+            error: "remote_chat_message_id_missing",
+            failure_code: "response_mapping_invalid",
+            retryable: false,
+            latency_ms: latencyMs,
+          },
+          422,
+        );
+      }
+
+      return json({
+        ok: true,
+        operation,
+        connection_id: connection.id,
+        external_message_id: externalMessageId,
+        latency_ms: latencyMs,
+        response: payload,
+      });
     }
 
     const gatewayResponsePath =
