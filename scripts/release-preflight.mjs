@@ -1,5 +1,5 @@
 import { readdir, readFile, access } from "node:fs/promises"
-import { join, relative, sep } from "node:path"
+import { dirname, join, normalize, relative, sep } from "node:path"
 const root=process.cwd(),failures=[],checked=[]
 async function walk(dir){for(const entry of await readdir(dir,{withFileTypes:true})){if(["node_modules",".git",".next"].includes(entry.name))continue;const path=join(dir,entry.name);if(entry.isDirectory())await walk(path);else if(/\.(ts|tsx|js|mjs|sql|toml|json)$/.test(entry.name))checked.push(path)}}
 await walk(root)
@@ -33,6 +33,26 @@ const duplicateRoutes=[
 ]
 for(const file of duplicateRoutes)if(source.has(join(root,file)))failures.push(`Duplicate route surface still present: ${file}`)
 try{await access(join(root,"docs","PRODUCTION_READINESS.md"))}catch{failures.push("Production readiness document missing")}
+const tsFiles=checked.filter(file=>/\.(ts|tsx)$/.test(file))
+const incoming=new Map(tsFiles.map(file=>[normalize(file),[]]))
+for(const file of tsFiles){
+  const text=source.get(file)
+  const specs=[...text.matchAll(/(?:from\s+|import\s*\()\s*['"]([^'"]+)['"]/g)].map(match=>match[1])
+  for(const spec of specs){
+    let base=null
+    if(spec.startsWith("@/"))base=join(root,spec.slice(2))
+    else if(spec.startsWith("."))base=join(dirname(file),spec)
+    if(!base)continue
+    const candidates=[base,base+".ts",base+".tsx",join(base,"index.ts"),join(base,"index.tsx")].map(normalize)
+    const target=candidates.find(candidate=>incoming.has(candidate))
+    if(target)incoming.get(target).push(file)
+  }
+}
+const orphanComponents=[...incoming.entries()]
+  .filter(([file,refs])=>file.includes(`${sep}components${sep}`)&&refs.length===0)
+  .map(([file])=>relative(root,file))
+  .sort()
+console.log(`Release preflight: unreferenced component candidates (${orphanComponents.length}): ${orphanComponents.join(", ")||"none"}`)
 console.log(`Release preflight: checked ${checked.length} source/config files.`)
 if(failures.length){console.error("Release preflight FAILED:");for(const failure of failures)console.error(`- ${failure}`);process.exit(1)}
 console.log("Release preflight PASSED: canonical release components, browser secrets, raw-card assignments, webhook Vault access, timer cleanup, async payment calls, internal guards, CRM/Iara components and retired duplicate, legacy navigation and duplicate-route checks are clear.")
