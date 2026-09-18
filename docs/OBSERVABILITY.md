@@ -34,6 +34,16 @@ These are targets, not achieved measurements. They must be validated against pro
 
 Alert on sustained critical API errors, gateway degradation, webhook failure spikes, worker backlog, DLQ growth and reconciliation discrepancies. Alert thresholds should be tuned after baseline traffic is available.
 
+## Canonical operations surface
+
+The authenticated operations surface is `/dashboard/noc`, backed by `public.noc_operations_v1(integer)`.
+
+The NOC consolidates bounded, sanitized operational signals from active `pg_cron` jobs, API request telemetry, integration-event retries, gateway webhooks and gateway operations, automation executions, CRM outbox delivery, outbound webhooks, reconciliation, checkout Recovery, funnel commands, production readiness gates and persisted platform health checks.
+
+Raw payloads, readiness evidence, provider error bodies, authorization data and cron command text are intentionally not returned to the browser. The legacy CRM observability page redirects to the canonical NOC and the old `/api/crm/observability` endpoint has been removed.
+
+The NOC polls every 30 seconds for scheduler/readiness state and also refreshes from tenant-scoped realtime changes on operational tables. Historical cron inspection is server-side and bounded to the most recent run window.
+
 ## Monitoring backend
 
 Provider-managed logs are currently the source of truth. Prometheus/Grafana/OpenTelemetry/Sentry integration remains deployable as a separate adapter when monitoring credentials/workspace are provisioned.
