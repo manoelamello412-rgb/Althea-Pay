@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { CheckCircle2, Clock3, CreditCard, RefreshCw, Search, ShoppingCart, XCircle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 type CheckoutStatus = 'started' | 'pending' | 'processing' | 'completed' | 'abandoned' | 'failed' | string
 
@@ -68,6 +69,7 @@ function productName(product: Product | undefined, productId: string | null): st
 
 export default function CheckoutsPage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
+  const router = useRouter()
   const [sessions, setSessions] = useState<CheckoutSession[]>([])
   const [funnels, setFunnels] = useState<Funnel[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -78,8 +80,11 @@ export default function CheckoutsPage() {
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
-    const { data: auth, error: authError } = await supabase.auth.getUser()
-    if (authError || !auth.user) throw new Error('Sessão expirada. Faça login novamente.')
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError || !sessionData.session) {
+      router.replace('/login')
+      return
+    }
 
     const [{ data: checkoutData, error: checkoutError }, { data: funnelData, error: funnelError }, { data: productData, error: productError }] = await Promise.all([
       supabase.from('checkout_sessions')
@@ -97,7 +102,7 @@ export default function CheckoutsPage() {
     setSessions((checkoutData ?? []) as CheckoutSession[])
     setFunnels((funnelData ?? []) as Funnel[])
     setProducts((productData ?? []) as Product[])
-  }, [supabase])
+  }, [router, supabase])
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
