@@ -240,7 +240,7 @@ export default function PagamentosPage() {
     if (!organizationId) return
     setCursor(null)
     void loadPage(false)
-  }, [funnelId, gatewayId, organizationId, query, status]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [funnelId, gatewayId, organizationId, query, status])
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
