@@ -39,13 +39,15 @@ Deno.serve(async (request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const internalSecret = Deno.env.get("ALTHEA_INTERNAL_SECRET");
-  if (!supabaseUrl || !serviceRole || !internalSecret) return response({ ok: false, error: "server_configuration_error" }, 500);
+  if (!supabaseUrl || !serviceRole) return response({ ok: false, error: "server_configuration_error" }, 500);
 
   const db = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
   const userResult = await db.auth.getUser(token);
   if (userResult.error || !userResult.data.user) return response({ ok: false, error: "unauthorized" }, 401);
   const userId = userResult.data.user.id;
+  const internalResult = await db.rpc("get_althea_internal_secret");
+  if (internalResult.error || typeof internalResult.data !== "string" || !internalResult.data) return response({ ok: false, error: "internal_auth_unavailable" }, 500);
+  const internalSecret = internalResult.data;
 
   let body: JsonObject;
   try {
