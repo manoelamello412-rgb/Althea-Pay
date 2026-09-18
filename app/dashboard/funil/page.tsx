@@ -4,7 +4,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { FunnelRemoteControl } from '@/components/funnel-remote-control'
-import { Activity, Check, ChevronDown, Copy, Eye, ExternalLink, KeyRound, Layers, Link2, Loader2, Plus, Radio, RefreshCw, Send, ShieldCheck, Webhook, X, Zap } from 'lucide-react'
+import { FunnelOperationalMirror } from '@/components/funnel-operational-mirror'
+import { Activity, Check, ChevronDown, Copy, Eye, ExternalLink, KeyRound, Layers, Link2, Loader2, Plus, RefreshCw, ShieldCheck, Webhook, X, Zap } from 'lucide-react'
 
 interface Funnel {
   id: string
@@ -73,13 +74,6 @@ function normalizeUrl(value: string): string {
   const clean = value.trim()
   if (!clean) return ''
   return /^https?:\/\//i.test(clean) ? clean : `https://${clean}`
-}
-
-function eventSummary(event: IntegrationEvent): string {
-  const payload = asRecord(event.payload)
-  const candidate = payload.summary ?? payload.message ?? payload.page ?? payload.path ?? payload.source
-  if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
-  return event.external_id ? `ID externo: ${event.external_id}` : 'Payload recebido e registrado'
 }
 
 function statusMeta(connection: FunnelConnection | null): { label: string; tone: string; dot: string } {
@@ -610,40 +604,7 @@ export default function FunilDominioPage() {
 
       {funnel && <FunnelRemoteControl funnelId={funnel.id} />}
 
-      {funnel && (
-      <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-sm font-semibold text-white">Eventos recentes</h2>
-            <p className="mt-1 text-[10px] text-[var(--althea-muted)]">Eventos recebidos do funil selecionado.</p>
-          </div>
-          <span className="inline-flex items-center gap-1 text-[8px] font-semibold text-[var(--althea-brand)]"><Radio size={11} /> REALTIME</span>
-        </div>
-
-        {events.length === 0 ? (
-          <div className="mt-4 grid min-h-[190px] place-items-center rounded-xl border border-dashed border-white/[.06] bg-[var(--althea-bg)] text-center">
-            <div>
-              <InboxIcon />
-              <p className="mt-2 text-xs font-medium text-white">Nenhum evento ainda</p>
-              <p className="mt-1 text-[9px] text-[var(--althea-muted)]">Depois da ativação, os eventos do seu funil aparecerão aqui.</p>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-4 divide-y divide-white/[.035] rounded-xl border border-white/[.045] bg-[var(--althea-bg)]">
-            {events.map((event) => (
-              <div key={event.id} className="px-4 py-3.5">
-                <div className="flex items-center gap-2">
-                  <span className={'h-1.5 w-1.5 rounded-full ' + (event.status.toLowerCase() === 'failed' || event.error_message ? 'bg-red-400' : 'bg-[var(--althea-brand)]')} />
-                  <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-white">{event.event_type}</span>
-                  <time className="shrink-0 text-[8px] text-[var(--althea-muted)]">{new Date(event.occurred_at || event.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>
-                </div>
-                <div className="mt-1 pl-3.5 text-[9px] leading-relaxed text-[var(--althea-muted)]">{eventSummary(event)}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-      )}
+      {funnel && <FunnelOperationalMirror funnelId={funnel.id} />}
     </div>
   )
 }
@@ -671,6 +632,3 @@ function MiniMetric({ label, value, warning = false, compact = false }: { label:
   )
 }
 
-function InboxIcon() {
-  return <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-xl border border-white/[.05] bg-[var(--althea-surface)] text-[var(--althea-brand)]"><Send className="h-3.5 w-3.5 rotate-[-20deg]" /></div>
-}
