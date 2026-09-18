@@ -30,14 +30,14 @@ const sections = [
       { label: 'Minha Empresa', description: 'Cadastro jurídico, fiscal e operacional.', href: '/dashboard/settings/empresa', icon: Building2 },
       { label: 'Gateways', description: 'Conexões, credenciais e testes de gateways.', href: '/dashboard/gateways', icon: Network },
       { label: 'Funil e domínio', description: 'Conexão, domínio, eventos e chat do funil.', href: '/dashboard/settings/funil-dominio', icon: GitBranch },
-      { label: 'Recuperação', description: 'Políticas de recuperação operacional.', href: '/dashboard/settings/recuperacao', icon: RefreshCw },
+      { label: 'Recuperação', description: 'Estado das preferências legadas e acesso à recuperação operacional real.', href: '/dashboard/settings/recuperacao', icon: RefreshCw },
       { label: 'Desempenho', description: 'Saúde, latência e telemetria da operação.', href: '/dashboard/settings/desempenho', icon: Activity },
     ],
   },
   {
     title: 'Inteligência e integrações',
     items: [
-      { label: 'Iara', description: 'Preferências do assistente e limites de atuação.', href: '/dashboard/settings/iara', icon: Sparkles },
+      { label: 'Iara', description: 'Nome aplicado no frontend e preferências persistidas do assistente.', href: '/dashboard/settings/iara', icon: Sparkles },
       { label: 'Integrações', description: 'Webhooks de saída e segredos de integração.', href: '/dashboard/webhooks', icon: Webhook },
       { label: 'API', description: 'Chaves e documentação da API operacional.', href: '/dashboard/api', icon: KeyRound },
     ],
