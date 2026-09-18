@@ -228,7 +228,7 @@ export default function NOCPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'recovery_events', filter: `organization_id=eq.${organizationId}` }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'funnel_command_targets', filter: `organization_id=eq.${organizationId}` }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reconciliation_items', filter: `organization_id=eq.${organizationId}` }, refresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'automation_executions', filter: `user_id=eq.${userId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'automation_executions', filter: `organization_id=eq.${organizationId}` }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_channel_message_outbox', filter: `user_id=eq.${userId}` }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'api_request_logs', filter: `user_id=eq.${userId}` }, refresh)
       .subscribe()
