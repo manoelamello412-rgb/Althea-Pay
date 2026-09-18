@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { CommandCenterOperations } from '@/components/command-center-operations'
 
 type FilterKey = 'product' | 'funnel' | 'gateway' | 'status' | 'source' | 'campaign' | 'currency' | 'payment_method'
 type Json = Record<string, any>
@@ -304,11 +305,11 @@ export default function DashboardProduction() {
     <div className="w-full space-y-5">
       <section className="flex flex-col gap-5 border-b border-white/[.055] pb-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Visão geral</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Revenue Operating System</p>
           <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[36px]">
             Olá, {displayName} <span aria-hidden="true">👋</span>
           </h1>
-          <p className="mt-1 text-xs text-[var(--althea-muted)]">Aqui está um resumo do que está acontecendo na sua operação.</p>
+          <p className="mt-1 text-xs text-[var(--althea-muted)]">Controle operacional em tempo real e desempenho comercial da sua operação.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -359,6 +360,8 @@ export default function DashboardProduction() {
           Não foi possível atualizar o dashboard: {error}
         </div>
       )}
+
+      <CommandCenterOperations />
 
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
