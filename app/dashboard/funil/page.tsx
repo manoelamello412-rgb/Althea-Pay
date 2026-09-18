@@ -301,6 +301,14 @@ export default function FunilDominioPage() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            onClick={() => router.push('/dashboard/funil/live')}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.055)] px-4 text-[10px] font-semibold text-[var(--althea-brand)] transition hover:bg-[rgba(29,184,84,.09)]"
+          >
+            <Activity size={14} />
+            Jornadas ao vivo
+          </button>
+          <button
+            type="button"
             onClick={() => void refresh()}
             disabled={refreshing}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white disabled:opacity-50"

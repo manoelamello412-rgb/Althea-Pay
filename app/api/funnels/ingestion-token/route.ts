@@ -54,6 +54,8 @@ export async function POST(request: Request) {
 
     if (createError) return json({ error: createError.message }, 400)
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? ''
+    const origin = new URL(request.url).origin
     return json({
       ingestion: {
         id: created.id,
@@ -61,6 +63,12 @@ export async function POST(request: Request) {
         token,
         endpoint: funnel.endpoint,
         secret_once: true,
+      },
+      connector: {
+        protocol_version: '1',
+        event_endpoint: funnel.endpoint,
+        client_token_endpoint: supabaseUrl ? `${supabaseUrl.replace(/\/$/, '')}/functions/v1/funnel-client-token` : null,
+        browser_sdk_url: `${origin}/althea-funnel-connector.js`,
       },
     }, 201)
   } catch {

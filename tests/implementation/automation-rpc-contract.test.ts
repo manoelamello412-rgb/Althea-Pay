@@ -14,10 +14,12 @@ describe('automation transaction RPC contract', () => {
     expect(source).not.toContain('p_external_status')
   })
 
-  it('keeps the internal-secret guard on the automation endpoint', async () => {
+  it('keeps the canonical Vault/RPC internal-secret guard on the automation endpoint', async () => {
     const source = await readFile(path, 'utf8')
-    expect(source).toContain('ALTHEA_INTERNAL_SECRET')
     expect(source).toContain('x-internal-secret')
+    expect(source).toContain('x-althea-internal-secret')
+    expect(source).toContain('verify_althea_internal_secret')
+    expect(source).not.toMatch(/Deno\.env\.get\((["'])ALTHEA_INTERNAL_SECRET\1\)/)
   })
 
   it('supports ordered multi-action plans with explicit failure policy', async () => {
