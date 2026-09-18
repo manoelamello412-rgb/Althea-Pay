@@ -7,8 +7,8 @@ Audit date: 2026-09-17/18.
 The live Supabase project and the GitHub repository do **not** share a reproducible migration history.
 
 Verified counts at audit time:
-- Live Supabase migration history: **568** rows in `supabase_migrations.schema_migrations`.
-- GitHub audit branch: **335** SQL migration files after the audit hardening migrations.
+- Live Supabase migration history: **569** rows in `supabase_migrations.schema_migrations`.
+- GitHub audit branch: **336** SQL migration files after the audit hardening migrations.
 - Comparing migration names before the final audit migration:
   - **292** remote migration names had no matching local migration file.
   - **60** local migration names had no matching remote history row.
@@ -49,7 +49,7 @@ The safe long-term cleanup is:
 4. Keep only new forward migrations after that baseline in the active migration chain.
 5. Test a clean database created from the new baseline plus forward migrations before changing the production workflow.
 
-Do not attempt to reconstruct the 568-row production history by guessing SQL from object names.
+Do not attempt to reconstruct the 569-row production history by guessing SQL from object names.
 
 ## Audit forward migrations applied and reconciled
 
@@ -62,6 +62,7 @@ During the live audit, the relevant changes were revalidated against the linked 
 - `20260918021456_restrict_checkout_status_rpc_to_server.sql`
 - `20260918024711_restrict_checkout_status_rpc_to_service_role.sql`
 - `20260918025009_remove_deprecated_checkout_status_role_guard.sql`
+- `20260918030253_gateway_global_primary_switch_v1.sql`
 
 The earlier local-only audit drafts dated `20260917203000`, `20260917204000` and `20260917205000` were never present in the linked migration history. After their intended changes were reviewed, applied under the real remote versions above, and verified, those unapplied drafts were removed from the active branch to avoid future duplicate execution. Their history remains available in Git.
 
