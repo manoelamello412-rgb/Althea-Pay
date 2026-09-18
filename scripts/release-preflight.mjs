@@ -29,6 +29,7 @@ const duplicateRoutes=[
   "app/dashboard/settings/vendas/page.tsx",
   "app/dashboard/settings/seguranca/page.tsx",
   "app/dashboard/settings/integracoes/page.tsx",
+  "app/dashboard/crm/mobile/page.tsx",
 ]
 for(const file of duplicateRoutes)if(source.has(join(root,file)))failures.push(`Duplicate route surface still present: ${file}`)
 try{await access(join(root,"docs","PRODUCTION_READINESS.md"))}catch{failures.push("Production readiness document missing")}
