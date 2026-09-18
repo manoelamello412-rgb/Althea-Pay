@@ -34,6 +34,14 @@ describe('server-side revenue analytics', () => {
     expect(source).toContain('checkout_sessions_org_funnel_created_idx')
   })
 
+  it('keeps checkout conversion consistent when a gateway filter is active', async () => {
+    const source = await readFile('supabase/migrations/20260918173944_analytics_gateway_filter_consistency_v27.sql', 'utf8')
+
+    expect(source).toContain("gt.gateway_id=p_gateway_id")
+    expect(source).toContain("gt.metadata->>'checkout_session_id'=c.id::text")
+    expect(source.match(/gt\.gateway_id=p_gateway_id/g)?.length).toBeGreaterThanOrEqual(2)
+  })
+
   it('removes 10k browser-side transaction and checkout scans', async () => {
     const source = await readFile('app/dashboard/analytics/page.tsx', 'utf8')
 
