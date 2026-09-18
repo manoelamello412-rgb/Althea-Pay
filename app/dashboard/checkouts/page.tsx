@@ -42,17 +42,29 @@ function money(amount: number | string | null, currency: string | null): string 
 }
 
 function statusLabel(status: string): string {
-  const labels: Record<string, string> = { started: 'Iniciado', pending: 'Pendente', processing: 'Processando', completed: 'Concluído', abandoned: 'Abandonado', failed: 'Falhou' }
+  const labels: Record<string, string> = {
+    started: 'Iniciado',
+    pending: 'Pendente',
+    processing: 'Processando',
+    completed: 'Concluído',
+    abandoned: 'Abandonado',
+    failed: 'Falhou',
+  }
   return labels[status.toLowerCase()] || status
 }
 
 function statusClass(status: string): string {
   switch (status.toLowerCase()) {
-    case 'completed': return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
-    case 'failed': return 'border-rose-400/20 bg-rose-400/10 text-rose-300'
-    case 'abandoned': return 'border-amber-400/20 bg-amber-400/10 text-amber-300'
-    case 'processing': return 'border-sky-400/20 bg-sky-400/10 text-sky-300'
-    default: return 'border-white/10 bg-white/[0.04] text-zinc-300'
+    case 'completed':
+      return 'border-[rgba(29,184,84,.18)] bg-[rgba(29,184,84,.08)] text-[#7bdc9b]'
+    case 'failed':
+      return 'border-red-400/15 bg-red-400/[.06] text-red-300'
+    case 'abandoned':
+      return 'border-[rgba(212,175,55,.18)] bg-[rgba(212,175,55,.07)] text-[#D4AF37]'
+    case 'processing':
+      return 'border-sky-400/15 bg-sky-400/[.06] text-sky-300'
+    default:
+      return 'border-white/[.06] bg-white/[.025] text-[var(--althea-muted)]'
   }
 }
 
@@ -99,17 +111,24 @@ export default function CheckoutsPage() {
     const activeOrganizationId = String(profile.default_organization_id)
     setOrganizationId(activeOrganizationId)
 
-    const [{ data: checkoutData, error: checkoutError }, { data: funnelData, error: funnelError }, { data: productData, error: productError }] = await Promise.all([
-      supabase.from('checkout_sessions')
+    const [
+      { data: checkoutData, error: checkoutError },
+      { data: funnelData, error: funnelError },
+      { data: productData, error: productError },
+    ] = await Promise.all([
+      supabase
+        .from('checkout_sessions')
         .select('id,funnel_id,product_id,status,currency,amount,customer,attribution,created_at,updated_at,abandoned_at,completed_at,recovery_count,recovery_status')
         .eq('organization_id', activeOrganizationId)
         .order('created_at', { ascending: false })
         .limit(200),
-      supabase.from('funnels')
+      supabase
+        .from('funnels')
         .select('id,nome')
         .eq('organization_id', activeOrganizationId)
         .is('deleted_at', null),
-      supabase.from('products')
+      supabase
+        .from('products')
         .select('id,name')
         .eq('organization_id', activeOrganizationId)
         .is('deleted_at', null)
@@ -128,8 +147,14 @@ export default function CheckoutsPage() {
   const refresh = useCallback(async () => {
     setRefreshing(true)
     setError('')
-    try { await load() } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível carregar os checkouts.') }
-    finally { setRefreshing(false); setLoading(false) }
+    try {
+      await load()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível carregar os checkouts.')
+    } finally {
+      setRefreshing(false)
+      setLoading(false)
+    }
   }, [load])
 
   useEffect(() => { void refresh() }, [refresh])
@@ -137,7 +162,8 @@ export default function CheckoutsPage() {
   useEffect(() => {
     if (!organizationId) return
     let active = true
-    const channel = supabase.channel(`dashboard-checkout-sessions-${organizationId}`)
+    const channel = supabase
+      .channel(`dashboard-checkout-sessions-${organizationId}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -145,7 +171,11 @@ export default function CheckoutsPage() {
         filter: `organization_id=eq.${organizationId}`,
       }, () => { if (active) void load() })
       .subscribe()
-    return () => { active = false; void supabase.removeChannel(channel) }
+
+    return () => {
+      active = false
+      void supabase.removeChannel(channel)
+    }
   }, [load, organizationId, supabase])
 
   const funnelMap = useMemo(() => new Map(funnels.map((item) => [item.id, item.nome])), [funnels])
@@ -156,9 +186,19 @@ export default function CheckoutsPage() {
     return sessions.filter((item) => {
       if (status !== 'all' && item.status.toLowerCase() !== status) return false
       if (!normalized) return true
+
       const customer = record(item.customer)
       const attribution = record(item.attribution)
-      const haystack = [item.id, customerName(customer), text(customer.email), funnelMap.get(item.funnel_id || ''), productName(productMap.get(item.product_id || ''), item.product_id), text(attribution.source), text(attribution.campaign)].join(' ').toLowerCase()
+      const haystack = [
+        item.id,
+        customerName(customer),
+        text(customer.email),
+        funnelMap.get(item.funnel_id || ''),
+        productName(productMap.get(item.product_id || ''), item.product_id),
+        text(attribution.source),
+        text(attribution.campaign),
+      ].join(' ').toLowerCase()
+
       return haystack.includes(normalized)
     })
   }, [funnelMap, productMap, query, sessions, status])
@@ -171,57 +211,124 @@ export default function CheckoutsPage() {
   }), [sessions])
 
   return (
-    <section className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="w-full space-y-5">
+      <section className="flex flex-col gap-5 border-b border-white/[.055] pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="mb-2 text-[11px] font-bold tracking-[0.22em] text-[var(--althea-brand)]">OPERAÇÃO / VENDAS</p>
-          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Checkouts</h1>
-          <p className="mt-1 max-w-2xl text-sm text-[var(--althea-muted)]">Sessões reais de checkout recebidas pelo ALTHEA PAY. Nenhum valor é inventado quando não há dados.</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Jornada de compra</p>
+          <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">Checkouts</h1>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--althea-muted)]">
+            Acompanhe as sessões reais de checkout, seus produtos, funis, valores e estados de conclusão.
+          </p>
         </div>
-        <button type="button" onClick={() => void refresh()} disabled={refreshing} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm text-white transition hover:bg-white/[0.06] disabled:opacity-50">
-          <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /> Atualizar
+
+        <button type="button" onClick={() => void refresh()} disabled={refreshing} className="inline-flex h-10 items-center gap-2 self-start rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white disabled:opacity-50 lg:self-auto">
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          Atualizar
         </button>
-      </header>
+      </section>
 
-      {error && <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{error}</div>}
+      {error && (
+        <div role="alert" className="rounded-xl border border-red-400/15 bg-red-400/[.05] px-4 py-3 text-xs text-red-200">
+          {error}
+        </div>
+      )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric icon={ShoppingCart} label="Sessões" value={metrics.total} />
         <Metric icon={Clock3} label="Em andamento" value={metrics.pending} />
         <Metric icon={CheckCircle2} label="Concluídos" value={metrics.completed} />
-        <Metric icon={XCircle} label="Abandonados" value={metrics.abandoned} />
-      </div>
+        <Metric icon={XCircle} label="Abandonados" value={metrics.abandoned} warning={metrics.abandoned > 0} />
+      </section>
 
-      <div className="rounded-2xl border border-white/[0.07] bg-[var(--althea-surface)] p-4 sm:p-5">
-        <div className="flex flex-col gap-3 lg:flex-row">
-          <label className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/[0.07] bg-black/10 px-3">
-            <Search size={17} className="shrink-0 text-[var(--althea-muted)]" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar cliente, funil, produto ou campanha..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[var(--althea-muted)]" />
+      <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4 sm:p-5">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_190px]">
+          <label className="flex h-10 min-w-0 items-center gap-2 rounded-xl border border-white/[.055] bg-[var(--althea-bg)] px-3">
+            <Search size={14} className="shrink-0 text-[var(--althea-muted)]" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar cliente, funil, produto ou campanha..."
+              className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-[#56645d]"
+            />
           </label>
-          <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filtrar por status" className="h-11 rounded-xl border border-white/[0.07] bg-[#111513] px-3 text-sm text-white outline-none">
-            <option value="all">Todos os status</option><option value="started">Iniciados</option><option value="pending">Pendentes</option><option value="processing">Processando</option><option value="completed">Concluídos</option><option value="abandoned">Abandonados</option><option value="failed">Falhos</option>
+
+          <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filtrar por status" className="h-10 rounded-xl border border-white/[.055] bg-[var(--althea-bg)] px-3 text-[10px] text-white outline-none">
+            <option value="all">Todos os status</option>
+            <option value="started">Iniciados</option>
+            <option value="pending">Pendentes</option>
+            <option value="processing">Processando</option>
+            <option value="completed">Concluídos</option>
+            <option value="abandoned">Abandonados</option>
+            <option value="failed">Falhos</option>
           </select>
         </div>
 
         <div className="mt-5 overflow-x-auto">
-          {loading ? <div className="space-y-3 py-4">{[1,2,3,4].map((item) => <div key={item} className="h-16 animate-pulse rounded-xl bg-white/[0.03]" />)}</div> : filtered.length === 0 ? (
-            <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.08] px-6 text-center">
-              <CreditCard size={25} className="mb-3 text-[var(--althea-muted)]" />
-              <p className="text-sm font-medium text-white">Nenhuma sessão encontrada</p>
-              <p className="mt-1 max-w-md text-xs text-[var(--althea-muted)]">Quando checkouts reais forem registrados, eles aparecerão aqui automaticamente.</p>
+          {loading ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4].map((item) => <div key={item} className="h-16 animate-pulse rounded-xl bg-[var(--althea-bg)]" />)}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="grid min-h-[240px] place-items-center rounded-xl border border-dashed border-white/[.06] bg-[var(--althea-bg)] px-6 text-center">
+              <div className="max-w-md">
+                <CreditCard size={24} className="mx-auto text-[var(--althea-brand)] opacity-60" />
+                <p className="mt-3 text-sm font-medium text-white">Nenhuma sessão encontrada</p>
+                <p className="mt-1 text-[10px] leading-4 text-[var(--althea-muted)]">Quando checkouts reais forem registrados, eles aparecerão aqui automaticamente.</p>
+              </div>
             </div>
           ) : (
-            <table className="w-full min-w-[850px] text-left text-sm">
-              <thead><tr className="border-b border-white/[0.06] text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--althea-muted)]"><th className="px-3 py-3">Cliente</th><th className="px-3 py-3">Funil</th><th className="px-3 py-3">Produto</th><th className="px-3 py-3">Valor</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Criado</th></tr></thead>
-              <tbody>{filtered.map((item) => <tr key={item.id} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]"><td className="px-3 py-4"><p className="font-medium text-white">{customerName(item.customer)}</p><p className="mt-0.5 text-xs text-[var(--althea-muted)]">{text(record(item.customer).email) || item.id.slice(0, 12)}</p></td><td className="px-3 py-4 text-zinc-300">{funnelMap.get(item.funnel_id || '') || '—'}</td><td className="px-3 py-4 text-zinc-300">{productName(productMap.get(item.product_id || ''), item.product_id)}</td><td className="px-3 py-4 font-medium text-white">{money(item.amount, item.currency)}</td><td className="px-3 py-4"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(item.status)}`}>{statusLabel(item.status)}</span></td><td className="px-3 py-4 text-xs text-[var(--althea-muted)]">{new Date(item.created_at).toLocaleString('pt-BR')}</td></tr>)}</tbody>
+            <table className="w-full min-w-[850px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-white/[.05] text-[9px] text-[var(--althea-muted)]">
+                  <th className="pb-3 pr-4 font-medium">Cliente</th>
+                  <th className="pb-3 pr-4 font-medium">Funil</th>
+                  <th className="pb-3 pr-4 font-medium">Produto</th>
+                  <th className="pb-3 pr-4 font-medium">Valor</th>
+                  <th className="pb-3 pr-4 font-medium">Status</th>
+                  <th className="pb-3 font-medium">Criado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item) => (
+                  <tr key={item.id} className="border-b border-white/[.035] last:border-0">
+                    <td className="py-3.5 pr-4">
+                      <p className="text-[10px] font-semibold text-white">{customerName(item.customer)}</p>
+                      <p className="mt-1 max-w-[220px] truncate text-[8px] text-[var(--althea-muted)]">{text(record(item.customer).email) || item.id.slice(0, 12)}</p>
+                    </td>
+                    <td className="py-3.5 pr-4 text-[10px] text-[var(--althea-muted)]">{funnelMap.get(item.funnel_id || '') || '—'}</td>
+                    <td className="py-3.5 pr-4 text-[10px] text-[var(--althea-muted)]">{productName(productMap.get(item.product_id || ''), item.product_id)}</td>
+                    <td className="py-3.5 pr-4 text-[10px] font-semibold text-white">{money(item.amount, item.currency)}</td>
+                    <td className="py-3.5 pr-4"><span className={`inline-flex rounded-full border px-2 py-1 text-[8px] font-semibold ${statusClass(item.status)}`}>{statusLabel(item.status)}</span></td>
+                    <td className="py-3.5 text-[9px] text-[var(--althea-muted)]">{new Date(item.created_at).toLocaleString('pt-BR')}</td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           )}
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   )
 }
 
-function Metric({ icon: Icon, label, value }: { icon: typeof ShoppingCart; label: string; value: number }) {
-  return <div className="rounded-2xl border border-white/[0.07] bg-[var(--althea-surface)] p-4"><div className="flex items-center gap-2 text-xs text-[var(--althea-muted)]"><Icon size={15} />{label}</div><p className="mt-2 text-2xl font-semibold tracking-tight text-white">{value}</p></div>
+function Metric({
+  icon: Icon,
+  label,
+  value,
+  warning = false,
+}: {
+  icon: typeof ShoppingCart
+  label: string
+  value: number
+  warning?: boolean
+}) {
+  return (
+    <article className="min-h-[112px] rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-[10px] text-[var(--althea-muted)]">{label}</span>
+        <Icon size={15} className={warning ? 'text-[#D4AF37]' : 'text-[var(--althea-brand)]'} />
+      </div>
+      <p className={`mt-4 text-[24px] font-semibold tracking-[-.035em] ${warning ? 'text-[#D4AF37]' : 'text-white'}`}>{value}</p>
+    </article>
+  )
 }
