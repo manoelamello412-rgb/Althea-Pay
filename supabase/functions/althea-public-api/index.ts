@@ -44,10 +44,18 @@ Deno.serve(async(req)=>{const rid=requestId(req),started=performance.now();if(re
     const{data,error}=await q;
     if(error)return respond({error:"database_error"},500,"funnels:read","database_error");
     const rows=data??[];
+    const incidentKey=(event:any)=>{
+      if(event.transaction_id)return "transaction:"+event.transaction_id;
+      if(event.checkout_id)return "checkout:"+event.checkout_id;
+      if(event.category==="chat"&&event.metadata?.conversation_id)return "chat:"+String(event.metadata.conversation_id)+":"+(event.external_id||event.event_id);
+      if(event.external_id)return event.category+":external:"+event.external_id;
+      return event.event_id;
+    };
     const summary={
       total:rows.length,
-      errors:rows.filter((event:any)=>event.severity==="error").length,
-      warnings:rows.filter((event:any)=>event.severity==="warning").length,
+      incidents:new Set(rows.filter((event:any)=>event.severity==="error"||event.severity==="warning").map(incidentKey)).size,
+      errors:new Set(rows.filter((event:any)=>event.severity==="error").map(incidentKey)).size,
+      warnings:new Set(rows.filter((event:any)=>event.severity==="warning").map(incidentKey)).size,
       latest_at:rows[0]?.occurred_at??null,
     };
     return respond({funnel,data:rows,summary},200,"funnels:read");
