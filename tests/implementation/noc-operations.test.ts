@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 
 describe('Revenue OS NOC', () => {
   it('keeps NOC access authenticated and operator-role scoped', async () => {
@@ -70,6 +70,22 @@ describe('Revenue OS NOC', () => {
     expect(page).toContain('Incidentes recentes')
     expect(legacy).toContain("redirect('/dashboard/noc')")
     expect(navigation).toContain("href: '/dashboard/noc'")
+  })
+
+  it('refreshes tenant operational state from realtime without exposing direct log scans', async () => {
+    const page = await readFile('app/dashboard/noc/page.tsx', 'utf8')
+
+    expect(page).toContain("table: 'integration_events'")
+    expect(page).toContain("table: 'gateway_webhook_events'")
+    expect(page).toContain("table: 'recovery_events'")
+    expect(page).toContain("table: 'funnel_command_targets'")
+    expect(page).toContain("table: 'reconciliation_items'")
+    expect(page).toContain('organization_id=eq.')
+    expect(page).toContain('user_id=eq.')
+  })
+
+  it('removes the obsolete CRM observability API after canonical NOC adoption', async () => {
+    await expect(access('app/api/crm/observability/route.ts')).rejects.toThrow()
   })
 
   it('does not scan operational log tables directly from the browser', async () => {
