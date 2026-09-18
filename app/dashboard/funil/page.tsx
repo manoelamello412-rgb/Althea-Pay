@@ -233,6 +233,8 @@ export default function FunilDominioPage() {
 
   async function provisionScriptCredential(funnelId: string) {
     if (generatingToken) return
+    const confirmed = window.confirm('Rotacionar a credencial de ingestão? A credencial atual será revogada imediatamente e a integração externa precisará usar a nova chave.')
+    if (!confirmed) return
     setGeneratingToken(true); setError(''); setSuccess('')
     try {
       const response = await fetch('/api/funnels/ingestion-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store', body: JSON.stringify({ funnel_id: funnelId }) })
@@ -567,7 +569,7 @@ export default function FunilDominioPage() {
                 className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.05)] text-[9px] font-semibold text-[var(--althea-brand)] transition hover:bg-[rgba(29,184,84,.08)] disabled:opacity-50"
               >
                 {generatingToken ? <Loader2 size={13} className="animate-spin" /> : <KeyRound size={13} />}
-                {generatingToken ? 'Gerando credencial...' : 'Gerar nova credencial de ingestão'}
+                {generatingToken ? 'Gerando credencial...' : 'Rotacionar credencial de ingestão'}
               </button>
             )}
 
