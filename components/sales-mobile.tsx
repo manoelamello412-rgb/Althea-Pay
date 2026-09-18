@@ -9,12 +9,14 @@ type Sale = AnalyticsSale & { currency?: string | null }
 type JsonObject = Record<string, unknown>
 const obj = (value: unknown): JsonObject => value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : {}
 const text = (value: unknown): string => typeof value === 'string' ? value : value == null ? '' : String(value)
-const fmtMoney = (n: number, currency = 'BRL') => {
-  const code = currency?.trim().toUpperCase() || 'BRL'
+const fmtMoney = (n: number, currency?: string | null) => {
+  const code = currency?.trim().toUpperCase() || ''
+  const value = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0)
+  if (!code) return `${value} · moeda não informada`
   try {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: code, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0)
   } catch {
-    return `${new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0)} ${code}`
+    return `${value} ${code}`
   }
 }
 const fmtDate = (value: string) => value ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit' }).format(new Date(`${value}T12:00:00-03:00`)) : '—'
@@ -93,12 +95,14 @@ export default function SalesMobile() {
   }), [sales, query, startDate, endDate, status])
 
   const totals = useMemo(() => {
-    const currencies = [...new Set(filtered.map((sale) => sale.currency?.trim().toUpperCase() || 'BRL'))]
-    const total = currencies.length === 1 ? filtered.reduce((sum, sale) => sum + amountOf(sale), 0) : null
+    const hasUnknownCurrency = filtered.some((sale) => !sale.currency?.trim())
+    const currencies = [...new Set(filtered.map((sale) => sale.currency?.trim().toUpperCase()).filter((currency): currency is string => Boolean(currency)))]
+    const total = !hasUnknownCurrency && currencies.length === 1 ? filtered.reduce((sum, sale) => sum + amountOf(sale), 0) : null
     return {
       total,
-      currency: currencies[0] || 'BRL',
+      currency: currencies[0] || '',
       currencyCount: currencies.length,
+      hasUnknownCurrency,
       paid: filtered.filter((sale) => isApproved(sale.status)).length,
       pending: filtered.filter((sale) => isPending(sale.status)).length,
     }
@@ -117,10 +121,10 @@ export default function SalesMobile() {
         <button className="ams-filter" type="button" onClick={() => { setDraftStatus(status); setFilterOpen(true) }}><Filter size={13} /><span>Filtros{status !== 'Todas' ? ` · ${status}` : ''}</span></button>
       </section>
       {!dateRangeValid ? <p className="mt-2 text-[10px] font-mono text-amber-400">Selecione um intervalo válido de até 90 dias.</p> : null}
-      <section className="ams-transactions"><div className="ams-table-head"><span>Cliente</span><span>Valor</span><span>Status</span></div>{loading ? <div className="ams-empty"><div className="ams-empty-icon" /><strong>Carregando vendas</strong><p>Sincronizando dados reais.</p></div> : error ? <div className="ams-empty"><div className="ams-empty-icon"><X size={21} /></div><strong>Falha na sincronização</strong><p>{error}</p><button type="button" onClick={() => void load()}>Tentar novamente</button></div> : filtered.length ? <div className="ams-list">{filtered.map((sale) => <button key={sale.id} type="button" className="ams-sale-row" onClick={() => setSelected(sale)}><span className="ams-sale-client"><b>{customerNameOf(sale)}</b><small>{fmtDate(dateOf(sale))} · {sale.gateway_id || 'Gateway não informado'}</small></span><span className="ams-sale-value">{fmtMoney(amountOf(sale), sale.currency || 'BRL')}</span><span className={`ams-sale-status ${isApproved(sale.status) ? 'paid' : isPending(sale.status) ? 'pending' : 'other'}`}>{label(sale)}</span></button>)}</div> : <div className="ams-empty"><div className="ams-empty-icon"><CreditCard size={21} /></div><strong>Nenhuma transação encontrada</strong><p>Tente ajustar os filtros ou o período selecionado.</p><button type="button" onClick={clear}>Limpar filtros</button></div>}</section>
-      <section className="ams-summary"><article><span>Volume</span><strong>{totals.total == null ? `${totals.currencyCount} moedas` : fmtMoney(totals.total, totals.currency)}</strong></article><article><span>Aprovadas</span><strong>{totals.paid}</strong></article><article><span>Pend.</span><strong>{totals.pending}</strong></article></section>
+      <section className="ams-transactions"><div className="ams-table-head"><span>Cliente</span><span>Valor</span><span>Status</span></div>{loading ? <div className="ams-empty"><div className="ams-empty-icon" /><strong>Carregando vendas</strong><p>Sincronizando dados reais.</p></div> : error ? <div className="ams-empty"><div className="ams-empty-icon"><X size={21} /></div><strong>Falha na sincronização</strong><p>{error}</p><button type="button" onClick={() => void load()}>Tentar novamente</button></div> : filtered.length ? <div className="ams-list">{filtered.map((sale) => <button key={sale.id} type="button" className="ams-sale-row" onClick={() => setSelected(sale)}><span className="ams-sale-client"><b>{customerNameOf(sale)}</b><small>{fmtDate(dateOf(sale))} · {sale.gateway_id || 'Gateway não informado'}</small></span><span className="ams-sale-value">{fmtMoney(amountOf(sale), sale.currency)}</span><span className={`ams-sale-status ${isApproved(sale.status) ? 'paid' : isPending(sale.status) ? 'pending' : 'other'}`}>{label(sale)}</span></button>)}</div> : <div className="ams-empty"><div className="ams-empty-icon"><CreditCard size={21} /></div><strong>Nenhuma transação encontrada</strong><p>Tente ajustar os filtros ou o período selecionado.</p><button type="button" onClick={clear}>Limpar filtros</button></div>}</section>
+      <section className="ams-summary"><article><span>Volume</span><strong>{totals.total == null ? totals.hasUnknownCurrency ? 'Moeda não informada' : `${totals.currencyCount} moedas` : fmtMoney(totals.total, totals.currency)}</strong></article><article><span>Aprovadas</span><strong>{totals.paid}</strong></article><article><span>Pend.</span><strong>{totals.pending}</strong></article></section>
     </main>
-    {selected && <div className="ams-modal" role="dialog" aria-modal="true" aria-label="Detalhes da venda" onClick={(e) => { if (e.currentTarget === e.target) setSelected(null) }}><div className="ams-sheet"><div className="ams-handle" /><div className="ams-sheet-title"><h2>Detalhes da venda</h2><button type="button" aria-label="Fechar" onClick={() => setSelected(null)}><X size={17} /></button></div><div className="ams-sale-detail"><div><span>Status</span><b>{label(selected)}</b></div><div><span>Valor</span><b>{fmtMoney(amountOf(selected), selected.currency || 'BRL')}</b></div><div><span>Data</span><b>{fmtDateTime(selected.occurred_at ?? selected.created_at ?? '')}</b></div><div><span>ID</span><b>{selected.id}</b></div><div><span>Transação externa</span><b>{selected.external_id || selected.transaction_id || 'Não informado'}</b></div><div><span>Gateway</span><b>{selected.gateway_id || 'Não informado'}</b></div></div><button className="ams-apply" type="button" onClick={() => setSelected(null)}><CheckCircle2 size={15} /> Fechar</button></div></div>}
+    {selected && <div className="ams-modal" role="dialog" aria-modal="true" aria-label="Detalhes da venda" onClick={(e) => { if (e.currentTarget === e.target) setSelected(null) }}><div className="ams-sheet"><div className="ams-handle" /><div className="ams-sheet-title"><h2>Detalhes da venda</h2><button type="button" aria-label="Fechar" onClick={() => setSelected(null)}><X size={17} /></button></div><div className="ams-sale-detail"><div><span>Status</span><b>{label(selected)}</b></div><div><span>Valor</span><b>{fmtMoney(amountOf(selected), selected.currency)}</b></div><div><span>Data</span><b>{fmtDateTime(selected.occurred_at ?? selected.created_at ?? '')}</b></div><div><span>ID</span><b>{selected.id}</b></div><div><span>Transação externa</span><b>{selected.external_id || selected.transaction_id || 'Não informado'}</b></div><div><span>Gateway</span><b>{selected.gateway_id || 'Não informado'}</b></div></div><button className="ams-apply" type="button" onClick={() => setSelected(null)}><CheckCircle2 size={15} /> Fechar</button></div></div>}
     {filterOpen && <div className="ams-modal" role="dialog" aria-modal="true" aria-label="Filtrar transações" onClick={(e) => { if (e.currentTarget === e.target) setFilterOpen(false) }}><div className="ams-sheet"><div className="ams-handle" /><div className="ams-sheet-title"><h2>Filtrar transações</h2><button type="button" aria-label="Fechar" onClick={() => setFilterOpen(false)}><X size={17} /></button></div>{['Todas', 'Pagas', 'Pendentes', 'Canceladas'].map((item) => <button key={item} type="button" className={draftStatus === item ? 'selected' : ''} onClick={() => setDraftStatus(item)}><span>{item}</span><b>{draftStatus === item ? '✓' : '○'}</b></button>)}<button className="ams-apply" type="button" onClick={() => { setStatus(draftStatus); setFilterOpen(false) }}>Aplicar filtros</button></div></div>}
   </section>
 }
