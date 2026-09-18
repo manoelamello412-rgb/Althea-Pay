@@ -4,14 +4,11 @@ import { readFile } from 'node:fs/promises'
 const path = 'supabase/functions/automation-engine-v2/index.ts'
 
 describe('automation transaction RPC contract', () => {
-  it('uses the canonical transaction state transition parameters', async () => {
+  it('keeps financial state changes outside the generic automation authority', async () => {
     const source = await readFile(path, 'utf8')
-    expect(source).toMatch(/p_next_status\s*:\s*String\(cfg\.status\)/)
-    expect(source).toMatch(/p_failure_code\s*:\s*cfg\.error_message\s*\?\s*String\(cfg\.error_message\)\s*:\s*null/)
-    expect(source).toMatch(/p_external_id\s*:\s*null/)
-    expect(source).not.toContain('p_new_status')
-    expect(source).not.toContain('p_error_message')
-    expect(source).not.toContain('p_external_status')
+    expect(source).toContain('financial_authority_action_forbidden')
+    expect(source).toContain('type==="update_transaction"||type==="update_sale"')
+    expect(source).not.toContain('transition_gateway_transaction_status')
   })
 
   it('keeps the canonical Vault/RPC internal-secret guard on the automation endpoint', async () => {
