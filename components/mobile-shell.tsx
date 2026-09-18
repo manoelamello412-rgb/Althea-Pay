@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { CircleDollarSign, GitBranch, HeartPulse, LayoutDashboard, LogOut, MessageCircle, Network, Package, RefreshCw, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
+import { CircleDollarSign, GitBranch, HeartPulse, LayoutDashboard, LogOut, MessageCircle, Network, Package, RefreshCw, Search, Settings2, Sparkles, Webhook, Workflow, X } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -24,6 +24,7 @@ const menuSections: MenuSection[] = [
     { label: 'Gateways e conexões', href: '/dashboard/gateways', icon: Network },
     { label: 'Roteamento e commands', href: '/dashboard/routing', icon: Network },
     { label: 'Funis', href: '/dashboard/funil', icon: GitBranch },
+    { label: 'Automações', href: '/dashboard/automations', icon: Workflow },
     { label: 'Checkouts', href: '/dashboard/checkouts', icon: CircleDollarSign },
     { label: 'Pagamentos', href: '/dashboard/pagamentos', icon: CircleDollarSign },
   ] },
@@ -66,6 +67,7 @@ function sectionLabel(pathname: string): string {
   if (pathname.startsWith('/dashboard/produtos')) return 'PRODUTOS'
   if (pathname.startsWith('/dashboard/gateways')) return 'GATEWAYS'
   if (pathname.startsWith('/dashboard/routing')) return 'ROTEAMENTO'
+  if (pathname.startsWith('/dashboard/automations')) return 'AUTOMAÇÕES'
   if (pathname.startsWith('/dashboard/checkouts')) return 'CHECKOUTS'
   if (pathname.startsWith('/dashboard/pagamentos')) return 'PAGAMENTOS'
   if (pathname.startsWith('/dashboard/clientes')) return 'CLIENTES'
