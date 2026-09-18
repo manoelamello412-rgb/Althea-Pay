@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, Cpu, Loader2, Pencil, Power, RefreshCw, Unplug, X } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Cpu, Loader2, Pencil, Power, RefreshCw, RotateCcw, Unplug, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { getOperationalCredentialFields, getWebhookCredentialFields, type GatewayCredentialField } from '@/components/gateway-provider-fields'
 
@@ -59,6 +59,7 @@ export const DynamicGatewayConnector: React.FC = () => {
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
   const [switchingAll, setSwitchingAll] = useState<string | null>(null)
+  const [lastCompletedBatchId, setLastCompletedBatchId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -238,6 +239,7 @@ export const DynamicGatewayConnector: React.FC = () => {
     if (!confirmed) return
 
     setSwitchingAll(gateway.id)
+    setLastCompletedBatchId(null)
     setError(null)
     setMessage(null)
 
@@ -303,6 +305,7 @@ export const DynamicGatewayConnector: React.FC = () => {
         setMessage(
           `Troca remota confirmada em ${successCount}/${total} funil(is). Operação ${correlation}. O vínculo interno só foi atualizado após a verificação externa.`
         )
+        setLastCompletedBatchId(batch.batch_id)
       } else if (finalBatch.status === 'partial' || finalBatch.status === 'failed' || finalBatch.status === 'preflight_failed') {
         throw new Error(
           `Operação ${correlation}: ${successCount}/${total} confirmados, ${failedCount} com falha. A Althea não marcou os funis não verificados como concluídos.`
@@ -316,6 +319,76 @@ export const DynamicGatewayConnector: React.FC = () => {
       await load()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível trocar a gateway dos funis.')
+    } finally {
+      setSwitchingAll(null)
+    }
+  }
+
+  const rollbackLastSwitch = async () => {
+    if (!lastCompletedBatchId || switchingAll || testing) return
+
+    const confirmed = window.confirm(
+      'Reverter a última troca confirmada? A Althea fará novo preflight, restaurará a gateway anterior de cada funil e verificará o estado remoto antes de concluir.'
+    )
+    if (!confirmed) return
+
+    setSwitchingAll('rollback')
+    setError(null)
+    setMessage(null)
+
+    try {
+      const { data: requested, error: rollbackError } = await db.rpc('request_funnel_gateway_rollback', {
+        p_batch_id: lastCompletedBatchId,
+        p_allow_partial: false,
+        p_idempotency_key: `rollback:${lastCompletedBatchId}:${crypto.randomUUID()}`,
+      })
+      if (rollbackError) throw rollbackError
+
+      const batch = (requested ?? {}) as {
+        batch_id?: string
+        correlation_id?: string
+        status?: string
+        total_targets?: number
+        failed_targets?: number
+      }
+
+      if (!batch.batch_id) throw new Error('O rollback não retornou um identificador de operação.')
+      if (batch.status === 'preflight_failed' || batch.status === 'failed') {
+        throw new Error('Rollback bloqueado: nem todos os funis possuem um estado anterior verificável.')
+      }
+
+      const { data: executed, error: workerError } = await db.functions.invoke('funnel-command-worker', {
+        body: { batch_id: batch.batch_id, limit: 50 },
+      })
+      if (workerError) throw new Error(workerError.message)
+
+      const finalBatch = (executed?.batch ?? {}) as {
+        correlation_id?: string
+        status?: string
+        total_targets?: number
+        succeeded_targets?: number
+        failed_targets?: number
+        pending_targets?: number
+      }
+
+      const correlation = finalBatch.correlation_id || batch.correlation_id || batch.batch_id
+      const total = Number(finalBatch.total_targets ?? batch.total_targets ?? 0)
+      const successCount = Number(finalBatch.succeeded_targets ?? 0)
+      const failedCount = Number(finalBatch.failed_targets ?? 0)
+      const pendingCount = Number(finalBatch.pending_targets ?? 0)
+
+      if (finalBatch.status === 'succeeded') {
+        setMessage(`Rollback confirmado em ${successCount}/${total} funil(is). Operação ${correlation}.`)
+        setLastCompletedBatchId(null)
+      } else if (finalBatch.status === 'partial' || finalBatch.status === 'failed' || finalBatch.status === 'preflight_failed') {
+        throw new Error(`Rollback ${correlation}: ${successCount}/${total} confirmados e ${failedCount} com falha.`)
+      } else {
+        setMessage(`Rollback ${correlation} em processamento: ${successCount}/${total} confirmados e ${pendingCount} pendentes.`)
+      }
+
+      await load()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível executar o rollback.')
     } finally {
       setSwitchingAll(null)
     }
@@ -356,6 +429,17 @@ export const DynamicGatewayConnector: React.FC = () => {
       </header>
 
       {message && <div className="flex items-center gap-2 rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 text-xs text-emerald-400"><CheckCircle2 className="h-4 w-4" />{message}</div>}
+      {lastCompletedBatchId && (
+        <button
+          type="button"
+          onClick={() => void rollbackLastSwitch()}
+          disabled={switchingAll !== null || testing !== null}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-amber-800/50 bg-amber-950/15 px-3 py-2.5 text-[9px] font-bold font-mono text-amber-300 disabled:opacity-40"
+        >
+          {switchingAll === 'rollback' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+          REVERTER ÚLTIMA TROCA
+        </button>
+      )}
       {error && <div className="flex items-center gap-2 rounded-lg border border-rose-900/50 bg-rose-950/20 p-3 text-xs text-rose-400"><AlertCircle className="h-4 w-4" />{error}</div>}
 
       <div className="space-y-3">
