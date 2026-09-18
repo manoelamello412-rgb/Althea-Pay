@@ -224,19 +224,19 @@ export default function RoutingPage() {
         drifts: Array.isArray(data.drifts) ? data.drifts as Drift[] : [],
       }
       setPayload(next)
-      if (!selectedGatewayId) {
-        const first = next.gateways.find(gateway => ['connected', 'degraded'].includes(gateway.status.toLowerCase()))
-        if (first) setSelectedGatewayId(first.id)
-      }
+      setSelectedGatewayId(current => {
+        if (current && next.gateways.some(gateway => gateway.id === current)) return current
+        return next.gateways.find(gateway => ['connected', 'degraded'].includes(gateway.status.toLowerCase()))?.id ?? ''
+      })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível carregar a Central de Roteamento.')
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [db, selectedGatewayId])
+  }, [db])
 
-  useEffect(() => { void load(true) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(true) }, [load])
 
   useEffect(() => {
     let active = true
