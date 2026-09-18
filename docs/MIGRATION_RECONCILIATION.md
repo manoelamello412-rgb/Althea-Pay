@@ -7,11 +7,11 @@ Audit date: 2026-09-17/18.
 The live Supabase project and the GitHub repository do **not** share a reproducible migration history.
 
 Verified counts at audit time:
-- Live Supabase migration history: **569** rows in `supabase_migrations.schema_migrations`.
-- GitHub audit branch: **336** SQL migration files after the audit hardening migrations.
+- Live Supabase migration history: **578** rows in `supabase_migrations.schema_migrations`.
+- GitHub audit branch: **345** SQL migration files after the audit hardening migrations.
 - Comparing migration names before the final audit migration:
-  - **292** remote migration names had no matching local migration file.
-  - **60** local migration names had no matching remote history row.
+  - **282** remote migration names had no matching local migration file.
+  - **49** local migration names had no matching remote history row.
 - The historical drift remains, but the new audit migrations created after this review are now mirrored locally using the exact versions recorded by the linked Supabase project.
 
 This drift is historical. It does **not** mean the current application schema is missing hundreds of runtime objects. During the audit, the active frontend/backend contracts were compared directly against the live Supabase schema and the canonical runtime objects were verified.
@@ -49,7 +49,7 @@ The safe long-term cleanup is:
 4. Keep only new forward migrations after that baseline in the active migration chain.
 5. Test a clean database created from the new baseline plus forward migrations before changing the production workflow.
 
-Do not attempt to reconstruct the 569-row production history by guessing SQL from object names.
+Do not attempt to reconstruct the 578-row production history by guessing SQL from object names.
 
 ## Audit forward migrations applied and reconciled
 
@@ -84,3 +84,26 @@ Applied and verified forward migrations, mirrored using actual remote versions:
 The earlier local draft timestamps for these two repairs were replaced with the
 actual remote versions; the SQL remains in Git history. Historical drift remains
 open. See `AUDIT_CONTINUATION_2026-09-18.md` for evidence and remaining blockers.
+
+
+## Funnel remote-control continuation on 2026-09-18
+
+The following reviewed forward migrations were applied to the linked Supabase project and mirrored in GitHub using the exact remote versions:
+
+- `20260918040711_funnel_remote_command_control_plane_v1.sql`
+- `20260918041340_funnel_remote_command_two_phase_v2.sql`
+- `20260918042319_funnel_command_immediate_batch_claim_and_legacy_lockdown_v3.sql`
+- `20260918042556_schedule_funnel_command_worker_v4.sql`
+- `20260918043540_funnel_gateway_rollback_and_drift_foundation_v5.sql`
+- `20260918043924_schedule_funnel_drift_worker_v6.sql`
+- `20260918044600_funnel_control_tenant_integrity_v7.sql`
+
+These migrations add the durable external-funnel command plane, two-phase verified gateway switching, service-only lockdown of the former local-only global switch, retry and drift workers, rollback state, RLS-protected drift records, and database-level tenant-integrity enforcement.
+
+Current reconciled counts at this continuation checkpoint:
+- Live migration history: **578**
+- Local SQL migration files: **345**
+- Remote logical names without a local name match: **282**
+- Local logical names without a remote name match: **49**
+
+Historical drift remains open. These updated counts do not make the old migration chain safely replayable from zero; automatic production `supabase db push` remains forbidden.
