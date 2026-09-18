@@ -17,12 +17,21 @@ for(const file of crmFiles){if(!source.has(join(root,file)))failures.push(`Requi
 assertNo(/SUPABASE_SERVICE_ROLE_KEY/i,"Service-role secret referenced by CRM browser/API surface",checked.filter(file=>/(^|[\\/])app[\\/]dashboard[\\/]crm[\\/]|(^|[\\/])components[\\/]crm[\\/]/.test(file)))
 const requiredFiles=["supabase/functions/gateway-orchestrator/index.ts","supabase/functions/gateway-provider-adapter/index.ts","supabase/functions/gateway-connection-test/index.ts","supabase/functions/checkout-engine-v2/index.ts","supabase/functions/gateway-webhook/index.ts","supabase/functions/gateway-webhook-processor/index.ts","supabase/functions/althea-public-api/index.ts","supabase/functions/althea-webhook/index.ts","supabase/functions/health/index.ts","supabase/functions/iara-ai-core/index.ts","supabase/functions/iara-copilot/index.ts","supabase/functions/iara-funnel-builder/index.ts","supabase/functions/iara-funnel-activate/index.ts","supabase/functions/iara-commercial-intervention/index.ts","supabase/functions/iara-commercial-intervention-worker/index.ts","supabase/functions/iara-daily-report/index.ts","supabase/functions/iara-daily-report-worker/index.ts","supabase/functions/iara-financial-confirm/index.ts","supabase/functions/iara-financial-command/index.ts","scripts/load-smoke.mjs"]
 for(const file of requiredFiles)if(!source.has(join(root,file)))failures.push(`Required release component missing: ${file}`)
-const retiredFunctions=["api","integration-webhook","checkout-engine","automation-engine","althea-gateway-orchestrator","gateway-refund","funnel-events-secure"]
+const retiredFunctions=["api","integration-webhook","checkout-engine","automation-engine","althea-gateway-orchestrator","gateway-refund","gateway-refund-v2","gateway-payment-link","gateway-provider-adapter-v2","funnel-events-secure"]
 for(const name of retiredFunctions)if(source.has(join(root,"supabase","functions",name,"index.ts")))failures.push(`Retired duplicate function still present: ${name}`)
 const operationalCode=checked.filter(file=>!file.includes(`${sep}supabase${sep}migrations${sep}`)&&!file.endsWith(join("scripts","release-preflight.mjs")))
 assertNo(/rank_gateway_candidates/,"Retired gateway ranking RPC still referenced",operationalCode)
-assertNo(/dynamic-gateway-connector-v2/,"Removed gateway connector V2 still referenced",operationalCode)
+assertNo(/dynamic-gateway-connector-v[23]/,"Versioned gateway connector still referenced",operationalCode)
+assertNo(/althea-mobile-page/,"Legacy event-based navigation still referenced",operationalCode)
+const duplicateRoutes=[
+  "app/dashboard/settings/usuarios/page.tsx",
+  "app/dashboard/settings/gateways/page.tsx",
+  "app/dashboard/settings/vendas/page.tsx",
+  "app/dashboard/settings/seguranca/page.tsx",
+  "app/dashboard/settings/integracoes/page.tsx",
+]
+for(const file of duplicateRoutes)if(source.has(join(root,file)))failures.push(`Duplicate route surface still present: ${file}`)
 try{await access(join(root,"docs","PRODUCTION_READINESS.md"))}catch{failures.push("Production readiness document missing")}
 console.log(`Release preflight: checked ${checked.length} source/config files.`)
 if(failures.length){console.error("Release preflight FAILED:");for(const failure of failures)console.error(`- ${failure}`);process.exit(1)}
-console.log("Release preflight PASSED: canonical release components, browser secrets, raw-card assignments, webhook Vault access, timer cleanup, async payment calls, internal guards, CRM/Iara components and retired duplicate checks are clear.")
+console.log("Release preflight PASSED: canonical release components, browser secrets, raw-card assignments, webhook Vault access, timer cleanup, async payment calls, internal guards, CRM/Iara components and retired duplicate, legacy navigation and duplicate-route checks are clear.")
