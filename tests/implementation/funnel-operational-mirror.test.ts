@@ -1,0 +1,46 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { describe, expect, test } from 'vitest'
+
+const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
+
+describe('funnel operational mirror', () => {
+  test('uses a security-invoker unified read model instead of copying operational data', () => {
+    const migration = source('supabase/migrations/20260918151516_funnel_operational_timeline_v11.sql')
+    expect(migration).toContain('v_funnel_operational_timeline')
+    expect(migration).toContain('security_invoker=true')
+    expect(migration).toContain('from public.integration_events')
+    expect(migration).toContain('from public.checkout_events')
+    expect(migration).toContain('from public.gateway_transactions')
+    expect(migration).toContain('from public.gateway_payment_attempts')
+    expect(migration).toContain('from public.sales')
+    expect(migration).toContain('from public.transaction_audit_events')
+    expect(migration).toContain('from public.funnel_control_drift_events')
+    expect(migration).toContain('from public.funnel_command_targets')
+    expect(migration).toContain('from public.funnel_connections')
+    expect(migration).not.toContain('create table public.v_funnel_operational_timeline')
+  })
+
+  test('keeps the timeline unavailable to anon while authenticated access inherits source RLS', () => {
+    const migration = source('supabase/migrations/20260918151516_funnel_operational_timeline_v11.sql')
+    expect(migration).toContain('revoke all on public.v_funnel_operational_timeline from anon')
+    expect(migration).toContain('grant select on public.v_funnel_operational_timeline to authenticated')
+  })
+
+  test('canonical funnel page embeds the operational mirror and does not render the legacy event list', () => {
+    const page = source('app/dashboard/funil/page.tsx')
+    expect(page).toContain('FunnelOperationalMirror')
+    expect(page).toContain('<FunnelOperationalMirror funnelId={funnel.id} />')
+    expect(page).not.toContain('Eventos recentes</h2>')
+  })
+
+  test('mirror exposes payment, checkout, chat, health and control filters', () => {
+    const component = source('components/funnel-operational-mirror.tsx')
+    expect(component).toContain("v_funnel_operational_timeline")
+    expect(component).toContain("Pagamentos")
+    expect(component).toContain("Checkout")
+    expect(component).toContain("Chat")
+    expect(component).toContain("Saúde & controle")
+    expect(component).toContain("atualização 15s")
+  })
+})
