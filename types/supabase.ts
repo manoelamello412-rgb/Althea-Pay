@@ -8302,6 +8302,29 @@ export type Database = {
           },
         ]
       }
+      v_funnel_operational_timeline: {
+        Row: {
+          amount: number | null
+          category: string | null
+          checkout_id: string | null
+          currency: string | null
+          event_id: string | null
+          event_type: string | null
+          external_id: string | null
+          funnel_id: string | null
+          gateway_id: string | null
+          message: string | null
+          metadata: Json | null
+          occurred_at: string | null
+          organization_id: string | null
+          severity: string | null
+          source: string | null
+          status: string | null
+          transaction_id: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       acquire_gateway_circuit: {
