@@ -91,3 +91,13 @@ The UI exposes these endpoints in the one-time provisioning handoff but never pe
 - Anonymous table access is revoked.
 - `integration_hub_overview_v1` requires an authenticated user and a valid default organization membership.
 - The overview returns operational metadata only; it does not return credential hashes, webhook secrets, API key hashes, provider credentials, or raw secret material.
+
+
+## UI surfaces
+
+- `/dashboard/integration-hub` is the operational Revenue Source overview.
+- `/dashboard/integration-hub/connect` starts the canonical source onboarding flow.
+- `/dashboard/funil/novo` uses the same provisioning workspace for operators entering from the funnel area.
+- `/dashboard/funil` is the post-provision handoff for one-time credentials, first-event verification, remote-control setup and optional commercial configuration.
+
+There is one provisioning implementation: `/api/funnels/provision` backed by `provision_funnel_commercial_atomic`.
