@@ -44,7 +44,7 @@ export default function AnalyticsPage() {
     let channel: ReturnType<typeof db.channel> | null = null
     void db.auth.getUser().then(({ data }) => {
       if (cancelled || !data.user) return
-      channel = db.channel(`analytics-${data.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_transactions', filter: `user_id=eq.${data.user.id}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'checkout_sessions', filter: `user_id=eq.${data.user.id}` }, () => void load()).subscribe()
+      channel = db.channel(`analytics-${data.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_transactions' }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'checkout_sessions' }, () => void load()).subscribe()
     })
     return () => { cancelled = true; if (channel) void db.removeChannel(channel) }
   }, [db, load])
