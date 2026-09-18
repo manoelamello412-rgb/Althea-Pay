@@ -69,8 +69,9 @@ export async function POST(request: Request) {
     const { data: pendingTransaction, error: pendingError } = await admin.rpc('transition_gateway_transaction_status', { p_transaction_id: boundTransaction.id, p_user_id: session.user_id, p_next_status: 'pending', p_failure_code: null, p_external_id: null, p_expected_version: Number(boundTransaction.version) })
     if (pendingError || !pendingTransaction) { console.error('[ALTHEA-PAYMENTS-PENDING]', pendingError); return NextResponse.json({ ok: false, code: 'PAYMENT_STATE_UPDATE_FAILED' }, { status: 500 }) }
 
-    const internalSecret = text(process.env.ALTHEA_INTERNAL_SECRET); const supabaseUrl = text(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)
-    if (!internalSecret || !supabaseUrl) { console.error('[ALTHEA-PAYMENTS-CONFIG] gateway execution secret/url is not configured'); return NextResponse.json({ ok: false, code: 'PAYMENT_PROCESSOR_NOT_CONFIGURED' }, { status: 503 }) }
+    const { data: internalSecretValue, error: internalSecretError } = await admin.rpc('get_althea_internal_secret')
+    const internalSecret = text(internalSecretValue); const supabaseUrl = text(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)
+    if (internalSecretError || !internalSecret || !supabaseUrl) { console.error('[ALTHEA-PAYMENTS-CONFIG] gateway execution secret/url is not configured'); return NextResponse.json({ ok: false, code: 'PAYMENT_PROCESSOR_NOT_CONFIGURED' }, { status: 503 }) }
 
     const adapterPayload = { operation: 'create_payment', gateway_id: selectedGatewayId, environment: text(gateway.environment) || 'production', transaction_id: pendingTransaction.id, amount: pendingTransaction.amount, currency: pendingTransaction.currency, payment_method: { type: paymentMethod, details: paymentDetails ?? {} }, customer: session.customer ?? {}, metadata: { ...metadata, ...(session.metadata && typeof session.metadata === 'object' ? session.metadata : {}) }, idempotency_key: `payment:${idempotencyKey}`, funnel_id: session.funnel_id, product_id: session.product_id }
     const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), ADAPTER_TIMEOUT_MS)
