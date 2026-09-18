@@ -161,6 +161,7 @@ Deno.serve(async (request) => {
     if (!checked.ok) return json({ ok: false, error: "remote_base_url_not_allowed" }, 422);
 
     const remoteControlInput = isObject(body.remote_control) ? body.remote_control : {};
+    const chatEnabled = remoteControlInput.chat_enabled === true;
     const remoteControl: Json = {
       gateway_get_path: text(remoteControlInput.gateway_get_path) || "/funnels/{{remote_funnel_id}}/gateway",
       gateway_get_method: text(remoteControlInput.gateway_get_method) || "GET",
@@ -170,6 +171,15 @@ Deno.serve(async (request) => {
       gateway_set_body: isObject(remoteControlInput.gateway_set_body)
         ? remoteControlInput.gateway_set_body
         : { gateway_id: "{{target_remote_gateway_ref}}" },
+      chat_enabled: chatEnabled,
+      chat_send_path:
+        text(remoteControlInput.chat_send_path) ||
+        "/funnels/{{remote_funnel_id}}/conversations/{{remote_conversation_id}}/messages",
+      chat_send_method: text(remoteControlInput.chat_send_method) || "POST",
+      chat_message_id_path: text(remoteControlInput.chat_message_id_path) || "message_id",
+      chat_send_body: isObject(remoteControlInput.chat_send_body)
+        ? remoteControlInput.chat_send_body
+        : { message: "{{message_body}}" },
       idempotency_header: text(remoteControlInput.idempotency_header) || "Idempotency-Key",
       timeout_ms: Math.min(Math.max(Number(remoteControlInput.timeout_ms ?? 15_000), 1_000), 30_000),
     };
@@ -201,9 +211,9 @@ Deno.serve(async (request) => {
     if (!secretId) return json({ ok: false, error: "connector_credential_required" }, 422);
 
     const existingConfig = isObject(current?.config) ? current.config : {};
-    const capabilities = writeEnabled
-      ? ["events:read", "gateway:read", "gateway:write"]
-      : ["events:read", "gateway:read"];
+    const capabilities = ["events:read", "gateway:read", "chat:read"];
+    if (writeEnabled) capabilities.push("gateway:write");
+    if (chatEnabled) capabilities.push("chat:write");
 
     const row = {
       user_id: current?.user_id ?? userId,
