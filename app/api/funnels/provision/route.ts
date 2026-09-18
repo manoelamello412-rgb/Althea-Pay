@@ -95,7 +95,17 @@ export async function POST(request: Request) {
       return json({ error: mapped.error }, mapped.status)
     }
 
-    return json(data, 201)
+    const payload = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : { data }
+    const origin = new URL(request.url).origin
+    return json({
+      ...payload,
+      connector: {
+        protocol_version: '1',
+        event_endpoint: eventEndpoint,
+        client_token_endpoint: `${supabaseUrl.replace(/\/$/, '')}/functions/v1/funnel-client-token`,
+        browser_sdk_url: `${origin}/althea-funnel-connector.js`,
+      },
+    }, 201)
   } catch (cause) {
     console.error('[funnels/provision]', cause)
     return json({ error: 'internal_error' }, 500)
