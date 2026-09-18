@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, fix/supabase-github-audit-20260917]
   pull_request:
     branches: [main]
   workflow_dispatch:
