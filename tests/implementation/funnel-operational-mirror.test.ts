@@ -55,6 +55,16 @@ describe('funnel operational mirror', () => {
     expect(component).toContain("new Set(")
   })
 
+  test('includes webhook health with signature and response failures', () => {
+    const migration = source('supabase/migrations/20260918153559_funnel_operational_webhook_health_v14.sql')
+    expect(migration).toContain('from public.webhook_deliveries d')
+    expect(migration).toContain('join public.webhook_integrations wi')
+    expect(migration).toContain("signature_valid=false")
+    expect(migration).toContain("Assinatura do webhook inválida.")
+    expect(migration).toContain('grant select on public.webhook_deliveries to authenticated')
+    expect(migration).toContain('revoke all on public.v_funnel_operational_timeline from anon')
+  })
+
   test('mirror exposes payment, checkout, chat, health and control filters', () => {
     const component = source('components/funnel-operational-mirror.tsx')
     expect(component).toContain("v_funnel_operational_timeline")
