@@ -1,23 +1,19 @@
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { checkDatabaseHealth } from '@/lib/health/database-health'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const startedAt = Date.now()
+  const result = await checkDatabaseHealth()
 
-  try {
-    await createSupabaseServerClient()
-    return NextResponse.json({
-      ok: true,
-      provider: 'supabase',
-      status: 'configured',
-      latency_ms: Date.now() - startedAt,
-    })
-  } catch {
-    return NextResponse.json(
-      { ok: false, provider: 'supabase', status: 'configuration_error', latency_ms: Date.now() - startedAt },
-      { status: 503 },
-    )
-  }
+  return NextResponse.json({
+    ok: result.ok,
+    provider: 'supabase',
+    status: result.status,
+    latency_ms: result.latency_ms,
+    timestamp: new Date().toISOString(),
+  }, {
+    status: result.ok ? 200 : 503,
+    headers: { 'Cache-Control': 'no-store' },
+  })
 }
