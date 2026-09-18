@@ -7,7 +7,7 @@ type Operation = "health_check" | "get_gateway" | "set_gateway";
 
 const HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type,x-althea-internal-secret",
+  "Access-Control-Allow-Headers": "content-type,apikey",
   "Access-Control-Allow-Methods": "POST,OPTIONS",
   "Content-Type": "application/json",
   "Cache-Control": "no-store",
@@ -21,6 +21,20 @@ const text = (value: unknown): string =>
 
 const json = (body: Json, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: HEADERS });
+
+const adminKeyFromEnv = (): string => {
+  const raw = Deno.env.get("SUPABASE_SECRET_KEYS");
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const key = typeof parsed.default === "string" ? parsed.default.trim() : "";
+      if (key) return key;
+    } catch {
+      // Fall through to the legacy key while the project migrates key formats.
+    }
+  }
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+};
 
 const getPath = (value: unknown, path: string): unknown => {
   let current = value;
@@ -147,16 +161,15 @@ Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: HEADERS });
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
 
-  const internalSecret = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
-  const suppliedSecret = request.headers.get("x-althea-internal-secret") ?? "";
-  if (!constantTimeEqual(internalSecret, suppliedSecret)) {
-    return json({ ok: false, error: "forbidden" }, 403);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const adminKey = adminKeyFromEnv();
+  if (!supabaseUrl || !adminKey) {
+    return json({ ok: false, error: "server_configuration_error" }, 500);
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  if (!supabaseUrl || !serviceRole) {
-    return json({ ok: false, error: "server_configuration_error" }, 500);
+  const suppliedAdminKey = request.headers.get("apikey") ?? "";
+  if (!constantTimeEqual(adminKey, suppliedAdminKey)) {
+    return json({ ok: false, error: "forbidden" }, 403);
   }
 
   let body: Json;
@@ -181,7 +194,7 @@ Deno.serve(async (request) => {
     return json({ ok: false, error: "target_remote_gateway_ref_required" }, 422);
   }
 
-  const db = createClient(supabaseUrl, serviceRole, {
+  const db = createClient(supabaseUrl, adminKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
