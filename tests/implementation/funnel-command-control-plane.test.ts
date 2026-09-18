@@ -45,6 +45,36 @@ describe('funnel remote command control plane', () => {
     expect(migration).toContain('grant execute on function public.switch_all_funnel_primary_gateways(text) to service_role')
   })
 
+  test('workers do not depend on a custom Edge runtime secret', () => {
+    const command = source('supabase/functions/funnel-command-worker/index.ts')
+    const drift = source('supabase/functions/funnel-drift-worker/index.ts')
+    const adapter = source('supabase/functions/funnel-provider-adapter/index.ts')
+    const control = source('supabase/functions/funnel-connection-control/index.ts')
+
+    expect(command).not.toContain('Deno.env.get("ALTHEA_INTERNAL_SECRET")')
+    expect(drift).not.toContain('Deno.env.get("ALTHEA_INTERNAL_SECRET")')
+    expect(control).not.toContain('Deno.env.get("ALTHEA_INTERNAL_SECRET")')
+    expect(command).toContain('verify_althea_internal_secret')
+    expect(drift).toContain('verify_althea_internal_secret')
+    expect(adapter).toContain('request.headers.get("apikey")')
+  })
+
+  test('service-role ACLs required by the control plane are versioned', () => {
+    const migration = source('supabase/migrations/20260918050607_grant_funnel_control_service_acl_v9.sql')
+    expect(migration).toContain('grant select, insert, update on public.funnel_connections to service_role')
+    expect(migration).toContain('grant select, insert, update on public.funnel_connection_gateway_mappings to service_role')
+    expect(migration).toContain('grant select, insert, update on public.funnel_control_drift_events to service_role')
+    expect(migration).not.toContain('to anon')
+  })
+
+  test('cron authentication is verified against Vault without returning the secret', () => {
+    const migration = source('supabase/migrations/20260918050052_fix_funnel_worker_runtime_auth_v8.sql')
+    expect(migration).toContain('verify_althea_internal_secret')
+    expect(migration).toContain('grant execute on function public.verify_althea_internal_secret(text) to service_role')
+    expect(migration).toContain("'x-althea-internal-secret'")
+    expect(migration).not.toContain("grant execute on function public.verify_althea_internal_secret(text) to authenticated")
+  })
+
   test('drift detection and rollback remain part of the canonical runtime', () => {
     const drift = source('supabase/functions/funnel-drift-worker/index.ts')
     const migration = source('supabase/migrations/20260918043540_funnel_gateway_rollback_and_drift_foundation_v5.sql')
