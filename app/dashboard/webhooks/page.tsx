@@ -14,6 +14,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Trash2,
+  X,
   XCircle,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -87,6 +88,8 @@ export default function WebhooksPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [rotating, setRotating] = useState<string | null>(null)
+  const [removeTarget, setRemoveTarget] = useState<Outbound | null>(null)
+  const [removing, setRemoving] = useState(false)
   const [secret, setSecret] = useState<string | null>(null)
   const [showSecret, setShowSecret] = useState(false)
   const [name, setName] = useState('')
@@ -206,15 +209,18 @@ export default function WebhooksPage() {
     }
   }
 
-  async function remove(id: string) {
-    if (!window.confirm('Remover este endpoint de saída?')) return
-    setMessage(''); setError('')
+  async function remove() {
+    if (!removeTarget || removing) return
+    setRemoving(true); setMessage(''); setError('')
     try {
-      await management({ action: 'delete', id })
+      await management({ action: 'delete', id: removeTarget.id })
       setMessage('Endpoint removido.')
+      setRemoveTarget(null)
       await load()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Falha ao remover endpoint.')
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -293,7 +299,7 @@ export default function WebhooksPage() {
 
         <section className="rounded-2xl border border-white/10 bg-white/[.02] p-5">
           <div className="mb-5 flex items-center gap-3"><ArrowUpFromLine size={19} className="text-emerald-400"/><div><h2 className="font-black">Webhooks de saída</h2><p className="text-xs text-slate-600">Gerencie os endpoints que recebem eventos da Althea.</p></div></div>
-          {outbound.length === 0 ? <p className="py-10 text-center text-sm text-slate-600">Nenhum webhook de saída cadastrado.</p> : <div className="grid gap-3 xl:grid-cols-2">{outbound.map(item => <article key={item.id} className="rounded-xl border border-white/[.07] bg-black/10 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="text-sm">{item.name}</b><p className="mt-1 truncate font-mono text-[11px] text-slate-600">{item.endpoint_url}</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><div className="mt-3 flex flex-wrap gap-2">{item.events.map(event => <span key={event} className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-slate-500">{event}</span>)}</div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => void toggle(item)} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{item.status === 'active' ? 'Desativar' : 'Ativar'}</button><button type="button" onClick={() => void rotate(item.id)} disabled={rotating === item.id} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{rotating === item.id ? 'Rotacionando...' : 'Rotacionar segredo'}</button><button type="button" onClick={() => void remove(item.id)} className="ml-auto grid h-10 w-10 place-items-center rounded-lg border border-red-400/20 text-red-300" aria-label="Remover webhook"><Trash2 size={14}/></button></div></article>)}</div>}
+          {outbound.length === 0 ? <p className="py-10 text-center text-sm text-slate-600">Nenhum webhook de saída cadastrado.</p> : <div className="grid gap-3 xl:grid-cols-2">{outbound.map(item => <article key={item.id} className="rounded-xl border border-white/[.07] bg-black/10 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="text-sm">{item.name}</b><p className="mt-1 truncate font-mono text-[11px] text-slate-600">{item.endpoint_url}</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><div className="mt-3 flex flex-wrap gap-2">{item.events.map(event => <span key={event} className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-slate-500">{event}</span>)}</div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => void toggle(item)} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{item.status === 'active' ? 'Desativar' : 'Ativar'}</button><button type="button" onClick={() => void rotate(item.id)} disabled={rotating === item.id} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{rotating === item.id ? 'Rotacionando...' : 'Rotacionar segredo'}</button><button type="button" onClick={() => setRemoveTarget(item)} className="ml-auto grid h-10 w-10 place-items-center rounded-lg border border-red-400/20 text-red-300" aria-label="Remover webhook"><Trash2 size={14}/></button></div></article>)}</div>}
         </section>
 
         <section className="grid gap-5 xl:grid-cols-2">
@@ -308,6 +314,8 @@ export default function WebhooksPage() {
           </div>
         </section>
       </div>
+
+      {removeTarget && <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="remove-webhook-title" onClick={(event) => { if (event.currentTarget === event.target && !removing) setRemoveTarget(null) }}><div className="w-full max-w-md rounded-t-3xl border border-white/10 bg-[#0b100e] p-5 shadow-2xl sm:rounded-3xl"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-red-300">Remover webhook</p><h2 id="remove-webhook-title" className="mt-2 text-lg font-black text-white">{removeTarget.name}</h2><p className="mt-2 text-sm leading-6 text-slate-500">O endpoint deixará de receber novos eventos da Althea Pay. O histórico de entregas já registrado permanece preservado.</p><p className="mt-3 break-all rounded-xl border border-white/[.06] bg-black/20 p-3 font-mono text-[10px] text-slate-600">{removeTarget.endpoint_url}</p></div><button type="button" onClick={() => setRemoveTarget(null)} disabled={removing} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-white/[.05] hover:text-white disabled:opacity-40" aria-label="Fechar confirmação"><X size={17}/></button></div><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setRemoveTarget(null)} disabled={removing} className="min-h-11 rounded-xl border border-white/10 px-4 text-sm text-slate-300 disabled:opacity-40">Cancelar</button><button type="button" onClick={() => void remove()} disabled={removing} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-500 px-4 text-sm font-bold text-white disabled:opacity-50"><Trash2 size={15}/>{removing ? 'Removendo...' : 'Remover endpoint'}</button></div></div></div>}
     </main>
   )
 }
