@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Check, Layers, Loader2, Package, Sparkles, Webhook } from 'lucide-react'
 import FunnelCommercialSelector from '@/app/dashboard/funil/funnel-commercial-selector'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { FunnelCommercialSelection } from '@/app/dashboard/funil/funnel-commercial-selector'
 
 type FunnelType = 'sales' | 'lead_capture' | 'launch' | 'product' | 'upsell_downsell' | 'subscription' | 'custom'
@@ -21,6 +22,7 @@ const types: Array<{ id: FunnelType; title: string; description: string }> = [
 
 export default function FunnelCreateWorkspace() {
   const router = useRouter()
+  const supabase = useMemo(() => createSupabaseBrowserClient(), [])
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [funnelType, setFunnelType] = useState<FunnelType>('sales')
@@ -89,9 +91,36 @@ export default function FunnelCreateWorkspace() {
       const created = payload.funnel && typeof payload.funnel === 'object'
         ? payload.funnel as Record<string, unknown>
         : {}
+      const ingestion = payload.ingestion && typeof payload.ingestion === 'object'
+        ? payload.ingestion as Record<string, unknown>
+        : {}
       const funnelId = typeof created.id === 'string' ? created.id : ''
 
       if (!funnelId) throw new Error('O provisionamento não retornou o ID do funil.')
+
+      const handoff: Record<string, string> = {
+        funnelId,
+        token: typeof ingestion.token === 'string' ? ingestion.token : '',
+        eventEndpoint: typeof ingestion.event_endpoint === 'string' ? ingestion.event_endpoint : '',
+      }
+
+      if (connectionType === 'webhook') {
+        const webhookResult = await supabase.functions.invoke('webhook-integrations', {
+          body: { funnel_id: funnelId, name: name.trim() || 'Webhook do Funil', provider: 'custom' },
+        })
+        if (webhookResult.error || !webhookResult.data?.secret || !webhookResult.data?.endpoint) {
+          handoff.warning = 'O funil foi criado, mas o webhook não pôde ser provisionado automaticamente. Você pode criá-lo na configuração do funil.'
+        } else {
+          handoff.webhookSecret = String(webhookResult.data.secret)
+          handoff.webhookEndpoint = String(webhookResult.data.endpoint)
+        }
+      }
+
+      try {
+        window.sessionStorage.setItem('althea:funnel-provision-handoff', JSON.stringify(handoff))
+      } catch {
+        // O funil já foi criado; falha no armazenamento local não deve desfazer a operação.
+      }
 
       router.push(`/dashboard/funil?funnel=${encodeURIComponent(funnelId)}`)
       router.refresh()
