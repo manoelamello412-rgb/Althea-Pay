@@ -28,7 +28,7 @@ export default function FunnelCommercialSelector({ value, onChange }: { value: F
       if (productError) throw productError
       if (gatewayError) throw gatewayError
       setProducts((productRows ?? []) as Product[])
-      setGateways(((gatewayRows ?? []) as Gateway[]).filter((gateway) => !['disabled', 'inactive', 'disconnected'].includes(String(gateway.status ?? '').toLowerCase())))
+      setGateways(((gatewayRows ?? []) as Gateway[]).filter((gateway) => ['active', 'connected', 'degraded'].includes(String(gateway.status ?? '').toLowerCase())))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível carregar produtos e gateways.')
     } finally { setLoading(false) }
