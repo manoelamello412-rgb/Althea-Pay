@@ -20,10 +20,22 @@ describe('canonical Althea design contract', () => {
       'app/althea-design-system.css',
       'app/brand-kit.css',
       'app/althea-visual.css',
-      'app/dashboard-polish.css',
       'app/brand-manual.css',
     ]
     for (const file of files) expect(source(file)).not.toContain(':root')
+  })
+
+  test('retired dashboard override layers are no longer loaded', () => {
+    const styles = source('app/althea-styles.css')
+    for (const retired of [
+      'dashboard.css',
+      'dashboard-responsive.css',
+      'dashboard-polish.css',
+      'session-actions.css',
+      'advanced-hub.css',
+    ]) {
+      expect(styles).not.toContain(retired)
+    }
   })
 
   test('dashboard layout delegates navigation and framing to MobileShell only', () => {
