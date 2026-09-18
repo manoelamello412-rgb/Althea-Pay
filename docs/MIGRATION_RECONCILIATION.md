@@ -7,8 +7,8 @@ Audit date: 2026-09-17/18.
 The live Supabase project and the GitHub repository do **not** share a reproducible migration history.
 
 Verified counts at audit time:
-- Live Supabase migration history: **580** rows in `supabase_migrations.schema_migrations`.
-- GitHub audit branch: **347** SQL migration files after the audit hardening migrations.
+- Live Supabase migration history: **589** rows in `supabase_migrations.schema_migrations`.
+- GitHub audit branch: **356** SQL migration files after the audit hardening migrations.
 - Comparing migration names before the final audit migration:
   - **282** remote migration names had no matching local migration file.
   - **49** local migration names had no matching remote history row.
@@ -49,7 +49,7 @@ The safe long-term cleanup is:
 4. Keep only new forward migrations after that baseline in the active migration chain.
 5. Test a clean database created from the new baseline plus forward migrations before changing the production workflow.
 
-Do not attempt to reconstruct the 580-row production history by guessing SQL from object names.
+Do not attempt to reconstruct the 589-row production history by guessing SQL from object names.
 
 ## Audit forward migrations applied and reconciled
 
@@ -103,8 +103,8 @@ The following reviewed forward migrations were applied to the linked Supabase pr
 These migrations add the durable external-funnel command plane, two-phase verified gateway switching, service-only lockdown of the former local-only global switch, retry and drift workers, rollback state, RLS-protected drift records, and database-level tenant-integrity enforcement.
 
 Current reconciled counts at this continuation checkpoint:
-- Live migration history: **580**
-- Local SQL migration files: **347**
+- Live migration history: **589**
+- Local SQL migration files: **356**
 - Remote logical names without a local name match: **282**
 - Local logical names without a remote name match: **49**
 
@@ -124,3 +124,31 @@ After applying `20260918050052_fix_funnel_worker_runtime_auth_v8.sql`, deploying
 - `funnel-drift-worker`: HTTP 200, `ok:true`
 
 This is stronger evidence than the cron scheduler status alone because it validates the actual Edge Function HTTP response.
+
+
+## Funnel operational mirror and public API continuation
+
+Reviewed forward migrations applied to the linked Supabase project and mirrored in GitHub with the exact remote versions include:
+
+- `20260918052534_crm_funnel_chat_remote_bridge_v10.sql`
+- `20260918151516_funnel_operational_timeline_v11.sql`
+- `20260918152707_checkout_engine_transaction_projection_v12.sql`
+- `20260918153239_funnel_operational_chat_delivery_v13.sql`
+- `20260918153303_fix_gateway_payment_link_sale_tenant_v13.sql`
+- `20260918153559_funnel_operational_webhook_health_v14.sql`
+- `20260918153812_funnel_operational_outbound_webhook_v15.sql`
+- `20260918154258_fix_public_api_key_auth_digest_v16.sql`
+- `20260918154709_grant_operational_timeline_service_acl_v17.sql`
+
+This continuation adds bidirectional remote funnel chat, the unified security-invoker operational timeline, asynchronous checkout transaction projection, chat delivery/DLQ visibility, inbound/outbound webhook health, repaired external API-key hashing, and the backend read ACLs required for the scoped public operational-timeline endpoint.
+
+Current reconciliation counts at this checkpoint:
+- Live migration history: **589**
+- Local SQL migration files: **356**
+- Remote logical names without a local name match: **282**
+- Local logical names without a remote name match: **49**
+- Canonical Edge Function inventory: **44 local / 44 deployed**
+
+Controlled runtime validation also proved the public `funnels:read` API-key path can read the per-funnel operational timeline with HTTP 200 after the v16/v17 repairs. The temporary E2E fixtures were removed after the test.
+
+Historical migration drift remains open; these forward migrations do not make the old chain safe to replay from zero, and automatic production `supabase db push` remains forbidden.
