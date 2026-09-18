@@ -58,6 +58,7 @@ export const DynamicGatewayConnector: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
+  const [switchingAll, setSwitchingAll] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -227,6 +228,36 @@ export const DynamicGatewayConnector: React.FC = () => {
     await load()
   }
 
+  const switchAllFunnels = async (gateway: Gateway) => {
+    const operational = ['connected', 'degraded'].includes(gateway.status.toLowerCase())
+    if (!operational || switchingAll || testing) return
+    const confirmed = window.confirm(
+      'Usar esta gateway como principal em todos os funis que já possuem uma gateway principal? Novos pagamentos usarão a nova rota; transações antigas não serão alteradas.'
+    )
+    if (!confirmed) return
+
+    setSwitchingAll(gateway.id)
+    setError(null)
+    setMessage(null)
+    try {
+      const { data, error: switchError } = await db.rpc('switch_all_funnel_primary_gateways', {
+        p_gateway_id: gateway.id,
+      })
+      if (switchError) throw switchError
+      const count = Number((data as { switched_count?: unknown } | null)?.switched_count ?? 0)
+      setMessage(
+        count === 1
+          ? 'Gateway aplicada como principal em 1 funil. Transações antigas foram preservadas.'
+          : `Gateway aplicada como principal em ${count} funis. Transações antigas foram preservadas.`
+      )
+      await load()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível trocar a gateway dos funis.')
+    } finally {
+      setSwitchingAll(null)
+    }
+  }
+
   const renderField = (credential: GatewayCredentialField, target: 'credential' | 'webhook' = 'credential') => {
     const source = target === 'webhook' ? webhookValues : values
     const setSource = target === 'webhook' ? setWebhookValues : setValues
@@ -274,13 +305,23 @@ export const DynamicGatewayConnector: React.FC = () => {
         ) : (
           <div className="space-y-2">
             {gateways.map(gateway => (
-              <div key={gateway.id} className="flex items-center justify-between gap-3 rounded-lg border border-neutral-800 p-3">
+              <div key={gateway.id} className="flex flex-col gap-3 rounded-lg border border-neutral-800 p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="truncate text-xs font-semibold text-white">{gateway.display_name || 'Gateway sem nome'}</div>
                   <div className="mt-1 text-[9px] font-mono uppercase text-neutral-500">{gateway.provider} · {gateway.environment} · {statusLabel(gateway.status)}</div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-full ${['connected', 'degraded'].includes(gateway.status.toLowerCase()) ? 'bg-emerald-500' : 'bg-neutral-600'}`} />
+                  {['connected', 'degraded'].includes(gateway.status.toLowerCase()) && (
+                    <button
+                      type="button"
+                      onClick={() => void switchAllFunnels(gateway)}
+                      disabled={testing !== null || switchingAll !== null}
+                      className="rounded-md border border-emerald-800/70 bg-emerald-950/30 px-2.5 py-2 text-[9px] font-bold font-mono text-emerald-400 disabled:opacity-40"
+                    >
+                      {switchingAll === gateway.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'TODOS OS FUNIS'}
+                    </button>
+                  )}
                   <button type="button" onClick={() => edit(gateway)} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Pencil className="h-3.5 w-3.5" /></button>
                   <button type="button" onClick={() => void test(gateway.id)} disabled={testing !== null} className="rounded-md border border-neutral-700 px-2.5 py-2 text-[9px] font-bold font-mono text-white">{testing === gateway.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'TESTAR'}</button>
                   <button type="button" onClick={() => void toggle(gateway)} disabled={testing !== null || !gateway.credential_id} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Power className="h-3.5 w-3.5" /></button>
