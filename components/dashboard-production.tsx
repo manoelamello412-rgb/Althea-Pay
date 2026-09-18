@@ -63,6 +63,7 @@ export default function DashboardProduction() {
   const monetaryCurrency = selected.currency || (currencyOptions.length === 1 ? currencyOptions[0] : '')
   const currency = monetaryCurrency || 'BRL'
   const moneyMetric = (value: any) => monetaryCurrency ? money(value, currency) : '—'
+  const explicitCurrencyMetric = (value: any) => selected.currency ? money(value, selected.currency) : '—'
   const cards = [
     ['Receita aprovada', monetaryCurrency ? d.financial?.revenue : null, monetaryCurrency ? d.previous?.revenue : null, monetaryCurrency ? money(d.financial?.revenue, currency) : `${currencyOptions.length || 'Várias'} moedas`, Wallet, '/dashboard/pagamentos'],
     ['Vendas aprovadas', d.sales?.approved, d.previous?.sales, number(d.sales?.approved), ShoppingCart, '/dashboard/vendas'],
@@ -75,8 +76,8 @@ export default function DashboardProduction() {
     ['Clientes', [['Clientes', number(d.clients?.total)], ['Novos', number(d.clients?.new)], ['Recorrentes', number(d.clients?.recurring)], ['Ativos', number(d.clients?.active)], ['LTV', moneyMetric(d.clients?.ltv)]], '/dashboard/clientes'],
     ['Pagamentos', [['Aprovados', number(d.payments?.approved)], ['Recusados', number(d.payments?.declined)], ['Pendentes', number(d.payments?.pending)], ['Reembolsos', number(d.payments?.refunds)], ['Chargebacks', number(d.payments?.chargebacks)]], '/dashboard/pagamentos'],
     ['Gateways', [['Gateways', number(d.gateways?.count)], ['Tentativas', number(d.gateways?.attempts)], ['Aprovadas', number(d.gateways?.approved)], ['Falhas', number(d.gateways?.failed)], ['Taxa', percent(d.gateways?.approvalRate)]], '/dashboard/gateways'],
-    ['Assinaturas', [['Total', number(d.subscriptions?.total)], ['Ativas', number(d.subscriptions?.active)], ['Trial', number(d.subscriptions?.trialing)], ['Em atraso', number(d.subscriptions?.pastDue)], ['MRR', moneyMetric(d.subscriptions?.mrr)]], '/dashboard/vendas'],
-    ['Afiliados', [['Afiliados', number(d.affiliates?.count)], ['Vendas atribuídas', number(d.affiliates?.sales)], ['Receita atribuída', moneyMetric(d.affiliates?.revenue)], ['Comissões', moneyMetric(d.affiliates?.commissions)]]],
+    ['Assinaturas', [['Total', number(d.subscriptions?.total)], ['Ativas', number(d.subscriptions?.active)], ['Trial', number(d.subscriptions?.trialing)], ['Em atraso', number(d.subscriptions?.pastDue)], ['MRR', explicitCurrencyMetric(d.subscriptions?.mrr)]], '/dashboard/vendas'],
+    ['Afiliados', [['Afiliados', number(d.affiliates?.count)], ['Vendas atribuídas', number(d.affiliates?.sales)], ['Receita atribuída', moneyMetric(d.affiliates?.revenue)], ['Comissões', '—']]],
     ['Marketing / Atribuição', [['Leads', number(d.marketing?.leads)], ['Vendas', number(d.marketing?.sales)], ['Receita', moneyMetric(d.marketing?.revenue)], ['Fonte', monetaryCurrency ? `Dados reais · ${currency}` : 'Selecione uma moeda']], '/dashboard/analytics'],
     ['CRM', [['Conversas', number(d.crm?.conversations)], ['Abertas', number(d.crm?.open)], ['Não lidas', number(d.crm?.unread)], ['SLA', 'Operacional']], '/dashboard/crm'],
     ['Operações', [['Eventos', number(d.operations?.events)], ['Falhas', number(d.operations?.failed)], ['Pendentes', number(d.operations?.pending)], ['Integrações', 'Monitoradas']], '/dashboard/webhooks'],
