@@ -46,6 +46,7 @@ Deno.serve(async(req)=>{
     aud:"althea-funnel-events",
     sub:userId,
     funnel_id:funnelId,
+    kid:String(resolved.data.token_id),
     scope:["events:write"],
     iat:now,
     exp:now+ttl,
