@@ -84,7 +84,7 @@ function eventSummary(event: IntegrationEvent): string {
 
 function statusMeta(connection: FunnelConnection | null): { label: string; tone: string; dot: string } {
   const health = connection?.health_status?.toLowerCase()
-  if (health === 'healthy') return { label: 'OPERACIONAL', tone: 'text-emerald-400', dot: 'bg-emerald-500' }
+  if (health === 'healthy') return { label: 'OPERACIONAL', tone: 'text-[var(--althea-brand)]', dot: 'bg-[var(--althea-brand)]' }
   if (health === 'degraded') return { label: 'DEGRADADO', tone: 'text-amber-400', dot: 'bg-amber-500' }
   if (health === 'unhealthy' || health === 'error') return { label: 'INSTÁVEL', tone: 'text-rose-400', dot: 'bg-rose-500' }
   return { label: 'AGUARDANDO EVENTO', tone: 'text-zinc-400', dot: 'bg-zinc-500' }
