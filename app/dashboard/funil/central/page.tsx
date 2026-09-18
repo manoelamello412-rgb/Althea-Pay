@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Activity, ArrowRight, BarChart3, CheckCircle2, GitBranch, Loader2, Plus, RefreshCw, Settings2, ShoppingCart, Sparkles, Zap } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
@@ -33,6 +33,7 @@ export default function FunnelCentralPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const initialFunnelId = useRef<string | null>(null)
 
   const load = useCallback(async (preferredId?: string) => {
     setError('')
@@ -63,7 +64,12 @@ export default function FunnelCentralPage() {
     setMetrics({ sales: approved.length, revenue, currency: currencies[0] || 'BRL', currencyCount: currencies.length, events: Number(connectionResult.data?.event_count ?? eventList.length), failedEvents: Number(connectionResult.data?.error_count ?? eventList.filter((e) => e.status === 'failed' || e.error_message).length), approval: sales.length ? approved.length / sales.length * 100 : 0 })
   }, [selectedId, supabase])
 
-  useEffect(() => { void load().catch((e) => setError(e instanceof Error ? e.message : 'Não foi possível carregar a central.')).finally(() => setLoading(false)) }, [load])
+  useEffect(() => {
+    if (initialFunnelId.current === null) initialFunnelId.current = new URLSearchParams(window.location.search).get('funnel')?.trim() || ''
+    const preferredId = initialFunnelId.current || undefined
+    initialFunnelId.current = ''
+    void load(preferredId).catch((e) => setError(e instanceof Error ? e.message : 'Não foi possível carregar a central.')).finally(() => setLoading(false))
+  }, [load])
 
   useEffect(() => {
     if (!selectedId) return
