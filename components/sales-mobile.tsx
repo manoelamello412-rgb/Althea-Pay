@@ -54,7 +54,7 @@ export default function SalesMobile() {
       const queryResult = await db
         .from('sales')
         .select('id,amount,status,currency,data,gateway_id,external_id,transaction_id,occurred_at,created_at')
-                .order('occurred_at', { ascending: false })
+        .order('occurred_at', { ascending: false })
         .limit(5000)
       if (queryResult.error) throw queryResult.error
       setSales((queryResult.data || []) as Sale[])
