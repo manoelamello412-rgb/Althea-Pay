@@ -25,7 +25,7 @@ type CheckoutSession = {
 }
 
 type Funnel = { id: string; nome: string }
-type Product = { id: string; data: Record<string, unknown> | null }
+type Product = { id: string; name: string | null }
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -63,14 +63,14 @@ function customerName(customer: Record<string, unknown> | null): string {
 
 function productName(product: Product | undefined, productId: string | null): string {
   if (!product) return productId ? `Produto ${productId.slice(0, 8)}` : 'Produto não informado'
-  const data = record(product.data)
-  return text(data.name ?? data.nome ?? data.title ?? data.product_name) || `Produto ${product.id.slice(0, 8)}`
+  return text(product.name) || `Produto ${product.id.slice(0, 8)}`
 }
 
 export default function CheckoutsPage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
   const router = useRouter()
   const [sessions, setSessions] = useState<CheckoutSession[]>([])
+  const [organizationId, setOrganizationId] = useState<string | null>(null)
   const [funnels, setFunnels] = useState<Funnel[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [query, setQuery] = useState('')
@@ -86,13 +86,34 @@ export default function CheckoutsPage() {
       return
     }
 
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('default_organization_id')
+      .eq('id', sessionData.session.user.id)
+      .single()
+
+    if (profileError || !profile?.default_organization_id) {
+      throw new Error('Organização ativa não encontrada para esta conta.')
+    }
+
+    const activeOrganizationId = String(profile.default_organization_id)
+    setOrganizationId(activeOrganizationId)
+
     const [{ data: checkoutData, error: checkoutError }, { data: funnelData, error: funnelError }, { data: productData, error: productError }] = await Promise.all([
       supabase.from('checkout_sessions')
         .select('id,funnel_id,product_id,status,currency,amount,customer,attribution,created_at,updated_at,abandoned_at,completed_at,recovery_count,recovery_status')
+        .eq('organization_id', activeOrganizationId)
         .order('created_at', { ascending: false })
         .limit(200),
-      supabase.from('funnels').select('id,nome').is('deleted_at', null),
-      supabase.from('products').select('id,data').is('deleted_at', null).limit(200),
+      supabase.from('funnels')
+        .select('id,nome')
+        .eq('organization_id', activeOrganizationId)
+        .is('deleted_at', null),
+      supabase.from('products')
+        .select('id,name')
+        .eq('organization_id', activeOrganizationId)
+        .is('deleted_at', null)
+        .limit(200),
     ])
 
     if (checkoutError) throw checkoutError
@@ -114,12 +135,18 @@ export default function CheckoutsPage() {
   useEffect(() => { void refresh() }, [refresh])
 
   useEffect(() => {
+    if (!organizationId) return
     let active = true
-    const channel = supabase.channel('dashboard-checkout-sessions')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'checkout_sessions' }, () => { if (active) void load() })
+    const channel = supabase.channel(`dashboard-checkout-sessions-${organizationId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'checkout_sessions',
+        filter: `organization_id=eq.${organizationId}`,
+      }, () => { if (active) void load() })
       .subscribe()
     return () => { active = false; void supabase.removeChannel(channel) }
-  }, [load, supabase])
+  }, [load, organizationId, supabase])
 
   const funnelMap = useMemo(() => new Map(funnels.map((item) => [item.id, item.nome])), [funnels])
   const productMap = useMemo(() => new Map(products.map((item) => [item.id, item])), [products])
