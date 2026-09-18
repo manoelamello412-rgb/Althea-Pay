@@ -41,8 +41,8 @@ const validSchema = (value: unknown): value is { fields: GatewayCredentialField[
 }
 
 const statusLabel = (status: string) => ({
-  connected: 'CONECTADO', degraded: 'DEGRADADO', error: 'ERRO',
-  disabled: 'DESATIVADO', connecting: 'CONECTANDO', inactive: 'INATIVO',
+  active: 'ATIVO', connected: 'CONECTADO', degraded: 'DEGRADADO', error: 'ERRO',
+  disabled: 'DESATIVADO', connecting: 'CONECTANDO', inactive: 'INATIVO', disconnected: 'DESCONECTADO',
 } as Record<string, string>)[status.toLowerCase()] ?? 'NÃO VALIDADO'
 
 export const DynamicGatewayConnector: React.FC = () => {
@@ -280,7 +280,7 @@ export const DynamicGatewayConnector: React.FC = () => {
                   <div className="mt-1 text-[9px] font-mono uppercase text-neutral-500">{gateway.provider} · {gateway.environment} · {statusLabel(gateway.status)}</div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
-                  <span className={`h-2 w-2 rounded-full ${['connected', 'degraded'].includes(gateway.status.toLowerCase()) ? 'bg-emerald-500' : 'bg-neutral-600'}`} />
+                  <span className={`h-2 w-2 rounded-full ${['active', 'connected', 'degraded'].includes(gateway.status.toLowerCase()) ? 'bg-emerald-500' : 'bg-neutral-600'}`} />
                   <button type="button" onClick={() => edit(gateway)} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Pencil className="h-3.5 w-3.5" /></button>
                   <button type="button" onClick={() => void test(gateway.id)} disabled={testing !== null} className="rounded-md border border-neutral-700 px-2.5 py-2 text-[9px] font-bold font-mono text-white">{testing === gateway.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'TESTAR'}</button>
                   <button type="button" onClick={() => void toggle(gateway)} disabled={testing !== null || !gateway.credential_id} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Power className="h-3.5 w-3.5" /></button>
