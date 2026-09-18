@@ -157,7 +157,7 @@ export default function MembersPage() {
         {error && <section className="rounded-2xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-red-200">{error}</section>}
 
         <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025]">
-          <div className="hidden grid-cols-[1.4fr_1.2fr_.8fr_1fr] gap-4 border-b border-white/10 px-5 py-3 text-[11px] font-medium uppercase tracking-wider text-white/35 md:grid">
+          <div className="hidden grid-cols-[1.4fr_1.2fr_.8fr_1fr] gap-4 border-b border-white/10 px-5 py-3 text-[11px] font-medium uppercase tracking-wider text-white/35 lg:grid">
             <span>Membro</span><span>Organização</span><span>Papel</span><span>Vínculo</span>
           </div>
           {loading ? (
@@ -171,7 +171,7 @@ export default function MembersPage() {
                 const organization = organizationMap[membership.organization_id]
                 const isCurrent = membership.user_id === currentUserId
                 return (
-                  <div key={`${membership.organization_id}:${membership.user_id}`} className="grid gap-3 px-5 py-4 md:grid-cols-[1.4fr_1.2fr_.8fr_1fr] md:items-center">
+                  <div key={`${membership.organization_id}:${membership.user_id}`} className="grid gap-3 px-5 py-4 lg:grid-cols-[1.4fr_1.2fr_.8fr_1fr] lg:items-center">
                     <div className="min-w-0">
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-xs font-semibold text-white/70">{(profile?.display_name ?? membership.user_id).slice(0, 2).toUpperCase()}</div>
