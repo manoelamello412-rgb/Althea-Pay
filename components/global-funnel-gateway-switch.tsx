@@ -226,7 +226,7 @@ export function GlobalFunnelGatewaySwitch({ gateways }: { gateways: GlobalGatewa
     try { await loadBatch(batch?.id ?? null) }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível atualizar o batch.') }
     finally { setBusy(null) }
-  }, [batch?.id, loadBatch])
+  }, [batch, loadBatch])
 
   const selectedGateway = eligibleGateways.find((gateway) => gateway.id === gatewayId) ?? null
   const preflightReady = Boolean(batch?.dry_run && batch.status === 'succeeded' && batch.target_gateway_id === gatewayId)
