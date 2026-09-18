@@ -25,7 +25,7 @@ export default function ClientesPage() {
     try {
       const { data: auth } = await db.auth.getUser()
       if (!auth.user) { setClients([]); return }
-      const result = await db.from('clients').select('id,data,created_at,user_id').eq('user_id', auth.user.id).order('created_at', { ascending: false }).limit(5000)
+      const result = await db.from('clients').select('id,data,created_at,user_id').order('created_at', { ascending: false }).limit(5000)
       if (result.error) throw result.error
       setClients((result.data ?? []) as Client[])
     } catch (cause) {
