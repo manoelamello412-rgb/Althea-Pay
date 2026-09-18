@@ -72,7 +72,7 @@ const fmt = (value: string | null) => value
   : '—'
 const badge = (status: string) =>
   status === 'active' || status === 'processed' || status === 'delivered'
-    ? 'border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.08)] text-emerald-300'
+    ? 'border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.08)] text-[#8edca5]'
     : status === 'failed' || status === 'dead_letter'
       ? 'border-red-400/20 bg-red-400/10 text-red-300'
       : 'border-amber-400/20 bg-amber-400/10 text-amber-300'
@@ -255,7 +255,7 @@ export default function WebhooksPage() {
         </section>
 
         {(error || message) && (
-          <div className={`rounded-xl border p-4 text-sm ${error ? 'border-red-400/20 bg-red-400/5 text-red-300' : 'border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.05)] text-emerald-300'}`}>
+          <div className={`rounded-xl border p-4 text-sm ${error ? 'border-red-400/20 bg-red-400/5 text-red-300' : 'border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.05)] text-[#8edca5]'}`}>
             {error || message}
           </div>
         )}
@@ -269,10 +269,10 @@ export default function WebhooksPage() {
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {EVENTS.map(item => (
-                <button key={item} type="button" onClick={() => setSelectedEvents(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])} className={`min-h-10 rounded-full border px-3 text-[10px] font-bold ${selectedEvents.includes(item) ? 'border-[rgba(29,184,84,.22)] bg-[rgba(29,184,84,.08)] text-emerald-300' : 'border-white/10 text-[var(--althea-muted)]'}`}>{item}</button>
+                <button key={item} type="button" onClick={() => setSelectedEvents(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])} className={`min-h-10 rounded-full border px-3 text-[10px] font-bold ${selectedEvents.includes(item) ? 'border-[rgba(29,184,84,.22)] bg-[rgba(29,184,84,.08)] text-[#8edca5]' : 'border-white/10 text-[var(--althea-muted)]'}`}>{item}</button>
               ))}
             </div>
-            <button type="submit" disabled={saving || selectedEvents.length === 0} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 text-xs font-black text-black disabled:opacity-50">
+            <button type="submit" disabled={saving || selectedEvents.length === 0} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--althea-brand)] px-4 text-xs font-black text-black disabled:opacity-50">
               {saving ? <RefreshCw size={15} className="animate-spin"/> : <Check size={15}/>} {saving ? 'Provisionando...' : 'Cadastrar endpoint'}
             </button>
             <div className="mt-4 rounded-xl border border-white/[.045] bg-black/20 p-3">
