@@ -29,9 +29,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <style jsx global>{`
         .althea-page-content { font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif; color: var(--althea-white); }
 
-        /* A MobileShell é a única barra global de navegação. Superfícies legadas
-           dentro das páginas não podem criar uma segunda barra superior. */
-        .althea-page-content header,
+        /* A MobileShell é a única barra global de navegação. Escondemos somente
+           barras legadas conhecidas; headers semânticos das páginas permanecem visíveis. */
         .althea-page-content .al-chat-top,
         .althea-page-content .al-bottom-nav,
         .althea-page-content .althea-legacy-bottom-nav,

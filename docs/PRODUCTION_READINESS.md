@@ -1,80 +1,112 @@
 # ALTHEA PAY — Production Readiness
 
-## Current technical baseline
-- Supabase Auth + RLS
-- Multi-funnel and multi-product data model
-- Gateway routes, health intelligence and transaction ledger
-- Checkout sessions/items/offers/events
-- Attribution sessions and sale attribution projection
-- Idempotent integration events and webhook delivery tracking
-- Automation engine + retryable event worker
-- Gateway Sandbox + Gateway Orchestrator
-- Checkout Engine / Checkout Engine v2
-- External webhook ingestion with signature validation
-- Funnel event ingestion with per-funnel hashed tokens
-- Realtime operational updates
-- Audit/log foundation
-- Organization and role foundation
-- Scheduled abandoned-checkout processing
-- Scheduled event-worker invocation
+## Canonical architecture
 
-## GREEN — implemented in code / database
-- Multi-tenant RLS model
-- Payment orchestration abstraction
-- Sandbox approval / decline / technical-failure simulation
-- Idempotency constraints for sales, transactions, checkout and events
-- Event retry policy with stale-claim recovery
-- Gateway health guard and route fallback foundation
-- Checkout abandonment marking and recovery state
-- Attribution persistence and projection
-- Webhook deduplication and signed delivery handling
-- Per-funnel event ingestion tokens (hash-only persistence)
-- API key scopes, rotation/revocation and rate limiting foundation
-- Realtime subscriptions for operational entities
-- Supabase function auth configuration synchronized in `supabase/config.toml`
-- Public health endpoint source and deployment synchronized
+Althea Pay is the control/orchestration layer. It does not hold funds and does not replace the connected payment provider.
 
-## YELLOW — requires final technical validation
-- End-to-end Sandbox checkout with an authenticated test user
-- Gateway fallback under simulated technical failure
-- Realtime transaction/checkout/chat verification in the deployed UI
-- Multi-user role and funnel-isolation test matrix
-- Load testing of event ingestion, checkout and public API
-- Production webhook certification against each selected provider
-- Gateway adapter certification for a real provider
-- Backup restore drill and documented RTO/RPO
-- Central alerting and on-call runbooks
-- Reconciliation sample against real settlement data
+Canonical runtime surfaces:
+- `gateway-orchestrator` — authenticated smart-routing/orchestration path.
+- `gateway-provider-adapter` — internal provider execution boundary.
+- `gateway-connection-test` — validates a configured connection and updates its operational state.
+- `checkout-engine-v2` — single versioned checkout engine.
+- `automation-engine-v2` — single versioned automation engine.
+- `althea-public-api` — public API surface.
+- `althea-webhook` — canonical external integration webhook.
+- `funnel-events` — canonical funnel event ingestion.
+- CRM omnichannel workers/functions listed in `supabase/config.toml`.
+- Iara functions listed in `supabase/config.toml`, using the configured private Althea AI engine.
 
-## RED — external blockers before a real-money launch
-- Production gateway/adquirer credentials and merchant onboarding
-- PCI scope determination and formal compliance evidence
-- KYC/AML policy and any required verification provider
-- Production domain/DNS/certificates
-- Production SMTP and branded transactional email
-- Supabase Auth leaked-password protection must be enabled
-- Owner MFA/security posture must be verified
-- Legal/regulatory review for the countries and payment flows operated
+Retired compatibility functions are intentionally absent from the repository. The Edge Functions deployment uses `--prune` so removed slugs are also deleted from the linked Supabase project after merge.
 
-## IMPORTANT INTERNAL BLOCKER
-The scheduled `althea-event-worker` job is installed and active, but the database Vault currently has no `ALTHEA_INTERNAL_SECRET` value. The worker intentionally remains protected and must not be made anonymous just to make the scheduler green.
+## GREEN — validated in the audit branch
 
-Required secure deployment action:
-1. Generate a strong random internal secret outside the repository.
-2. Configure the same secret as the Edge Function secret/environment variable for `event-worker` and `automation-engine-v2` (and any other internal caller that uses it).
-3. Store the same secret in Supabase Vault under `ALTHEA_INTERNAL_SECRET` for the cron job.
-4. Never commit or print the secret.
-5. Re-run the worker scheduler smoke test after provisioning.
+- Dependency versions are pinned and `package-lock.json` is committed.
+- TypeScript typecheck passes.
+- ESLint passes with zero warnings.
+- 21 test files / 77 tests pass.
+- Next.js production build compiles and generates 57 pages.
+- Production-safe load smoke passes.
+- Release preflight passes.
+- Security workflow passes.
+- Supabase migration audit workflow passes.
+- Release preflight reports zero unreferenced component candidates and zero unreferenced lib candidates.
+- Versioned/duplicate runtime names such as V2/V3/old/legacy are absent outside migration history.
+- Retired Edge Function stubs were removed from source.
+- GitHub now contains every canonical Edge Function currently required by the audited runtime.
+- `supabase/config.toml` explicitly records JWT behavior for canonical functions.
+- Public checkout payment actions validate checkout session identity with the session idempotency key through server routes.
+- Checkout no longer depends on public browser access to transaction-status RPCs.
+- Gateway ranking uses the current `gateway_runtime_route_candidates` RPC.
+- Gateway connection UI uses one canonical connector and no longer reads the removed `gateways.priority` column.
+- Generic HTTP providers expose the transport fields required to configure them from the operator UI.
+- CRM outbox dispatcher source matches the working deployed implementation family and is syntactically valid.
+- Active Iara functions that previously existed only in Supabase are versioned in GitHub.
+- Security hardening revokes unintended anonymous execution from administrative SECURITY DEFINER functions.
+- The funnel commercial view is switched to security-invoker behavior.
+- Plaintext gateway credential resolution is service-role-only.
+- Audit, sales and company/settings screens use columns/tables that exist in the current Supabase schema.
+- Supabase Vault contains an `ALTHEA_INTERNAL_SECRET` entry.
+- Existing internal pg_cron jobs are active; the audit migration adds the missing canonical CRM worker schedules.
+
+## YELLOW — environment/E2E validation still required
+
+These checks require live provider credentials, live external systems or a deployable preview environment:
+- End-to-end checkout with a real supported provider.
+- Real PIX creation, QR/copy-paste payload, provider confirmation and webhook transition.
+- Controlled technical-failure test proving safe failover behavior without ambiguous duplicate charging.
+- Realtime checkout/chat/customer support test in the deployed browser UI.
+- Multi-user role and tenant-isolation browser test matrix.
+- Production webhook certification for each enabled provider.
+- Reconciliation sample against real provider settlement data.
+- Backup restore drill and documented RTO/RPO.
+- Central alerting/on-call runbook.
+- The two integration suites that intentionally require external/runtime fixtures remain skipped in ordinary CI.
+- Vercel preview is currently unavailable because the account has hit its build-rate limit; GitHub's independent production build is green.
+
+## RED — external/business blockers before real-money launch
+
+- Production gateway/adquirer credentials and merchant onboarding.
+- PCI scope determination and formal compliance evidence.
+- KYC/AML policy and any required verification provider.
+- Production domain/DNS/certificates.
+- Production SMTP and branded transactional email.
+- Supabase Auth leaked-password protection must be enabled if not already enabled.
+- Owner MFA/security posture must be verified.
+- Legal/regulatory review for every country/payment flow operated.
+
+## Database deployment rule
+
+GitHub and the live Supabase project previously had different migration histories. Automatic `supabase db push` remains forbidden in CI until the histories are explicitly reconciled.
+
+Before applying new database changes:
+1. Compare `supabase migration list --linked` with the repository.
+2. Pull/reconcile the live schema/history if necessary.
+3. Review the exact SQL diff.
+4. Apply only reviewed forward migrations.
+5. Never rebuild production from the old local migration history as a substitute for reconciliation.
+
+## Edge Function deployment rule
+
+The repository is the canonical Edge Function inventory. On `main`, the deployment workflow runs:
+
+`supabase functions deploy --project-ref hkraryqoziravulvqkid --prune`
+
+This deploys canonical functions and removes remote functions intentionally retired from source.
 
 ## Security principles
-- Never place Supabase secret/service-role keys in browser code.
-- Never store PAN or CVC in ALTHEA.
-- Keep user-called Edge Functions authenticated.
-- Keep external webhook functions unauthenticated at the platform layer only when the handler validates the provider signature.
-- Use RLS for tenant isolation.
-- Use idempotency and replay protection for payment/event paths.
-- Keep internal workers protected by a non-public secret rather than disabling authentication.
-- Keep financial settlement in external gateways; ALTHEA is the control and intelligence layer.
+
+- Never place service-role or provider secrets in browser code.
+- Never store PAN/CVC in Althea.
+- Keep user-facing privileged functions JWT-authenticated.
+- Keep external webhooks platform-anonymous only when the handler validates a provider signature/token.
+- Keep internal workers guarded by `ALTHEA_INTERNAL_SECRET`.
+- Use RLS and organization context for tenant isolation.
+- Use idempotency/replay protection for payment and event paths.
+- Preserve the original provider/gateway on historical transactions when routing changes.
+- Keep settlement/funds at the external gateway; Althea remains the control and intelligence layer.
 
 ## Go-live rule
-ALTHEA PAY must not be labelled fully production-ready until all RED items have an owner/evidence and the YELLOW technical verification suite has passed. Code readiness is not the same as regulatory, merchant, or payment-provider readiness.
+
+Code readiness is not the same as real-money production readiness.
+
+The audited branch may be merged when GitHub checks remain green and the migration diff is accepted. Real-money go-live still requires the YELLOW live E2E checks and RED external/compliance items above.

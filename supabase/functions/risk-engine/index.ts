@@ -2,9 +2,6 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{"Content-Type":"application/json"}});
-const encoder=new TextEncoder();
-const hash=async(v:string)=>{const h=await crypto.subtle.digest("SHA-256",encoder.encode(v));return Array.from(new Uint8Array(h)).map(x=>x.toString(16).padStart(2,"0")).join("")};
-
 Deno.serve(async req=>{
   if(req.method!=="POST") return json({error:"method_not_allowed"},405);
   const internal=Deno.env.get("ALTHEA_INTERNAL_SECRET")||"";
@@ -12,10 +9,6 @@ Deno.serve(async req=>{
   let b:any; try{b=await req.json()}catch{return json({error:"invalid_json"},400)}
   const amount=Number(b.amount??0), userId=String(b.user_id??"");
   if(!userId||!Number.isFinite(amount)||amount<=0)return json({error:"user_id_and_positive_amount_required"},400);
-
-  const forced=String(b.metadata?.risk_simulation??"").toLowerCase();
-  if(forced==="critical"||forced==="high") return json({decision:"blocked",risk_score:95,risk_level:"critical",reason_codes:["simulation_high_risk"]});
-  if(forced==="medium") return json({decision:"review",risk_score:72,risk_level:"high",reason_codes:["simulation_review"]});
 
   const payload={user_id:userId,amount,currency:String(b.currency??"BRL"),customer:b.customer??{},metadata:b.metadata??{},ip:b.ip??null,device_id:b.device_id??null,card_fingerprint:b.card_fingerprint??null};
   const provider=String(Deno.env.get("RISK_PROVIDER")||"heuristic").toLowerCase();

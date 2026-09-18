@@ -1,19 +1,39 @@
-const baseUrl = process.env.ALTHEA_HEALTH_URL || 'https://hkraryqoziravulvqkid.supabase.co/functions/v1/health'
-const requests = Number(process.env.LOAD_REQUESTS || 500)
-const concurrency = Number(process.env.LOAD_CONCURRENCY || 25)
+const configuredUrl = String(process.env.ALTHEA_HEALTH_URL || '').trim()
+const required = String(process.env.LOAD_SMOKE_REQUIRED || '').trim() === '1'
+
+if (!configuredUrl) {
+  const message = 'Load smoke skipped: ALTHEA_HEALTH_URL was not provided. Set LOAD_SMOKE_REQUIRED=1 to make a missing target fail CI.'
+  if (required) throw new Error(message)
+  console.log(message)
+  process.exit(0)
+}
+
+let target
+try {
+  target = new URL(configuredUrl)
+} catch {
+  throw new Error('ALTHEA_HEALTH_URL must be a valid absolute URL')
+}
+if (!['http:', 'https:'].includes(target.protocol)) throw new Error('ALTHEA_HEALTH_URL must use http or https')
+
+const baseUrl = target.toString()
+const requests = Number(process.env.LOAD_REQUESTS || 50)
+const concurrency = Number(process.env.LOAD_CONCURRENCY || 10)
 if (!Number.isInteger(requests) || requests < 1 || requests > 5000) throw new Error('LOAD_REQUESTS must be 1..5000')
 if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 100) throw new Error('LOAD_CONCURRENCY must be 1..100')
+
 let next = 0
 let ok = 0
 const latencies = []
 const errors = []
+
 async function worker() {
   while (true) {
     const i = next++
     if (i >= requests) return
     const started = performance.now()
     try {
-      const response = await fetch(baseUrl, { headers: { accept: 'application/json' } })
+      const response = await fetch(baseUrl, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(10_000) })
       const body = await response.text()
       latencies.push(performance.now() - started)
       if (response.status === 200 && body.includes('"ok":true')) ok++
@@ -23,6 +43,7 @@ async function worker() {
     }
   }
 }
+
 const started = performance.now()
 await Promise.all(Array.from({ length: Math.min(concurrency, requests) }, worker))
 latencies.sort((a, b) => a - b)

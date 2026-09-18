@@ -1,1 +1,0 @@
-The active provider-driven connector implementation is `dynamic-gateway-connector-v3.tsx`. The existing gateways page currently imports the V2 component; switching that import is the final wiring step for this UI refactor.

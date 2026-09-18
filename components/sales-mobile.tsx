@@ -3,7 +3,7 @@
 import { CalendarDays, CheckCircle2, CreditCard, Filter, Search, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { amountOf, dateOf, normalizeStatus, todayInSaoPaulo, type AnalyticsSale } from '@/lib/analytics/sales'
+import { amountOf, customerNameOf, dateOf, normalizeStatus, todayInSaoPaulo, type AnalyticsSale } from '@/lib/analytics/sales'
 
 type Sale = AnalyticsSale & { currency?: string | null }
 type JsonObject = Record<string, unknown>
@@ -44,11 +44,17 @@ export default function SalesMobile() {
     try {
       const { data: auth } = await db.auth.getUser()
       if (!auth.user) { setSales([]); return }
-      const q = await db.from('sales').select('id,amount,status,currency,data,gateway_id,external_id,transaction_id,customer_id,occurred_at,created_at').eq('user_id', auth.user.id).order('occurred_at', { ascending: false }).limit(5000)
-      if (q.error) throw q.error
-      setSales((q.data || []) as Sale[])
+      const queryResult = await db
+        .from('sales')
+        .select('id,amount,status,currency,data,gateway_id,external_id,transaction_id,occurred_at,created_at')
+        .eq('user_id', auth.user.id)
+        .order('occurred_at', { ascending: false })
+        .limit(5000)
+      if (queryResult.error) throw queryResult.error
+      setSales((queryResult.data || []) as Sale[])
     } catch (cause) {
-      console.error('[ALTHEA-VENDAS]', cause); setError('Não foi possível carregar as vendas reais.')
+      console.error('[ALTHEA-VENDAS]', cause)
+      setError('Não foi possível carregar as vendas reais.')
     } finally { setLoading(false) }
   }, [db])
 
@@ -66,8 +72,9 @@ export default function SalesMobile() {
   }, [db, load])
 
   const filtered = useMemo(() => sales.filter((sale) => {
-    const data = obj(sale.data); const customer = obj(data.customer)
-    const searchText = [sale.id, sale.external_id, sale.transaction_id, sale.gateway_id, sale.customer_id, text(customer.name), text(customer.email)].join(' ').toLowerCase()
+    const data = obj(sale.data)
+    const customer = obj(data.customer)
+    const searchText = [sale.id, sale.external_id, sale.transaction_id, sale.gateway_id, text(customer.name), text(customer.email), text(customer.phone)].join(' ').toLowerCase()
     if (query.trim() && !searchText.includes(query.trim().toLowerCase())) return false
     const day = dateOf(sale)
     if (startDate && (!day || day < startDate)) return false
@@ -93,7 +100,7 @@ export default function SalesMobile() {
         <button className="ams-filter" type="button" onClick={() => { setDraftStatus(status); setFilterOpen(true) }}><Filter size={13} /><span>Filtros{status !== 'Todas' ? ` · ${status}` : ''}</span></button>
       </section>
       {!dateRangeValid ? <p className="mt-2 text-[10px] font-mono text-amber-400">Selecione um intervalo válido de até 90 dias.</p> : null}
-      <section className="ams-transactions"><div className="ams-table-head"><span>Cliente</span><span>Valor</span><span>Status</span></div>{loading ? <div className="ams-empty"><div className="ams-empty-icon" /><strong>Carregando vendas</strong><p>Sincronizando dados reais.</p></div> : error ? <div className="ams-empty"><div className="ams-empty-icon"><X size={21} /></div><strong>Falha na sincronização</strong><p>{error}</p><button type="button" onClick={() => void load()}>Tentar novamente</button></div> : filtered.length ? <div className="ams-list">{filtered.map((sale) => { const customer = obj(obj(sale.data).customer); return <button key={sale.id} type="button" className="ams-sale-row" onClick={() => setSelected(sale)}><span className="ams-sale-client"><b>{text(customer.name) || text(customer.full_name) || text(customer.email) || sale.external_id || sale.customer_id || sale.id}</b><small>{fmtDate(dateOf(sale))} · {sale.gateway_id || 'Gateway não informado'}</small></span><span className="ams-sale-value">{fmtMoney(amountOf(sale))}</span><span className={`ams-sale-status ${isApproved(sale.status) ? 'paid' : isPending(sale.status) ? 'pending' : 'other'}`}>{label(sale)}</span></button> })}</div> : <div className="ams-empty"><div className="ams-empty-icon"><CreditCard size={21} /></div><strong>Nenhuma transação encontrada</strong><p>Tente ajustar os filtros ou o período selecionado.</p><button type="button" onClick={clear}>Limpar filtros</button></div>}</section>
+      <section className="ams-transactions"><div className="ams-table-head"><span>Cliente</span><span>Valor</span><span>Status</span></div>{loading ? <div className="ams-empty"><div className="ams-empty-icon" /><strong>Carregando vendas</strong><p>Sincronizando dados reais.</p></div> : error ? <div className="ams-empty"><div className="ams-empty-icon"><X size={21} /></div><strong>Falha na sincronização</strong><p>{error}</p><button type="button" onClick={() => void load()}>Tentar novamente</button></div> : filtered.length ? <div className="ams-list">{filtered.map((sale) => <button key={sale.id} type="button" className="ams-sale-row" onClick={() => setSelected(sale)}><span className="ams-sale-client"><b>{customerNameOf(sale)}</b><small>{fmtDate(dateOf(sale))} · {sale.gateway_id || 'Gateway não informado'}</small></span><span className="ams-sale-value">{fmtMoney(amountOf(sale))}</span><span className={`ams-sale-status ${isApproved(sale.status) ? 'paid' : isPending(sale.status) ? 'pending' : 'other'}`}>{label(sale)}</span></button>)}</div> : <div className="ams-empty"><div className="ams-empty-icon"><CreditCard size={21} /></div><strong>Nenhuma transação encontrada</strong><p>Tente ajustar os filtros ou o período selecionado.</p><button type="button" onClick={clear}>Limpar filtros</button></div>}</section>
       <section className="ams-summary"><article><span>Volume</span><strong>{fmtMoney(totals.total)}</strong></article><article><span>Aprovadas</span><strong>{totals.paid}</strong></article><article><span>Pend.</span><strong>{totals.pending}</strong></article></section>
     </main>
     {selected && <div className="ams-modal" role="dialog" aria-modal="true" aria-label="Detalhes da venda" onClick={(e) => { if (e.currentTarget === e.target) setSelected(null) }}><div className="ams-sheet"><div className="ams-handle" /><div className="ams-sheet-title"><h2>Detalhes da venda</h2><button type="button" aria-label="Fechar" onClick={() => setSelected(null)}><X size={17} /></button></div><div className="ams-sale-detail"><div><span>Status</span><b>{label(selected)}</b></div><div><span>Valor</span><b>{fmtMoney(amountOf(selected))}</b></div><div><span>Data</span><b>{fmtDateTime(selected.occurred_at ?? selected.created_at ?? '')}</b></div><div><span>ID</span><b>{selected.id}</b></div><div><span>Transação externa</span><b>{selected.external_id || selected.transaction_id || 'Não informado'}</b></div><div><span>Gateway</span><b>{selected.gateway_id || 'Não informado'}</b></div></div><button className="ams-apply" type="button" onClick={() => setSelected(null)}><CheckCircle2 size={15} /> Fechar</button></div></div>}

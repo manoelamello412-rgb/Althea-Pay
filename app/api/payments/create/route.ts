@@ -35,8 +35,9 @@ export async function POST(request: Request) {
     if (!/^[0-9a-f-]{36}$/i.test(checkoutSessionId) || !PAYMENT_METHODS.has(paymentMethod) || idempotencyKey.length < 16 || idempotencyKey.length > 128) return NextResponse.json({ ok: false, code: 'INVALID_PAYMENT_REQUEST' }, { status: 400 })
 
     const admin = createSupabaseAdminClient()
-    const { data: session, error: sessionError } = await admin.from('checkout_sessions').select('id,user_id,organization_id,funnel_id,product_id,amount,currency,customer,metadata,status').eq('id', checkoutSessionId).maybeSingle()
+    const { data: session, error: sessionError } = await admin.from('checkout_sessions').select('id,user_id,organization_id,funnel_id,product_id,amount,currency,customer,metadata,status,idempotency_key').eq('id', checkoutSessionId).maybeSingle()
     if (sessionError || !session) return NextResponse.json({ ok: false, code: 'CHECKOUT_SESSION_NOT_FOUND' }, { status: 404 })
+    if (text(session.idempotency_key) !== idempotencyKey) return NextResponse.json({ ok: false, code: 'CHECKOUT_SESSION_TOKEN_MISMATCH' }, { status: 403 })
     if (session.status !== 'started') return NextResponse.json({ ok: false, code: 'CHECKOUT_NOT_PAYABLE' }, { status: 409 })
 
     const metadata: JsonObject = { source: 'public_checkout', payment_method: paymentMethod, checkout_session_id: session.id }
@@ -95,6 +96,6 @@ export async function POST(request: Request) {
     const { data: finalTransaction, error: transitionError } = await admin.rpc('transition_gateway_transaction_status', { p_transaction_id: pendingTransaction.id, p_user_id: session.user_id, p_next_status: transactionStatus, p_failure_code: attemptStatus === 'declined' || attemptStatus === 'unknown' ? text(adapterPayloadResult.failure_code ?? adapterPayloadResult.error) || 'GATEWAY_EXECUTION_PENDING_OR_FAILED' : null, p_external_id: providerExternalId || null, p_expected_version: Number(pendingTransaction.version) })
     if (transitionError || !finalTransaction) { console.error('[ALTHEA-PAYMENTS-TRANSITION]', transitionError); return NextResponse.json({ ok: false, code: 'PAYMENT_STATE_UPDATE_FAILED', transaction_id: pendingTransaction.id }, { status: 500 }) }
 
-    return NextResponse.json({ ok: true, transaction: { id: finalTransaction.id, status: finalTransaction.status, amount: finalTransaction.amount, currency: finalTransaction.currency, gateway_id: finalTransaction.gateway_id, external_id: finalTransaction.external_id }, gateway: { id: selectedGatewayId, provider: gateway.provider, provider_status: adapterPayloadResult.provider_status ?? null }, action: nextAction, next: transactionStatus === 'approved' ? 'complete' : transactionStatus === 'pending' ? 'awaiting_gateway' : 'retry_or_failover' }, { status: 200 })
+    return NextResponse.json({ ok: true, transaction: { id: finalTransaction.id, status: finalTransaction.status, amount: finalTransaction.amount, currency: finalTransaction.currency, gateway_id: finalTransaction.gateway_id, external_id: finalTransaction.external_id }, gateway: { id: selectedGatewayId, provider: gateway.provider, provider_status: adapterPayloadResult.provider_status ?? null }, action: nextAction, next: transactionStatus === 'approved' ? 'complete' : transactionStatus === 'pending' ? 'awaiting_gateway' : 'retry_payment' }, { status: 200 })
   } catch (error) { console.error('[ALTHEA-PAYMENTS-CREATE]', error); return NextResponse.json({ ok: false, code: 'PAYMENT_PROCESSING_FAILED' }, { status: 500 }) }
 }

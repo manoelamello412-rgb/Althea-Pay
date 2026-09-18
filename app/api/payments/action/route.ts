@@ -24,11 +24,13 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({})) as JsonObject
     const transactionId = text(body.transaction_id)
     const checkoutSessionId = text(body.checkout_session_id)
-    if (!/^[0-9a-f-]{36}$/i.test(transactionId) || !/^[0-9a-f-]{36}$/i.test(checkoutSessionId)) return NextResponse.json({ ok:false, code:'INVALID_PAYMENT_ACTION_REQUEST' }, { status:400 })
+    const idempotencyKey = text(body.idempotency_key)
+    if (!/^[0-9a-f-]{36}$/i.test(transactionId) || !/^[0-9a-f-]{36}$/i.test(checkoutSessionId) || idempotencyKey.length < 16 || idempotencyKey.length > 128) return NextResponse.json({ ok:false, code:'INVALID_PAYMENT_ACTION_REQUEST' }, { status:400 })
     const admin = createSupabaseAdminClient()
-    const { data: session } = await admin.from('checkout_sessions').select('id,organization_id').eq('id', checkoutSessionId).maybeSingle()
+    const { data: session } = await admin.from('checkout_sessions').select('id,organization_id,idempotency_key').eq('id', checkoutSessionId).maybeSingle()
     if (!session) return NextResponse.json({ ok:false, code:'CHECKOUT_SESSION_NOT_FOUND' }, { status:404 })
-    const { data: tx } = await admin.from('gateway_transactions').select('id,organization_id,gateway_id,external_id,amount,currency,metadata,status').eq('id', transactionId).eq('organization_id', session.organization_id).maybeSingle()
+    if (text(session.idempotency_key) !== idempotencyKey) return NextResponse.json({ ok:false, code:'CHECKOUT_SESSION_TOKEN_MISMATCH' }, { status:403 })
+    const { data: tx } = await admin.from('gateway_transactions').select('id,user_id,organization_id,gateway_id,external_id,amount,currency,metadata,status,version').eq('id', transactionId).eq('organization_id', session.organization_id).maybeSingle()
     if (!tx || text(tx.metadata?.checkout_session_id) !== checkoutSessionId) return NextResponse.json({ ok:false, code:'TRANSACTION_NOT_FOUND' }, { status:404 })
     if (!tx.gateway_id) return NextResponse.json({ ok:true, action:null, status:tx.status })
     const externalId = text(tx.external_id) || text(tx.metadata?.external_transaction_id)
@@ -41,8 +43,50 @@ export async function POST(request: Request) {
     const response = await fetch(`${supabaseUrl.replace(/\/$/,'')}/functions/v1/gateway-provider-adapter`, { method:'POST', headers:{'content-type':'application/json','x-althea-internal-secret':secret,'x-althea-gateway-id':tx.gateway_id}, body:JSON.stringify({ operation:'payment_status', gateway_id:tx.gateway_id, environment:gateway.environment, transaction_id:tx.id, external_transaction_id:externalId, amount:tx.amount, currency:tx.currency, payment_method:{ type:text(tx.metadata?.payment_method) }, idempotency_key:`action:${tx.id}` }), cache:'no-store' })
     const result = await response.json().catch(()=>({})) as JsonObject
     if (!response.ok) return NextResponse.json({ ok:true, action:null, status:tx.status })
-    const status = text(result.status).toLowerCase() || text(tx.status).toLowerCase()
-    return NextResponse.json({ ok:true, action:normalizeAction(result, text(tx.metadata?.payment_method)), status, provider_status:text(result.provider_status)||null })
+    const providerStatus = text(result.status).toLowerCase()
+    const currentStatus = text(tx.status).toLowerCase()
+    const nextStatus = providerStatus === 'approved'
+      ? 'approved'
+      : ['declined', 'failed', 'rejected'].includes(providerStatus)
+        ? 'failed'
+        : providerStatus === 'pending' || providerStatus === 'processing'
+          ? 'pending'
+          : currentStatus
+
+    let persistedStatus = currentStatus
+    if (nextStatus && nextStatus !== currentStatus && !['approved', 'failed', 'refunded', 'chargeback'].includes(currentStatus)) {
+      const externalIdFromProvider = text(result.external_id ?? result.id) || externalId
+      const { data: transitioned, error: transitionError } = await admin.rpc('transition_gateway_transaction_status', {
+        p_transaction_id: tx.id,
+        p_user_id: tx.user_id,
+        p_next_status: nextStatus,
+        p_failure_code: nextStatus === 'failed' ? text(result.failure_code ?? result.error) || 'PROVIDER_REPORTED_FAILURE' : null,
+        p_external_id: externalIdFromProvider || null,
+        p_expected_version: Number.isFinite(Number(tx.version)) ? Number(tx.version) : null,
+      })
+
+      if (!transitionError && transitioned) {
+        persistedStatus = text(transitioned.status).toLowerCase() || nextStatus
+      } else {
+        const { data: latest } = await admin
+          .from('gateway_transactions')
+          .select('status')
+          .eq('id', tx.id)
+          .eq('organization_id', session.organization_id)
+          .maybeSingle()
+        persistedStatus = text(latest?.status).toLowerCase() || currentStatus
+        if (transitionError && !/concurrency_(stale_detected|update_failed)/i.test(String(transitionError.message ?? ''))) {
+          console.error('[ALTHEA-PAYMENT-ACTION-TRANSITION]', transitionError)
+        }
+      }
+    }
+
+    return NextResponse.json({
+      ok:true,
+      action:normalizeAction(result, text(tx.metadata?.payment_method)),
+      status:persistedStatus || currentStatus,
+      provider_status:text(result.provider_status)||providerStatus||null,
+    })
   } catch (error) {
     console.error('[ALTHEA-PAYMENT-ACTION]', error)
     return NextResponse.json({ ok:false, code:'PAYMENT_ACTION_UNAVAILABLE' }, { status:500 })
