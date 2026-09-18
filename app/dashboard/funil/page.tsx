@@ -307,7 +307,7 @@ export default function FunilDominioPage() {
           </button>
           <button
             type="button"
-            onClick={() => router.push('/funnels/new')}
+            onClick={() => router.push('/dashboard/funil/novo')}
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-[var(--althea-brand)] px-4 text-[10px] font-bold text-[#06110a] shadow-[0_8px_28px_rgba(29,184,84,.14)] transition hover:brightness-110"
           >
             <Plus size={14} />
