@@ -29,7 +29,7 @@ const sections = [
     items: [
       { label: 'Minha Empresa', description: 'Cadastro jurídico, fiscal e operacional.', href: '/dashboard/settings/empresa', icon: Building2 },
       { label: 'Gateways', description: 'Conexões, credenciais e testes de gateways.', href: '/dashboard/gateways', icon: Network },
-      { label: 'Funil e domínio', description: 'Conexão, domínio, eventos e chat do funil.', href: '/dashboard/settings/funil-dominio', icon: GitBranch },
+      { label: 'Funil e domínio', description: 'Conexão, domínio, eventos e chat do funil.', href: '/dashboard/funil', icon: GitBranch },
       { label: 'Recuperação', description: 'Políticas de recuperação operacional.', href: '/dashboard/settings/recuperacao', icon: RefreshCw },
       { label: 'Desempenho', description: 'Saúde, latência e telemetria da operação.', href: '/dashboard/settings/desempenho', icon: Activity },
     ],
