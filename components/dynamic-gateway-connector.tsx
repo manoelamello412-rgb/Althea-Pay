@@ -207,8 +207,6 @@ export const DynamicGatewayConnector: React.FC = () => {
       p_is_active: !enabled,
     })
     if (credentialError) { setError(credentialError.message); return }
-    const update = await db.from('gateways').update({ status: enabled ? 'disabled' : 'inactive' }).eq('id', gateway.id)
-    if (update.error) { setError(update.error.message); return }
     if (enabled) {
       setMessage('Gateway desativado.')
       await load()
