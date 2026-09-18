@@ -103,6 +103,7 @@ export default function FunilDominioPage() {
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [creatingWebhook, setCreatingWebhook] = useState(false)
+  const [generatingToken, setGeneratingToken] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [provisionWarning, setProvisionWarning] = useState('')
@@ -219,26 +220,30 @@ export default function FunilDominioPage() {
   }
 
   async function createWebhookIntegration(funnelId: string) {
+    if (creatingWebhook) return
     setCreatingWebhook(true); setError(''); setSuccess('')
     try {
       const { data, error: invokeError } = await supabase.functions.invoke('webhook-integrations', { body: { funnel_id: funnelId, name: funnelName.trim() || 'Webhook do Funil', provider: 'custom' } })
       if (invokeError) throw invokeError
       if (!data?.secret || !data?.endpoint) throw new Error('A integração não retornou a credencial esperada.')
-      setWebhook(data.integration as WebhookIntegration); setWebhookSecret(String(data.secret)); setWebhookEndpoint(String(data.endpoint)); setSecretFunnelId(funnelId); setSuccess('Webhook criado. Guarde o segredo: ele não será exibido novamente.')
+      setWebhook(data.integration as WebhookIntegration); setWebhookSecret(String(data.secret)); setWebhookEndpoint(String(data.endpoint)); setSecretFunnelId(funnelId); setProvisionWarning(''); setSuccess('Webhook criado. Guarde o segredo: ele não será exibido novamente.')
       await refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível criar o webhook.') } finally { setCreatingWebhook(false) }
   }
 
   async function provisionScriptCredential(funnelId: string) {
+    if (generatingToken) return
+    setGeneratingToken(true); setError(''); setSuccess('')
     try {
       const response = await fetch('/api/funnels/ingestion-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store', body: JSON.stringify({ funnel_id: funnelId }) })
       const body: unknown = await response.json().catch(() => ({}))
       const payload = asRecord(body)
       if (!response.ok) throw new Error(stringValue(payload.error) || 'Não foi possível gerar a credencial.')
       const ingestion = asRecord(payload.ingestion)
-      setOneTimeToken(stringValue(ingestion.token)); setOneTimeEndpoint(stringValue(ingestion.endpoint || ingestion.event_endpoint || funnel?.endpoint)); setSecretFunnelId(funnelId)
+      setOneTimeToken(stringValue(ingestion.token)); setOneTimeEndpoint(stringValue(ingestion.endpoint || ingestion.event_endpoint || funnel?.endpoint)); setSecretFunnelId(funnelId); setProvisionWarning('')
       if (stringValue(ingestion.token)) setSuccess('Credencial criada. O segredo completo é exibido somente agora.')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao gerar a credencial.') }
+    finally { setGeneratingToken(false) }
   }
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
@@ -558,9 +563,11 @@ export default function FunilDominioPage() {
               <button
                 type="button"
                 onClick={() => void provisionScriptCredential(funnel.id)}
-                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.05)] text-[9px] font-semibold text-[var(--althea-brand)] transition hover:bg-[rgba(29,184,84,.08)]"
+                disabled={generatingToken}
+                className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.05)] text-[9px] font-semibold text-[var(--althea-brand)] transition hover:bg-[rgba(29,184,84,.08)] disabled:opacity-50"
               >
-                <KeyRound size={13} /> Gerar nova credencial de ingestão
+                {generatingToken ? <Loader2 size={13} className="animate-spin" /> : <KeyRound size={13} />}
+                {generatingToken ? 'Gerando credencial...' : 'Gerar nova credencial de ingestão'}
               </button>
             )}
 
