@@ -1,7 +1,6 @@
 @import './tailwind.css';
 @import './globals.css';
 @import './motion.css';
-@import './mobile-modernization.css';
 @import './althea-design-system.css';
 @import './brand-kit.css';
 @import './althea-visual.css';
@@ -18,5 +17,4 @@
 @import './gateways-mobile.css';
 @import './funnels-mobile.css';
 @import './settings-mobile.css';
-@import './mobile-shell-global.css';
 @import './althea-canonical.css';
