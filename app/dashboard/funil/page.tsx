@@ -105,6 +105,7 @@ export default function FunilDominioPage() {
   const [creatingWebhook, setCreatingWebhook] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [provisionWarning, setProvisionWarning] = useState('')
   const [funnelName, setFunnelName] = useState('')
   const [pageLink, setPageLink] = useState('')
   const [externalId, setExternalId] = useState('')
@@ -115,6 +116,7 @@ export default function FunilDominioPage() {
   const [oneTimeEndpoint, setOneTimeEndpoint] = useState('')
   const [webhookSecret, setWebhookSecret] = useState('')
   const [webhookEndpoint, setWebhookEndpoint] = useState('')
+  const [secretFunnelId, setSecretFunnelId] = useState('')
   const [copied, setCopied] = useState('')
 
   useEffect(() => {
@@ -124,13 +126,16 @@ export default function FunilDominioPage() {
     try {
       const handoff = JSON.parse(raw) as Record<string, unknown>
       const funnelId = stringValue(handoff.funnelId)
-      if (funnelId) setSelectedFunnelId(funnelId)
+      if (funnelId) {
+        setSelectedFunnelId(funnelId)
+        setSecretFunnelId(funnelId)
+      }
       setOneTimeToken(stringValue(handoff.token))
       setOneTimeEndpoint(stringValue(handoff.eventEndpoint))
       setWebhookSecret(stringValue(handoff.webhookSecret))
       setWebhookEndpoint(stringValue(handoff.webhookEndpoint))
       const warning = stringValue(handoff.warning)
-      if (warning) setError(warning)
+      if (warning) setProvisionWarning(warning)
       else if (funnelId) setSuccess('Funil criado e vinculado ao produto e gateway selecionados.')
     } catch {
       // Handoff é apenas para exibir segredos uma única vez; a operação já está persistida.
@@ -219,7 +224,7 @@ export default function FunilDominioPage() {
       const { data, error: invokeError } = await supabase.functions.invoke('webhook-integrations', { body: { funnel_id: funnelId, name: funnelName.trim() || 'Webhook do Funil', provider: 'custom' } })
       if (invokeError) throw invokeError
       if (!data?.secret || !data?.endpoint) throw new Error('A integração não retornou a credencial esperada.')
-      setWebhook(data.integration as WebhookIntegration); setWebhookSecret(String(data.secret)); setWebhookEndpoint(String(data.endpoint)); setSuccess('Webhook criado. Guarde o segredo: ele não será exibido novamente.')
+      setWebhook(data.integration as WebhookIntegration); setWebhookSecret(String(data.secret)); setWebhookEndpoint(String(data.endpoint)); setSecretFunnelId(funnelId); setSuccess('Webhook criado. Guarde o segredo: ele não será exibido novamente.')
       await refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível criar o webhook.') } finally { setCreatingWebhook(false) }
   }
@@ -231,7 +236,7 @@ export default function FunilDominioPage() {
       const payload = asRecord(body)
       if (!response.ok) throw new Error(stringValue(payload.error) || 'Não foi possível gerar a credencial.')
       const ingestion = asRecord(payload.ingestion)
-      setOneTimeToken(stringValue(ingestion.token)); setOneTimeEndpoint(stringValue(ingestion.endpoint || ingestion.event_endpoint || funnel?.endpoint))
+      setOneTimeToken(stringValue(ingestion.token)); setOneTimeEndpoint(stringValue(ingestion.endpoint || ingestion.event_endpoint || funnel?.endpoint)); setSecretFunnelId(funnelId)
       if (stringValue(ingestion.token)) setSuccess('Credencial criada. O segredo completo é exibido somente agora.')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao gerar a credencial.') }
   }
@@ -243,7 +248,6 @@ export default function FunilDominioPage() {
     const name = funnelName.trim(); const url = normalizeUrl(pageLink); const externalFunnelId = externalId.trim()
     if (!selectedFunnelId || !funnel) { setError('Selecione um funil existente ou crie um novo funil.'); setSaving(false); return }
     if (!name) { setError('Informe o nome do funil.'); setSaving(false); return }
-    if (!externalFunnelId) { setError('Informe o ID do funil externo.'); setSaving(false); return }
     if (url) { try { new URL(url) } catch { setError('O link informado não é uma URL válida.'); setSaving(false); return } }
 
     try {
@@ -251,11 +255,11 @@ export default function FunilDominioPage() {
       const { data: auth } = await supabase.auth.getUser()
       if (!auth.user) throw new Error('Sessão expirada. Faça login novamente.')
 
-      const { error: saveError } = await supabase.rpc('save_funnel_domain_connection', { p_funnel_id: funnelId, p_name: name, p_url: url || null, p_external_funnel_id: externalFunnelId, p_pixel_id: pixelId.trim() || null, p_chat_enabled: chatEnabled })
+      const { error: saveError } = await supabase.rpc('save_funnel_domain_connection', { p_funnel_id: funnelId, p_name: name, p_url: url || null, p_external_funnel_id: externalFunnelId || null, p_pixel_id: pixelId.trim() || null, p_chat_enabled: chatEnabled })
       if (saveError) throw saveError
 
       const existingConfig = asRecord(connection?.config)
-      const { error: metadataError } = await supabase.from('funnel_connections').update({ connection_type: method, config: { ...existingConfig, connection_method: method, external_funnel_id: externalFunnelId, pixel_id: pixelId.trim() || null, chat_enabled: chatEnabled, updated_from: 'funnel_workspace' }, updated_at: new Date().toISOString() }).eq('funnel_id', funnelId).eq('user_id', auth.user.id)
+      const { error: metadataError } = await supabase.from('funnel_connections').update({ connection_type: method, config: { ...existingConfig, connection_method: method, external_funnel_id: externalFunnelId || null, pixel_id: pixelId.trim() || null, chat_enabled: chatEnabled, updated_from: 'funnel_workspace' }, updated_at: new Date().toISOString() }).eq('funnel_id', funnelId).eq('user_id', auth.user.id)
       if (metadataError) throw metadataError
 
       setSuccess('Configuração do funil atualizada com sucesso.')
@@ -323,6 +327,12 @@ export default function FunilDominioPage() {
       {success && (
         <div className="rounded-xl border border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.055)] px-4 py-3 text-xs text-[#8edca5]">
           <div className="flex items-start gap-2"><Check size={14} className="mt-0.5 shrink-0" /><span>{success}</span></div>
+        </div>
+      )}
+
+      {provisionWarning && (
+        <div className="rounded-xl border border-[rgba(212,175,55,.18)] bg-[rgba(212,175,55,.055)] px-4 py-3 text-xs text-[#D4AF37]">
+          <div className="flex items-start gap-2"><Activity size={14} className="mt-0.5 shrink-0" /><span>{provisionWarning}</span></div>
         </div>
       )}
 
@@ -415,14 +425,13 @@ export default function FunilDominioPage() {
               </div>
             </Field>
 
-            <Field label="ID do funil externo *">
+            <Field label="ID externo do funil">
               <div className="relative">
                 <span className="absolute left-3 top-3 text-xs font-bold text-[var(--althea-muted)]">#</span>
                 <input
-                  required
                   value={externalId}
                   onChange={(event) => setExternalId(event.target.value)}
-                  placeholder="ID do seu curso/funil"
+                  placeholder="Opcional · usado quando a plataforma externa possui um ID próprio"
                   className="althea-ds-input pl-9 text-sm"
                 />
               </div>
@@ -509,7 +518,7 @@ export default function FunilDominioPage() {
               <MiniMetric label="Último" value={lastEventLabel} compact />
             </div>
 
-            {oneTimeToken && (
+            {oneTimeToken && secretFunnelId === selectedFunnelId && (
               <div className="mt-4 space-y-2 rounded-xl border border-[rgba(29,184,84,.14)] bg-[rgba(29,184,84,.04)] p-3">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--althea-brand)]">Credencial de ingestão</span>
@@ -522,7 +531,7 @@ export default function FunilDominioPage() {
               </div>
             )}
 
-            {webhookSecret && (
+            {webhookSecret && secretFunnelId === selectedFunnelId && (
               <div className="mt-4 space-y-2 rounded-xl border border-[rgba(29,184,84,.14)] bg-[rgba(29,184,84,.04)] p-3">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--althea-brand)]">Webhook criado</span>
@@ -535,7 +544,7 @@ export default function FunilDominioPage() {
               </div>
             )}
 
-            {webhook && !webhookSecret && (
+            {webhook && !(webhookSecret && secretFunnelId === selectedFunnelId) && (
               <div className="mt-4 flex items-center justify-between rounded-xl border border-white/[.045] bg-[var(--althea-bg)] p-3">
                 <div>
                   <span className="block text-[9px] font-semibold text-white">Webhook</span>
@@ -545,7 +554,7 @@ export default function FunilDominioPage() {
               </div>
             )}
 
-            {method === 'script' && funnel && !oneTimeToken && (
+            {method === 'script' && funnel && !(oneTimeToken && secretFunnelId === selectedFunnelId) && (
               <button
                 type="button"
                 onClick={() => void provisionScriptCredential(funnel.id)}
@@ -555,7 +564,7 @@ export default function FunilDominioPage() {
               </button>
             )}
 
-            {method === 'webhook' && funnel && !webhook && !webhookSecret && (
+            {method === 'webhook' && funnel && !webhook && !(webhookSecret && secretFunnelId === selectedFunnelId) && (
               <button
                 type="button"
                 onClick={() => void createWebhookIntegration(funnel.id)}
