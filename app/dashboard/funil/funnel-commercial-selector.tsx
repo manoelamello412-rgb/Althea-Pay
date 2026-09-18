@@ -23,7 +23,7 @@ export default function FunnelCommercialSelector({ value, onChange }: { value: F
       if (authError || !auth.user) throw new Error('Sessão expirada. Faça login novamente.')
       const [{ data: productRows, error: productError }, { data: gatewayRows, error: gatewayError }] = await Promise.all([
         db.from('products').select('id,name,unit_amount,currency,status').eq('status', 'active').is('deleted_at', null).order('name', { ascending: true }),
-        db.from('gateways').select('id,display_name,provider,environment,status').order('priority', { ascending: true }),
+        db.from('gateways').select('id,display_name,provider,environment,status').order('display_name', { ascending: true }),
       ])
       if (productError) throw productError
       if (gatewayError) throw gatewayError
