@@ -407,7 +407,7 @@ export const DynamicGatewayConnector: React.FC = () => {
           value={source[credential.name] ?? ''}
           onChange={event => setSource(current => ({ ...current, [credential.name]: event.target.value }))}
           autoComplete="off"
-          className="w-full rounded-lg border border-white/[.055] bg-[var(--althea-bg)] p-3 text-sm text-white outline-none focus:border-emerald-700"
+          className="w-full rounded-lg border border-white/[.055] bg-[var(--althea-bg)] p-3 text-sm text-white outline-none focus:border-[rgba(29,184,84,.30)]"
         />
       </label>
     )
@@ -536,7 +536,7 @@ export const DynamicGatewayConnector: React.FC = () => {
             <div className="rounded-xl border border-white/[.055] bg-[var(--althea-bg)]/40 p-4 text-xs text-[var(--althea-muted)]">Este provider não exige credenciais manuais. A configuração técnica é resolvida pelo adapter.</div>
           )}
 
-          <button type="submit" disabled={!active || saving} className="w-full rounded-lg border border-emerald-800 bg-[rgba(29,184,84,.06)] p-3 text-xs font-bold uppercase tracking-wider text-[var(--althea-brand)] disabled:opacity-40">
+          <button type="submit" disabled={!active || saving} className="w-full rounded-lg border border-[rgba(29,184,84,.22)] bg-[rgba(29,184,84,.06)] p-3 text-xs font-bold uppercase tracking-wider text-[var(--althea-brand)] disabled:opacity-40">
             {saving ? 'SALVANDO...' : editing ? 'SALVAR ALTERAÇÕES' : 'CADASTRAR GATEWAY'}
           </button>
         </form>
