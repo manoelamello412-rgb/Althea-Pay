@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Braces,
   Check,
-  CheckCircle2,
   ChevronRight,
   CircleDot,
   CreditCard,
