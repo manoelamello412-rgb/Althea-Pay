@@ -8,11 +8,14 @@ const statusTarget = (status: string) => { if (["chargeback", "charged_back"].in
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-  const internal = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
-  if (!internal || req.headers.get("x-internal-secret") !== internal) return json({ error: "unauthorized" }, 401);
   const url = Deno.env.get("SUPABASE_URL"), service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !service) return json({ error: "server_configuration_error" }, 500);
   const db = createClient(url, service);
+  const supplied = req.headers.get("x-internal-secret") ?? req.headers.get("x-althea-internal-secret") ?? "";
+  if (!supplied) return json({ error: "unauthorized" }, 401);
+  const verified = await db.rpc("verify_althea_internal_secret", { p_secret: supplied });
+  if (verified.error) return json({ error: "internal_auth_unavailable" }, 500);
+  if (verified.data !== true) return json({ error: "unauthorized" }, 401);
   let body: any = {};
   try { body = await req.json(); } catch { body = {}; }
   const start = body.period_start ? new Date(body.period_start).toISOString() : new Date(Date.now() - 86_400_000).toISOString();
