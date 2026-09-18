@@ -145,11 +145,11 @@ export default function PerfilSettingsPage() {
 
   return (
     <div className="min-h-full bg-[#060608] pb-32 font-['Space_Grotesk'] text-zinc-100">
-      <header className="sticky top-0 z-40 -mx-4 mb-5 border-b border-[#191921] bg-[#060608]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-        <button type="button" onClick={() => router.push('/dashboard/settings')} className="inline-flex min-h-11 items-center gap-2 text-xs font-semibold text-zinc-400 hover:text-white">
+      <div className="mb-5 border-b border-[#191921] pb-4">
+        <button type="button" onClick={() => router.push('/dashboard/settings')} className="inline-flex min-h-10 items-center gap-2 text-xs font-semibold text-zinc-400 hover:text-white">
           <ArrowLeft size={15} /> Voltar
         </button>
-      </header>
+      </div>
 
       <main className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
         <form onSubmit={handleSave} className="space-y-5">
