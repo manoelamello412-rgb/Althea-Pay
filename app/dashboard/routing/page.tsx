@@ -13,7 +13,6 @@ import {
   RotateCcw,
   Router,
   ShieldCheck,
-  XCircle,
   Zap,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -194,6 +193,7 @@ export default function RoutingPage() {
   const [payload, setPayload] = useState<Payload | null>(null)
   const [organizationId, setOrganizationId] = useState<string | null>(null)
   const [selectedGatewayId, setSelectedGatewayId] = useState('')
+  const [preflightGatewayId, setPreflightGatewayId] = useState('')
   const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -324,11 +324,13 @@ export default function RoutingPage() {
 
       if (dryRun) {
         if (status === 'succeeded') {
+          setPreflightGatewayId(selectedGateway.id)
           setMessage(`Preflight concluído para ${selectedGateway.name}. Todos os targets elegíveis foram verificados antes de qualquer alteração remota.`)
         } else {
           setMessage(`Preflight ${text(batch.correlation_id) || batchId} está em ${status || 'processamento'}. O worker continuará os retries automaticamente.`)
         }
       } else if (status === 'succeeded') {
+        setPreflightGatewayId('')
         setMessage(`Troca global confirmada: ${num(batch.succeeded_targets)}/${num(batch.total_targets)} funis foram verificados remotamente antes da atualização local.`)
       } else if (['failed', 'partial', 'preflight_failed'].includes(status)) {
         throw new Error(`Operação terminou como ${batchLabels[status] || status}. Nenhum target não verificado é contado como sucesso.`)
@@ -381,7 +383,7 @@ export default function RoutingPage() {
   }
 
   const metrics = payload?.metrics ?? EMPTY_METRICS
-  const executeEnabled = Boolean(selectedGateway && latestSuccessfulPreflight && !working)
+  const executeEnabled = Boolean(selectedGateway && preflightGatewayId === selectedGateway.id && !working)
 
   return (
     <div className="w-full space-y-5">
@@ -424,7 +426,7 @@ export default function RoutingPage() {
 
           <label className="mt-5 block">
             <span className="text-[9px] uppercase tracking-wider text-[var(--althea-muted)]">Gateway alvo</span>
-            <select value={selectedGatewayId} onChange={event => setSelectedGatewayId(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/[.06] bg-[var(--althea-bg)] px-3 text-xs text-white outline-none">
+            <select value={selectedGatewayId} onChange={event => { setSelectedGatewayId(event.target.value); setPreflightGatewayId('') }} className="mt-2 h-11 w-full rounded-xl border border-white/[.06] bg-[var(--althea-bg)] px-3 text-xs text-white outline-none">
               <option value="">Selecione...</option>
               {(payload?.gateways ?? []).map(gateway => <option key={gateway.id} value={gateway.id} disabled={!['connected', 'degraded'].includes(gateway.status.toLowerCase())}>{gateway.name} · {gateway.status}</option>)}
             </select>
@@ -449,8 +451,8 @@ export default function RoutingPage() {
 
           <div className="mt-3 rounded-xl border border-white/[.045] bg-[var(--althea-bg)] p-3 text-[9px] leading-4 text-[var(--althea-muted)]">
             {latestSuccessfulPreflight
-              ? <>Preflight persistente encontrado: <b className="text-zinc-300">{latestSuccessfulPreflight.correlation_id}</b>, concluído em {dateTime(latestSuccessfulPreflight.completed_at)}. A execução ainda cria um novo batch e repete o preflight antes de alterar o remoto.</>
-              : 'A execução permanece bloqueada até existir um preflight concluído para o gateway selecionado.'}
+              ? <>Último preflight persistente: <b className="text-zinc-300">{latestSuccessfulPreflight.correlation_id}</b>, concluído em {dateTime(latestSuccessfulPreflight.completed_at)}. Para segurança, ele não desbloqueia uma nova execução após recarregar a página; faça um preflight nesta sessão.</>
+              : 'A execução permanece bloqueada até um preflight desta sessão concluir com sucesso para o gateway selecionado.'}
           </div>
         </article>
 
