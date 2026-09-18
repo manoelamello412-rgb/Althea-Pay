@@ -12,7 +12,7 @@ Verified counts at audit time:
 - Comparing migration names before the final audit migration:
   - **284** remote migration names had no matching local migration file.
   - **51** local migration names had no matching remote history row.
-- The final audit performance migration increases the local-only side by one until it is deliberately applied.
+- The historical drift remains, but the new audit migrations created after this review are now mirrored locally using the exact versions recorded by the linked Supabase project.
 
 This drift is historical. It does **not** mean the current application schema is missing hundreds of runtime objects. During the audit, the active frontend/backend contracts were compared directly against the live Supabase schema and the canonical runtime objects were verified.
 
@@ -51,15 +51,19 @@ The safe long-term cleanup is:
 
 Do not attempt to reconstruct the 561-row production history by guessing SQL from object names.
 
-## Audit migrations waiting for reviewed application
+## Audit forward migrations applied and reconciled
 
-The audit branch contains forward migrations that are intentionally **not** auto-applied:
+During the live audit, the relevant changes were revalidated against the linked production schema and then applied through Supabase's migration API. The repository now records the **actual remote migration versions**:
 
-- `20260917203000_security_definer_access_hardening.sql`
-- `20260917204000_crm_workers_pg_cron.sql`
-- `20260917205000_gateway_rls_and_fk_performance_cleanup.sql`
+- `20260918020651_audit_harden_rpc_acl_and_commercial_view.sql`
+- `20260918021208_fix_funnel_gateway_binding_tenant_policy.sql`
+- `20260918021448_schedule_canonical_crm_workers.sql`
+- `20260918021452_consolidate_gateway_read_policies_and_indexes.sql`
+- `20260918021456_restrict_checkout_status_rpc_to_server.sql`
 
-They must be reviewed against the linked production schema immediately before application.
+The earlier local-only audit drafts dated `20260917203000`, `20260917204000` and `20260917205000` were never present in the linked migration history. After their intended changes were reviewed, applied under the real remote versions above, and verified, those unapplied drafts were removed from the active branch to avoid future duplicate execution. Their history remains available in Git.
+
+This does **not** resolve the older historical migration drift. Automatic `supabase db push` remains forbidden until a canonical production baseline is deliberately created.
 
 ## Edge Functions are separate
 
