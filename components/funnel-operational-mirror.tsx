@@ -158,8 +158,22 @@ export function FunnelOperationalMirror({ funnelId }: { funnelId: string }) {
     return events.filter(event => new Date(event.occurred_at).getTime() >= cutoff)
   }, [events])
 
-  const issueCount = last24h.filter(event => event.severity === 'error').length
-  const warningCount = last24h.filter(event => event.severity === 'warning').length
+  const incidentKey = (event: OperationalEvent) => {
+    if (event.transaction_id) return 'transaction:' + event.transaction_id
+    if (event.checkout_id) return 'checkout:' + event.checkout_id
+    if (event.category === 'chat' && event.metadata?.conversation_id) {
+      return 'chat:' + String(event.metadata.conversation_id) + ':' + (event.external_id || event.event_id)
+    }
+    if (event.external_id) return event.category + ':external:' + event.external_id
+    return event.event_id
+  }
+
+  const issueCount = new Set(
+    last24h.filter(event => event.severity === 'error').map(incidentKey),
+  ).size
+  const warningCount = new Set(
+    last24h.filter(event => event.severity === 'warning').map(incidentKey),
+  ).size
   const latestPayment = events.find(event => event.category === 'payment' || event.category === 'sale') || null
   const connector = events.find(event => event.event_type === 'connector_health') || null
   const hasCritical = issueCount > 0
