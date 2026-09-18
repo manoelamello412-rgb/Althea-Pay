@@ -144,7 +144,7 @@ export default function PerfilSettingsPage() {
   const documentLabel = business?.document_type || 'CPF/CNPJ'
 
   return (
-    <div className="w-full space-y-5 text-zinc-100">
+    <div className="w-full space-y-5 text-white">
       <section className="flex flex-col gap-5 border-b border-white/[.055] pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Conta</p>
@@ -165,7 +165,7 @@ export default function PerfilSettingsPage() {
               </div>
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-bold tracking-tight text-white">Meu Perfil</h1>
-                <p className="truncate text-xs text-zinc-400">{displayName}</p>
+                <p className="truncate text-xs text-[var(--althea-muted)]">{displayName}</p>
               </div>
             </div>
           </section>
@@ -174,16 +174,16 @@ export default function PerfilSettingsPage() {
             <div className="mb-4 flex items-center gap-2"><UserRound size={16} className="text-[var(--althea-brand)]" /><h2 className="text-sm font-semibold text-white">Identidade</h2></div>
             <div className="space-y-4">
               <label className="block space-y-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Nome de exibição</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Nome de exibição</span>
                 <input required maxLength={100} value={name} onChange={event => setName(event.target.value)} className="min-h-11 w-full rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 text-sm text-white outline-none focus:border-[rgba(29,184,84,.32)]" />
               </label>
               <label className="block space-y-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">E-mail de login</span>
-                <div className="relative"><Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" /><input value={email} readOnly aria-readonly="true" className="min-h-11 w-full cursor-not-allowed rounded-xl border border-white/[.045] bg-[var(--althea-bg)] pl-9 pr-3 text-sm text-zinc-500 outline-none" /></div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">E-mail de login</span>
+                <div className="relative"><Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600" /><input value={email} readOnly aria-readonly="true" className="min-h-11 w-full cursor-not-allowed rounded-xl border border-white/[.045] bg-[var(--althea-bg)] pl-9 pr-3 text-sm text-[var(--althea-muted)] outline-none" /></div>
               </label>
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Telefone</span><input value={phone || 'Não cadastrado'} readOnly className="min-h-11 w-full cursor-not-allowed rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 text-sm text-zinc-500 outline-none" /></label>
-                <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{documentLabel}</span><input value={maskDocument(business?.document_number ?? null)} readOnly className="min-h-11 w-full cursor-not-allowed rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 font-mono text-sm text-zinc-500 outline-none" /></label>
+                <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">Telefone</span><input value={phone || 'Não cadastrado'} readOnly className="min-h-11 w-full cursor-not-allowed rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 text-sm text-[var(--althea-muted)] outline-none" /></label>
+                <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-[var(--althea-muted)]">{documentLabel}</span><input value={maskDocument(business?.document_number ?? null)} readOnly className="min-h-11 w-full cursor-not-allowed rounded-xl border border-white/[.045] bg-[var(--althea-bg)] px-3 font-mono text-sm text-[var(--althea-muted)] outline-none" /></label>
               </div>
             </div>
           </section>
@@ -210,13 +210,13 @@ export default function PerfilSettingsPage() {
         <aside className="space-y-4">
           <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5">
             <div className="flex items-center gap-2"><Building2 size={16} className="text-[var(--althea-brand)]" /><h2 className="text-sm font-semibold text-white">Empresa</h2></div>
-            <p className="mt-3 text-xs text-zinc-500">{business?.legal_name || 'Cadastro empresarial não preenchido.'}</p>
-            <button type="button" onClick={() => router.push('/dashboard/settings/empresa')} className="mt-4 min-h-11 w-full rounded-xl border border-white/[.055] text-xs font-semibold text-zinc-300 hover:text-white">Abrir Minha Empresa</button>
+            <p className="mt-3 text-xs text-[var(--althea-muted)]">{business?.legal_name || 'Cadastro empresarial não preenchido.'}</p>
+            <button type="button" onClick={() => router.push('/dashboard/settings/empresa')} className="mt-4 min-h-11 w-full rounded-xl border border-white/[.055] text-xs font-semibold text-[#c8d2cc] hover:text-white">Abrir Minha Empresa</button>
           </section>
           <section className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5">
             <div className="flex items-center gap-2"><ShieldCheck size={16} className="text-[var(--althea-brand)]" /><h2 className="text-sm font-semibold text-white">Segurança</h2></div>
-            <p className="mt-3 text-xs leading-5 text-zinc-500">Senha, MFA e sessões são administrados somente na área de Segurança.</p>
-            <button type="button" onClick={() => router.push('/dashboard/security')} className="mt-4 min-h-11 w-full rounded-xl border border-white/[.055] text-xs font-semibold text-zinc-300 hover:text-white">Abrir Segurança</button>
+            <p className="mt-3 text-xs leading-5 text-[var(--althea-muted)]">Senha, MFA e sessões são administrados somente na área de Segurança.</p>
+            <button type="button" onClick={() => router.push('/dashboard/security')} className="mt-4 min-h-11 w-full rounded-xl border border-white/[.055] text-xs font-semibold text-[#c8d2cc] hover:text-white">Abrir Segurança</button>
           </section>
         </aside>
       </main>
