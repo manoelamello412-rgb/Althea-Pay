@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, CheckCircle2, Clock3, Loader2, Radio, RefreshCw, ServerCog, TriangleAlert, XCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type HealthState = 'collecting' | 'operational' | 'degraded' | 'unstable'
@@ -120,17 +119,8 @@ export default function PerformanceSettingsPage() {
   const meta = statusMeta(health)
   const StatusIcon = meta.icon
   const lastCheck = telemetry.lastChecked ? new Date(telemetry.lastChecked).toLocaleTimeString('pt-BR') : '—'
-  const routes: Record<MobileShellTab, string> = {
-    dashboard: '/dashboard',
-    vendas: '/dashboard/vendas',
-    chat: '/dashboard/crm',
-    ia: '/dashboard/ia',
-    funil: '/dashboard/funil',
-  }
-
   return (
-    <MobileShell activeTab="dashboard" onTabChange={(tab) => router.push(routes[tab])}>
-      <div className="mx-auto w-full max-w-4xl space-y-4 pb-16">
+    <div className="mx-auto w-full max-w-4xl space-y-4 pb-16">
         <div className="flex items-center gap-3 border-b border-white/[0.06] pb-4">
           <button type="button" onClick={() => router.push('/dashboard/settings')} className="min-h-11 rounded-lg px-1 text-xs font-mono text-[#A6A6A6] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1DB854]/40">← VOLTAR</button>
           <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-[#A6A6A6]"><Radio size={13} className="text-[#1DB854]" aria-hidden="true" /> Desempenho</div>
@@ -141,8 +131,7 @@ export default function PerformanceSettingsPage() {
         <section className="rounded-2xl border border-white/[0.06] bg-[#0F1A16] p-5"><div className="flex items-center justify-between gap-3"><div><div className="flex items-center gap-2"><Clock3 size={14} className="text-[#A6A6A6]" aria-hidden="true"/><h2 className="text-sm font-semibold text-white">Histórico de Latência</h2></div><p className="mt-1 text-[10px] text-[#A6A6A6]">Últimos probes realizados nesta sessão.</p></div><button type="button" disabled={refreshing} onClick={() => void refresh()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/[0.06] bg-[#0B0B0D] px-3 text-[10px] font-mono text-[#A6A6A6] transition hover:text-white disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1DB854]/40">{refreshing ? <Loader2 size={13} className="animate-spin" aria-hidden="true"/> : <RefreshCw size={13} aria-hidden="true"/>} ATUALIZAR</button></div><div className="mt-4 overflow-x-auto rounded-xl border border-white/[0.06] bg-[#0B0B0D]"><div className="grid min-w-[420px] grid-cols-[1fr_auto_auto] gap-3 border-b border-white/[0.06] px-4 py-2 text-[9px] font-mono uppercase tracking-wider text-[#A6A6A6]"><span>Sequência</span><span>Resposta</span><span>Status</span></div>{pings.length === 0 ? <div className="p-6 text-center text-[11px] text-[#A6A6A6]">Aguardando telemetria.</div> : pings.map((ping, index) => <div key={ping.id} className="grid min-w-[420px] grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-white/[0.04] px-4 py-2.5 text-[10px] font-mono last:border-0"><span className="truncate text-[#A6A6A6]">PULSE_{String(index + 1).padStart(2, '0')} · {new Date(ping.at).toLocaleTimeString('pt-BR')}</span><span className={ping.latency > 300 ? 'font-semibold text-[#D4AF37]' : 'text-white'}>{ping.latency} ms</span><span className={ping.ok ? 'text-[#1DB854]' : 'text-rose-400'}>{ping.ok ? 'OK' : 'FALHA'}</span></div>)}</div><div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-[#A6A6A6]"><span>ÚLTIMA VARREDURA · {lastCheck}</span><span>{logs.length} logs transacionais carregados</span></div></section>
         {error && <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-[11px] text-rose-300" role="alert">{error}</div>}
         {loading && <div className="flex items-center justify-center gap-2 py-8 text-xs text-[#A6A6A6]" role="status"><Loader2 size={14} className="animate-spin" aria-hidden="true"/> Inicializando telemetria…</div>}
-      </div>
-    </MobileShell>
+    </div>
   )
 }
 
