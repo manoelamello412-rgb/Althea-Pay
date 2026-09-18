@@ -34,6 +34,27 @@ describe('funnel operational mirror', () => {
     expect(page).not.toContain('Eventos recentes</h2>')
   })
 
+  test('includes chat delivery state without exposing the internal outbox table', () => {
+    const migration = source('supabase/migrations/20260918153239_funnel_operational_chat_delivery_v13.sql')
+    const dispatcher = source('supabase/functions/crm-channel-outbox-dispatcher/index.ts')
+    expect(migration).toContain("from public.crm_messages m")
+    expect(migration).toContain("m.channel='funnel_chat'")
+    expect(migration).toContain("delivery_status")
+    expect(migration).toContain("dead_letter")
+    expect(migration).toContain("security_invoker=true")
+    expect(migration).not.toContain("grant select on public.crm_channel_message_outbox to authenticated")
+    expect(dispatcher).toContain("markLocalMessageFailure")
+    expect(dispatcher).toContain("delivery_error")
+  })
+
+  test('deduplicates operational incident counters by transaction or checkout identity', () => {
+    const component = source('components/funnel-operational-mirror.tsx')
+    expect(component).toContain("const incidentKey")
+    expect(component).toContain("transaction:")
+    expect(component).toContain("checkout:")
+    expect(component).toContain("new Set(")
+  })
+
   test('mirror exposes payment, checkout, chat, health and control filters', () => {
     const component = source('components/funnel-operational-mirror.tsx')
     expect(component).toContain("v_funnel_operational_timeline")
