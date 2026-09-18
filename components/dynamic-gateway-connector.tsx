@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, Cpu, Loader2, Pencil, Power, RefreshCw, RotateCcw, Unplug, X } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Cpu, Loader2, Pencil, Power, RefreshCw, Unplug, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { getOperationalCredentialFields, getWebhookCredentialFields, type GatewayCredentialField } from '@/components/gateway-provider-fields'
 
@@ -58,8 +58,6 @@ export const DynamicGatewayConnector: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState<string | null>(null)
-  const [switchingAll, setSwitchingAll] = useState<string | null>(null)
-  const [lastCompletedBatchId, setLastCompletedBatchId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -229,171 +227,6 @@ export const DynamicGatewayConnector: React.FC = () => {
     await load()
   }
 
-  const switchAllFunnels = async (gateway: Gateway) => {
-    const operational = ['connected', 'degraded'].includes(gateway.status.toLowerCase())
-    if (!operational || switchingAll || testing) return
-
-    const confirmed = window.confirm(
-      'Trocar de verdade a gateway de todos os funis conectados e compatíveis? A Althea fará preflight, alterará cada funil pela API externa e confirmará o estado remoto antes de atualizar o vínculo interno.'
-    )
-    if (!confirmed) return
-
-    setSwitchingAll(gateway.id)
-    setLastCompletedBatchId(null)
-    setError(null)
-    setMessage(null)
-
-    try {
-      const idempotencyKey = `global-gateway-switch:${gateway.id}:${crypto.randomUUID()}`
-      const { data: requested, error: requestError } = await db.rpc('request_global_funnel_gateway_switch', {
-        p_gateway_id: gateway.id,
-        p_dry_run: false,
-        p_allow_partial: false,
-        p_idempotency_key: idempotencyKey,
-      })
-      if (requestError) throw requestError
-
-      const batch = (requested ?? {}) as {
-        batch_id?: string
-        correlation_id?: string
-        status?: string
-        total_targets?: number
-        failed_targets?: number
-        blocked_targets?: number
-      }
-
-      if (!batch.batch_id) throw new Error('O Command Engine não retornou o identificador da operação.')
-
-      if (batch.status === 'preflight_failed' || batch.status === 'failed') {
-        const { data: blocked } = await db
-          .from('funnel_command_targets')
-          .select('funnel_id,last_error_message')
-          .eq('batch_id', batch.batch_id)
-          .in('status', ['blocked', 'failed'])
-          .limit(3)
-
-        const detail = (blocked ?? [])
-          .map(item => item.last_error_message || `Funil ${item.funnel_id} não está pronto.`)
-          .join(' · ')
-
-        throw new Error(
-          `Preflight bloqueado: ${Number(batch.failed_targets ?? batch.blocked_targets ?? 0)} funil(is) precisam de atenção.${detail ? ` ${detail}` : ''}`
-        )
-      }
-
-      const { data: executed, error: workerError } = await db.functions.invoke('funnel-command-worker', {
-        body: { batch_id: batch.batch_id, limit: 50 },
-      })
-      if (workerError) throw new Error(workerError.message)
-
-      const finalBatch = (executed?.batch ?? {}) as {
-        correlation_id?: string
-        status?: string
-        total_targets?: number
-        succeeded_targets?: number
-        failed_targets?: number
-        pending_targets?: number
-      }
-
-      const correlation = finalBatch.correlation_id || batch.correlation_id || batch.batch_id
-      const total = Number(finalBatch.total_targets ?? batch.total_targets ?? 0)
-      const successCount = Number(finalBatch.succeeded_targets ?? 0)
-      const failedCount = Number(finalBatch.failed_targets ?? 0)
-      const pendingCount = Number(finalBatch.pending_targets ?? 0)
-
-      if (finalBatch.status === 'succeeded') {
-        setMessage(
-          `Troca remota confirmada em ${successCount}/${total} funil(is). Operação ${correlation}. O vínculo interno só foi atualizado após a verificação externa.`
-        )
-        setLastCompletedBatchId(batch.batch_id)
-      } else if (finalBatch.status === 'partial' || finalBatch.status === 'failed' || finalBatch.status === 'preflight_failed') {
-        throw new Error(
-          `Operação ${correlation}: ${successCount}/${total} confirmados, ${failedCount} com falha. A Althea não marcou os funis não verificados como concluídos.`
-        )
-      } else {
-        setMessage(
-          `Operação ${correlation} em processamento: ${successCount}/${total} confirmados e ${pendingCount} pendentes. O worker continuará os retries automaticamente.`
-        )
-      }
-
-      await load()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Não foi possível trocar a gateway dos funis.')
-    } finally {
-      setSwitchingAll(null)
-    }
-  }
-
-  const rollbackLastSwitch = async () => {
-    if (!lastCompletedBatchId || switchingAll || testing) return
-
-    const confirmed = window.confirm(
-      'Reverter a última troca confirmada? A Althea fará novo preflight, restaurará a gateway anterior de cada funil e verificará o estado remoto antes de concluir.'
-    )
-    if (!confirmed) return
-
-    setSwitchingAll('rollback')
-    setError(null)
-    setMessage(null)
-
-    try {
-      const { data: requested, error: rollbackError } = await db.rpc('request_funnel_gateway_rollback', {
-        p_batch_id: lastCompletedBatchId,
-        p_allow_partial: false,
-        p_idempotency_key: `rollback:${lastCompletedBatchId}:${crypto.randomUUID()}`,
-      })
-      if (rollbackError) throw rollbackError
-
-      const batch = (requested ?? {}) as {
-        batch_id?: string
-        correlation_id?: string
-        status?: string
-        total_targets?: number
-        failed_targets?: number
-      }
-
-      if (!batch.batch_id) throw new Error('O rollback não retornou um identificador de operação.')
-      if (batch.status === 'preflight_failed' || batch.status === 'failed') {
-        throw new Error('Rollback bloqueado: nem todos os funis possuem um estado anterior verificável.')
-      }
-
-      const { data: executed, error: workerError } = await db.functions.invoke('funnel-command-worker', {
-        body: { batch_id: batch.batch_id, limit: 50 },
-      })
-      if (workerError) throw new Error(workerError.message)
-
-      const finalBatch = (executed?.batch ?? {}) as {
-        correlation_id?: string
-        status?: string
-        total_targets?: number
-        succeeded_targets?: number
-        failed_targets?: number
-        pending_targets?: number
-      }
-
-      const correlation = finalBatch.correlation_id || batch.correlation_id || batch.batch_id
-      const total = Number(finalBatch.total_targets ?? batch.total_targets ?? 0)
-      const successCount = Number(finalBatch.succeeded_targets ?? 0)
-      const failedCount = Number(finalBatch.failed_targets ?? 0)
-      const pendingCount = Number(finalBatch.pending_targets ?? 0)
-
-      if (finalBatch.status === 'succeeded') {
-        setMessage(`Rollback confirmado em ${successCount}/${total} funil(is). Operação ${correlation}.`)
-        setLastCompletedBatchId(null)
-      } else if (finalBatch.status === 'partial' || finalBatch.status === 'failed' || finalBatch.status === 'preflight_failed') {
-        throw new Error(`Rollback ${correlation}: ${successCount}/${total} confirmados e ${failedCount} com falha.`)
-      } else {
-        setMessage(`Rollback ${correlation} em processamento: ${successCount}/${total} confirmados e ${pendingCount} pendentes.`)
-      }
-
-      await load()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Não foi possível executar o rollback.')
-    } finally {
-      setSwitchingAll(null)
-    }
-  }
-
   const renderField = (credential: GatewayCredentialField, target: 'credential' | 'webhook' = 'credential') => {
     const source = target === 'webhook' ? webhookValues : values
     const setSource = target === 'webhook' ? setWebhookValues : setValues
@@ -429,17 +262,6 @@ export const DynamicGatewayConnector: React.FC = () => {
       </header>
 
       {message && <div className="flex items-center gap-2 rounded-lg border border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.05)] p-3 text-xs text-[var(--althea-brand)]"><CheckCircle2 className="h-4 w-4" />{message}</div>}
-      {lastCompletedBatchId && (
-        <button
-          type="button"
-          onClick={() => void rollbackLastSwitch()}
-          disabled={switchingAll !== null || testing !== null}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-amber-800/50 bg-amber-950/15 px-3 py-2.5 text-[9px] font-bold font-mono text-amber-300 disabled:opacity-40"
-        >
-          {switchingAll === 'rollback' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-          REVERTER ÚLTIMA TROCA
-        </button>
-      )}
       {error && <div className="flex items-center gap-2 rounded-lg border border-rose-900/50 bg-rose-950/20 p-3 text-xs text-rose-400"><AlertCircle className="h-4 w-4" />{error}</div>}
 
       <div className="space-y-3">
@@ -459,16 +281,6 @@ export const DynamicGatewayConnector: React.FC = () => {
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-full ${['connected', 'degraded'].includes(gateway.status.toLowerCase()) ? 'bg-[var(--althea-brand)]' : 'bg-neutral-600'}`} />
-                  {['connected', 'degraded'].includes(gateway.status.toLowerCase()) && (
-                    <button
-                      type="button"
-                      onClick={() => void switchAllFunnels(gateway)}
-                      disabled={testing !== null || switchingAll !== null}
-                      className="rounded-md border border-[rgba(29,184,84,.2)] bg-[rgba(29,184,84,.06)] px-2.5 py-2 text-[9px] font-bold font-mono text-[var(--althea-brand)] disabled:opacity-40"
-                    >
-                      {switchingAll === gateway.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'TODOS OS FUNIS'}
-                    </button>
-                  )}
                   <button type="button" onClick={() => edit(gateway)} className="rounded-md border border-white/[.07] p-2 text-[#c8d2cc]"><Pencil className="h-3.5 w-3.5" /></button>
                   <button type="button" onClick={() => void test(gateway.id)} disabled={testing !== null} className="rounded-md border border-white/[.07] px-2.5 py-2 text-[9px] font-bold font-mono text-white">{testing === gateway.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'TESTAR'}</button>
                   <button type="button" onClick={() => void toggle(gateway)} disabled={testing !== null || !gateway.credential_id} className="rounded-md border border-white/[.07] p-2 text-[#c8d2cc]"><Power className="h-3.5 w-3.5" /></button>
