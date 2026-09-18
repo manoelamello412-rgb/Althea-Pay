@@ -25,12 +25,12 @@ Retired compatibility functions are intentionally absent from the repository. Th
 - ESLint passes with zero warnings.
 - 21 test files / 77 tests pass.
 - Next.js production build compiles and generates 57 pages.
-- Production-safe load smoke passes.
+- Production-safe load smoke is implemented, but the last audited CI run skipped the external HTTP check because `ALTHEA_HEALTH_URL` was not configured.
 - Release preflight passes.
 - Security workflow passes.
 - Supabase migration audit workflow passes.
 - Release preflight reports zero unreferenced component candidates and zero unreferenced lib candidates.
-- Versioned/duplicate runtime names such as V2/V3/old/legacy are absent outside migration history.
+- Competing versioned/legacy runtime implementations are absent. The deployed slugs `checkout-engine-v2` and `automation-engine-v2` remain the single canonical implementations for those domains.
 - Retired Edge Function stubs were removed from source.
 - GitHub now contains every canonical Edge Function currently required by the audited runtime.
 - `supabase/config.toml` explicitly records JWT behavior for canonical functions.
@@ -41,12 +41,16 @@ Retired compatibility functions are intentionally absent from the repository. Th
 - Generic HTTP providers expose the transport fields required to configure them from the operator UI.
 - CRM outbox dispatcher source matches the working deployed implementation family and is syntactically valid.
 - Active Iara functions that previously existed only in Supabase are versioned in GitHub.
-- Security hardening revokes unintended anonymous execution from administrative SECURITY DEFINER functions.
-- The funnel commercial view is switched to security-invoker behavior.
+- Security hardening revokes unintended anonymous execution from administrative SECURITY DEFINER functions; the only remaining anonymous SECURITY DEFINER warnings are the deliberately public checkout/chat RPCs.
+- The funnel commercial view uses `security_invoker=true`, with underlying organization-scoped RLS and authenticated SELECT grants.
 - Plaintext gateway credential resolution is service-role-only.
 - Audit, sales and company/settings screens use columns/tables that exist in the current Supabase schema.
-- Supabase Vault contains an `ALTHEA_INTERNAL_SECRET` entry.
-- Existing internal pg_cron jobs are active; the audit migration adds the missing canonical CRM worker schedules.
+- Supabase Vault contains a non-empty `ALTHEA_INTERNAL_SECRET` entry (the secret value was not exposed during the audit).
+- Canonical CRM retry/predictive workers are scheduled in Supabase `pg_cron` every five minutes and are active.
+- Funnel gateway binding INSERT/UPDATE policies now prove that both referenced funnel and gateway belong to the binding `organization_id`; the previous tautological organization checks were removed.
+- Duplicate permissive SELECT policies on gateway transactions/attempts are consolidated, and the tenant-scoped supporting indexes are present.
+- Direct anonymous execution of `get_checkout_transaction_status` is revoked because checkout status polling now goes through the validated server route.
+- The live Supabase migration history records the audit corrections under the exact remote versions documented in `docs/MIGRATION_RECONCILIATION.md`.
 
 ## YELLOW — environment/E2E validation still required
 
@@ -61,7 +65,7 @@ These checks require live provider credentials, live external systems or a deplo
 - Backup restore drill and documented RTO/RPO.
 - Central alerting/on-call runbook.
 - The two integration suites that intentionally require external/runtime fixtures remain skipped in ordinary CI.
-- Vercel preview is currently unavailable because the account has hit its build-rate limit; GitHub's independent production build is green.
+- The newest post-audit Vercel preview check is currently blocked by the Hobby account build-rate limit. Earlier audit previews and the current `main` production deployment reached READY; this is an external capacity limit rather than a demonstrated application build error.
 
 ## RED — external/business blockers before real-money launch
 
@@ -109,4 +113,4 @@ This deploys canonical functions and removes remote functions intentionally reti
 
 Code readiness is not the same as real-money production readiness.
 
-The audited branch may be merged when GitHub checks remain green and the migration diff is accepted. Real-money go-live still requires the YELLOW live E2E checks and RED external/compliance items above.
+The post-merge audit delta should only be merged after a fresh CI run validates typecheck, lint, tests, production build and release preflight. The reviewed database migrations listed in `docs/MIGRATION_RECONCILIATION.md` are already applied to the linked Supabase project. Real-money go-live still requires the YELLOW live E2E checks and RED external/compliance items above.
