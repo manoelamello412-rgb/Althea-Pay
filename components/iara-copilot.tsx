@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { AlertTriangle, Bot, CircleDollarSign, GitBranch, MessageCircle, Send, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -26,6 +26,64 @@ export default function IaraCopilot() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [initializing, setInitializing] = useState(true)
+
+  useEffect(() => {
+    let active = true
+
+    async function hydrateConversation() {
+      setInitializing(true)
+      setError(null)
+      try {
+        const { data: auth, error: authError } = await db.auth.getUser()
+        if (authError || !auth.user) {
+          router.replace('/login')
+          return
+        }
+
+        const { data: session, error: sessionError } = await db
+          .from('chat_sessions')
+          .select('id')
+          .eq('user_id', auth.user.id)
+          .eq('title', 'IARA')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (sessionError) throw sessionError
+        if (!session?.id) {
+          if (active) {
+            setSessionId(null)
+            setMessages([])
+          }
+          return
+        }
+
+        const { data: history, error: historyError } = await db
+          .from('chat_messages')
+          .select('id,sender,content')
+          .eq('session_id', session.id)
+          .eq('user_id', auth.user.id)
+          .order('created_at', { ascending: true })
+          .limit(200)
+
+        if (historyError) throw historyError
+        if (!active) return
+
+        setSessionId(String(session.id))
+        setMessages((history ?? [])
+          .filter((item) => item.sender === 'user' || item.sender === 'iara')
+          .map((item) => ({ id: String(item.id), sender: item.sender as 'user' | 'iara', content: String(item.content) })))
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : 'Não foi possível restaurar o histórico da IARA.')
+      } finally {
+        if (active) setInitializing(false)
+      }
+    }
+
+    void hydrateConversation()
+    return () => { active = false }
+  }, [db, router])
 
   const createIaraSession = useCallback(async () => {
     if (sessionId) return sessionId
@@ -85,7 +143,7 @@ export default function IaraCopilot() {
     }
   }, [command, createIaraSession, db, router, sending])
 
-  const empty = messages.length === 0
+  const empty = !initializing && messages.length === 0
 
   return (
     <section className="min-h-[calc(100dvh-5rem)] bg-[#050908] px-3 pb-32 pt-3 text-white sm:px-5 sm:pt-5">
@@ -96,13 +154,18 @@ export default function IaraCopilot() {
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-7">
-          {empty ? (
+          {initializing ? (
+            <div className="mx-auto max-w-3xl space-y-4 py-8">
+              <div className="h-16 animate-pulse rounded-2xl border border-white/[0.04] bg-white/[0.025]" />
+              <div className="h-24 animate-pulse rounded-2xl border border-white/[0.04] bg-white/[0.025]" />
+              <p className="text-center text-xs text-[#68756e]">Sincronizando seu histórico com a IARA…</p>
+            </div>
+          ) : empty ? (
             <div className="mx-auto max-w-[760px]">
-              <div className="flex justify-end"><div className="max-w-[72%] rounded-[20px] rounded-br-md bg-[#0cbd55] px-5 py-3.5 text-[15px] font-medium text-white shadow-[0_12px_35px_rgba(29,184,84,0.15)]">Olá Iara<span className="ml-3 text-[11px] text-white/60">✓✓</span></div></div>
-              <div className="mt-7 flex items-start gap-3">
+              <div className="flex items-start gap-3">
                 <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#1DBB54]/20 bg-[#0a3326] text-[#1DBB54]"><Bot className="h-5 w-5" /></div>
                 <div className="max-w-[88%] rounded-[20px] rounded-bl-md border border-white/[0.055] bg-[#101917] px-5 py-4 text-[15px] leading-[1.65] text-[#e5ebe7] shadow-[0_16px_45px_rgba(0,0,0,0.18)]">
-                  <p>Olá.</p><p className="mt-2">Eu sou a IARA, a inteligência da <span className="text-[#1DBB54]">Althea Pay</span>.</p><p className="mt-4">Estou aqui para ajudar você a gerenciar seus funis, acompanhar suas vendas, analisar seus clientes e extrair insights valiosos para o seu negócio.</p><p className="mt-4">Como posso te ajudar hoje?</p><span className="mt-3 block text-[10px] text-[#68756e]">agora</span>
+                  <p>Olá. Eu sou a IARA, a inteligência da <span className="text-[#1DBB54]">Althea Pay</span>.</p><p className="mt-3">Posso analisar os dados reais da sua operação, incluindo funis, vendas, clientes, pagamentos, checkouts e gateways.</p><p className="mt-3">Como posso te ajudar?</p>
                 </div>
               </div>
               <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3">{quickActions.map(({ label, icon: Icon, prompt }) => <button key={label} type="button" disabled={sending} onClick={() => void askIara(undefined, prompt)} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#1DBB54]/25 bg-[#07150f] px-3 text-xs font-medium text-[#d9e3dc] transition hover:border-[#1DBB54]/50 hover:bg-[#0a2117] disabled:opacity-50"><Icon size={17} className="text-[#1DBB54]" strokeWidth={1.8} /><span>{label}</span></button>)}</div>
