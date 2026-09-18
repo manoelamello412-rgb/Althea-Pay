@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, RefreshCw, Zap } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { DynamicGatewayConnectorV3 } from '@/components/dynamic-gateway-connector-v3';
+import { DynamicGatewayConnector } from '@/components/dynamic-gateway-connector';
 
 type GatewayStatus = 'OPERACIONAL' | 'INDISPONÍVEL';
 type LogType = 'SUCCESS' | 'CRITICAL';
@@ -114,7 +114,7 @@ export default function GatewaysManagementPage() {
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-6 pb-32 space-y-7">
-      <DynamicGatewayConnectorV3 />
+      <DynamicGatewayConnector />
 
       <section className="space-y-2">
         <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-zinc-100">
