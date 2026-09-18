@@ -109,6 +109,8 @@ export default function FunilDominioPage() {
   const [method, setMethod] = useState<ConnectionMethod>('script')
   const [oneTimeToken, setOneTimeToken] = useState('')
   const [oneTimeEndpoint, setOneTimeEndpoint] = useState('')
+  const [clientTokenEndpoint, setClientTokenEndpoint] = useState('')
+  const [browserSdkUrl, setBrowserSdkUrl] = useState('')
   const [webhookSecret, setWebhookSecret] = useState('')
   const [webhookEndpoint, setWebhookEndpoint] = useState('')
   const [secretFunnelId, setSecretFunnelId] = useState('')
@@ -127,11 +129,13 @@ export default function FunilDominioPage() {
       }
       setOneTimeToken(stringValue(handoff.token))
       setOneTimeEndpoint(stringValue(handoff.eventEndpoint))
+      setClientTokenEndpoint(stringValue(handoff.clientTokenEndpoint))
+      setBrowserSdkUrl(stringValue(handoff.browserSdkUrl))
       setWebhookSecret(stringValue(handoff.webhookSecret))
       setWebhookEndpoint(stringValue(handoff.webhookEndpoint))
       const warning = stringValue(handoff.warning)
       if (warning) setProvisionWarning(warning)
-      else if (funnelId) setSuccess('Funil criado e vinculado ao produto e gateway selecionados.')
+      else if (funnelId) setSuccess('Funil conectado. A credencial de ingestão é exibida somente agora; produto e gateway podem ser configurados quando fizer sentido.')
     } catch {
       // Handoff é apenas para exibir segredos uma única vez; a operação já está persistida.
     }
@@ -386,7 +390,7 @@ export default function FunilDominioPage() {
           <div className="max-w-md">
             <Layers className="mx-auto h-7 w-7 text-[var(--althea-brand)]" />
             <h2 className="mt-4 text-sm font-semibold text-white">Nenhum funil cadastrado</h2>
-            <p className="mt-2 text-[10px] leading-5 text-[var(--althea-muted)]">Crie o primeiro funil pelo fluxo canônico, já vinculando produto e gateway sem duplicar configurações.</p>
+            <p className="mt-2 text-[10px] leading-5 text-[var(--althea-muted)]">Crie o primeiro funil pelo fluxo canônico. A conexão e a credencial de ingestão são provisionadas primeiro; produto e gateway permanecem opcionais.</p>
             <button type="button" onClick={() => router.push('/dashboard/funil/novo')} className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-[var(--althea-brand)] px-4 text-[10px] font-bold text-[#06110a]">
               <Plus size={14} /> Criar primeiro funil
             </button>
@@ -536,7 +540,10 @@ export default function FunilDominioPage() {
                   </button>
                 </div>
                 <code className="block overflow-x-auto rounded-lg bg-black/20 p-2 text-[9px] text-[#8edca5]">{oneTimeToken}</code>
-                {oneTimeEndpoint && <code className="block break-all text-[8px] text-[var(--althea-muted)]">{oneTimeEndpoint}</code>}
+                <p className="text-[8px] leading-4 text-[#D4AF37]">Guarde esta chave somente no backend ou em um secret manager. Não exponha a credencial longa no navegador.</p>
+                {oneTimeEndpoint && <div><span className="text-[7px] uppercase tracking-wider text-[#5f6e66]">Event endpoint</span><code className="mt-1 block break-all text-[8px] text-[var(--althea-muted)]">{oneTimeEndpoint}</code></div>}
+                {clientTokenEndpoint && <div><span className="text-[7px] uppercase tracking-wider text-[#5f6e66]">Browser short-lived token endpoint</span><code className="mt-1 block break-all text-[8px] text-[var(--althea-muted)]">{clientTokenEndpoint}</code></div>}
+                {browserSdkUrl && <div><span className="text-[7px] uppercase tracking-wider text-[#5f6e66]">Browser SDK</span><code className="mt-1 block break-all text-[8px] text-[var(--althea-muted)]">{browserSdkUrl}</code></div>}
               </div>
             )}
 

@@ -20,8 +20,10 @@ const types: Array<{ id: FunnelType; title: string; description: string }> = [
   { id: 'custom', title: 'Personalizado', description: 'Estrutura definida pelo operador.' },
 ]
 
-export default function FunnelCreateWorkspace() {
+export default function FunnelCreateWorkspace({ context = 'funnel' }: { context?: 'funnel' | 'integration' }) {
   const router = useRouter()
+  const integrationContext = context === 'integration'
+  const backHref = integrationContext ? '/dashboard/integration-hub' : '/dashboard/funil'
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
@@ -43,17 +45,6 @@ export default function FunnelCreateWorkspace() {
       setSaving(false)
       return
     }
-    if (!commercial.productId) {
-      setError('Selecione um produto ativo para o funil.')
-      setSaving(false)
-      return
-    }
-    if (!commercial.gatewayId) {
-      setError('Selecione um gateway operacional para o funil.')
-      setSaving(false)
-      return
-    }
-
     try {
       const response = await fetch('/api/funnels/provision', {
         method: 'POST',
@@ -94,6 +85,9 @@ export default function FunnelCreateWorkspace() {
       const ingestion = payload.ingestion && typeof payload.ingestion === 'object'
         ? payload.ingestion as Record<string, unknown>
         : {}
+      const connector = payload.connector && typeof payload.connector === 'object'
+        ? payload.connector as Record<string, unknown>
+        : {}
       const funnelId = typeof created.id === 'string' ? created.id : ''
 
       if (!funnelId) throw new Error('O provisionamento não retornou o ID do funil.')
@@ -102,6 +96,9 @@ export default function FunnelCreateWorkspace() {
         funnelId,
         token: typeof ingestion.token === 'string' ? ingestion.token : '',
         eventEndpoint: typeof ingestion.event_endpoint === 'string' ? ingestion.event_endpoint : '',
+        clientTokenEndpoint: typeof connector.client_token_endpoint === 'string' ? connector.client_token_endpoint : '',
+        browserSdkUrl: typeof connector.browser_sdk_url === 'string' ? connector.browser_sdk_url : '',
+        origin: integrationContext ? 'integration_hub' : 'funnel',
       }
 
       if (connectionType === 'webhook') {
@@ -134,19 +131,19 @@ export default function FunnelCreateWorkspace() {
     <div className="w-full space-y-5 text-white">
       <section className="flex flex-col gap-5 border-b border-white/[.055] pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Operação de funis</p>
-          <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">Criar funil</h1>
+          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">{integrationContext ? 'Revenue Source · Onboarding' : 'Operação de funis'}</p>
+          <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">{integrationContext ? 'Conectar funil externo' : 'Criar funil'}</h1>
           <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--althea-muted)]">
-            Crie o funil já associado a um produto ativo e a um gateway operacional. O vínculo comercial é persistido na mesma operação.
+            Primeiro conecte a fonte e habilite a ingestão de eventos. Produto, gateway e controle remoto são opcionais e podem ser configurados depois.
           </p>
         </div>
         <button
           type="button"
-          onClick={() => router.push('/dashboard/funil')}
+          onClick={() => router.push(backHref)}
           className="inline-flex h-10 items-center gap-2 self-start rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white lg:self-auto"
         >
           <ArrowLeft size={14} />
-          Voltar aos funis
+          {integrationContext ? 'Voltar ao Integration Hub' : 'Voltar aos funis'}
         </button>
       </section>
 
@@ -268,21 +265,21 @@ export default function FunnelCreateWorkspace() {
                 <Package size={16} />
               </span>
               <div>
-                <h2 className="text-sm font-semibold text-white">Pronto para provisionar</h2>
-                <p className="mt-1 text-[10px] leading-4 text-[var(--althea-muted)]">Produto e gateway são obrigatórios. A associação é criada atomicamente junto com o funil.</p>
+                <h2 className="text-sm font-semibold text-white">Pronto para conectar</h2>
+                <p className="mt-1 text-[10px] leading-4 text-[var(--althea-muted)]">O funil, a conexão e a credencial de ingestão são provisionados juntos. Vínculos comerciais selecionados também entram na mesma operação.</p>
               </div>
             </div>
 
             <button
               type="submit"
-              disabled={saving || !name.trim() || !commercial.productId || !commercial.gatewayId}
+              disabled={saving || !name.trim()}
               className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--althea-brand)] px-4 text-[10px] font-bold text-[#06110a] shadow-[0_8px_28px_rgba(29,184,84,.14)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-              {saving ? 'Criando...' : 'Criar e preparar jornada'}
+              {saving ? 'Conectando...' : integrationContext ? 'Conectar fonte' : 'Criar e conectar funil'}
             </button>
 
-            <p className="mt-3 text-center text-[8px] uppercase tracking-[.12em] text-[#5f6e66]">Produto + gateway obrigatórios · associação atômica</p>
+            <p className="mt-3 text-center text-[8px] uppercase tracking-[.12em] text-[#5f6e66]">Conexão primeiro · produto e gateway opcionais</p>
           </section>
         </div>
       </form>
