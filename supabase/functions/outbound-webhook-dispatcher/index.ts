@@ -8,11 +8,13 @@ async function sign(secret:string,body:string){const key=await crypto.subtle.imp
 
 Deno.serve(async req=>{
  if(req.method!=="POST")return json({error:"method_not_allowed"},405);
- const internal=Deno.env.get("ALTHEA_INTERNAL_SECRET")||"";if(!internal||req.headers.get("x-internal-secret")!==internal)return json({error:"unauthorized"},401);
  const url=Deno.env.get("SUPABASE_URL"),service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");if(!url||!service)return json({error:"server_configuration_error"},500);
+ const db=createClient(url,service);
+ const supplied=req.headers.get("x-internal-secret")??req.headers.get("x-althea-internal-secret")??"";if(!supplied)return json({error:"unauthorized"},401);
+ const verified=await db.rpc("verify_althea_internal_secret",{p_secret:supplied});if(verified.error)return json({error:"internal_auth_unavailable"},500);if(verified.data!==true)return json({error:"unauthorized"},401);
  let b:Record<string,unknown>;try{const parsed=await req.json();if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))return json({error:"invalid_json"},400);b=parsed as Record<string,unknown>}catch{return json({error:"invalid_json"},400)}
  const userId=String(b.user_id??""),eventType=String(b.event_type??"order.approved"),eventId=String(b.event_id??crypto.randomUUID());if(!userId)return json({error:"user_id_required"},400);
- const db=createClient(url,service);const {data:webhooks,error}=await db.from("outbound_webhooks").select("*").eq("user_id",userId).eq("status","active");if(error)return json({error:"webhook_lookup_failed"},500);
+ const {data:webhooks,error}=await db.from("outbound_webhooks").select("*").eq("user_id",userId).eq("status","active");if(error)return json({error:"webhook_lookup_failed"},500);
  const payload={id:eventId,type:eventType,created_at:new Date().toISOString(),data:b.payload??{}};const body=JSON.stringify(payload);const results=[];
  for(const wh of webhooks??[]){if(!Array.isArray(wh.events)||(!wh.events.includes(eventType)&&!wh.events.includes("*")))continue;const idempotencyKey=`${eventId}:${wh.id}:${eventType}`;const secret=String(wh.secret_ref??"");let signature="";if(secret)signature=await sign(secret,body);
   const started=Date.now();let status="retry",code:number|null=null,errorMessage:string|null=null;
