@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { CircleDollarSign, GitBranch, LayoutDashboard, LogOut, MessageCircle, Network, Package, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
+import { CircleDollarSign, GitBranch, LayoutDashboard, LogOut, MessageCircle, Network, Package, RefreshCw, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -29,6 +29,7 @@ const menuSections: MenuSection[] = [
   { title: 'CLIENTES E RELACIONAMENTO', items: [
     { label: 'Clientes', href: '/dashboard/clientes', icon: MessageCircle },
     { label: 'Chat / CRM', href: '/dashboard/crm', icon: MessageCircle },
+    { label: 'Recovery', href: '/dashboard/recovery', icon: RefreshCw },
   ] },
   { title: 'DADOS E INTELIGÊNCIA', items: [
     { label: 'Vendas', href: '/dashboard/vendas', icon: CircleDollarSign },
@@ -66,6 +67,7 @@ function sectionLabel(pathname: string): string {
   if (pathname.startsWith('/dashboard/pagamentos')) return 'PAGAMENTOS'
   if (pathname.startsWith('/dashboard/clientes')) return 'CLIENTES'
   if (pathname.startsWith('/dashboard/analytics')) return 'ANALYTICS'
+  if (pathname.startsWith('/dashboard/recovery')) return 'RECOVERY'
   if (pathname.startsWith('/dashboard/integration-hub')) return 'INTEGRAÇÕES'
   if (pathname.startsWith('/dashboard/api')) return 'API'
   if (pathname.startsWith('/dashboard/webhooks')) return 'WEBHOOKS'
