@@ -142,7 +142,7 @@ export function FunnelWhiteLabelChat({
         type="button"
         aria-label={`Abrir ${brand}`}
         onClick={openChat}
-        className="fixed bottom-5 right-5 z-40 inline-flex h-12 items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500 px-4 text-sm font-semibold text-black shadow-2xl shadow-black/40 transition hover:bg-emerald-400"
+        className="fixed bottom-5 right-5 z-40 inline-flex h-12 items-center gap-2 rounded-full border border-[rgba(29,184,84,.20)] bg-[var(--althea-brand)] px-4 text-sm font-semibold text-black shadow-2xl shadow-black/40 transition hover:brightness-110"
       >
         <MessageCircle size={19} />
         <span>Falar com suporte</span>
@@ -170,7 +170,7 @@ export function FunnelWhiteLabelChat({
               )}
               {messages.map(item => (
                 <div key={item.id} className={`flex ${item.direction === 'inbound' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[86%] rounded-2xl px-3 py-2.5 text-sm ${item.direction === 'inbound' ? 'rounded-br-md bg-emerald-500 text-black' : 'rounded-bl-md bg-white/[0.08] text-white/85'}`}>
+                  <div className={`max-w-[86%] rounded-2xl px-3 py-2.5 text-sm ${item.direction === 'inbound' ? 'rounded-br-md bg-[var(--althea-brand)] text-black' : 'rounded-bl-md bg-white/[0.08] text-white/85'}`}>
                     <span className="whitespace-pre-wrap break-words">{item.body}</span>
                     <small className={`mt-1 block text-[9px] ${item.direction === 'inbound' ? 'text-black/55' : 'text-white/35'}`}>
                       {new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -194,14 +194,14 @@ export function FunnelWhiteLabelChat({
                   }
                 }}
                 placeholder={loading ? 'Conectando…' : 'Digite sua mensagem…'}
-                className="min-h-11 max-h-28 flex-1 resize-none rounded-2xl border border-white/10 bg-black/25 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/30"
+                className="min-h-11 max-h-28 flex-1 resize-none rounded-2xl border border-white/10 bg-black/25 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/30 focus:border-[rgba(29,184,84,.30)]"
               />
               <button
                 type="button"
                 aria-label="Enviar"
                 disabled={loading || sending || !token || !text.trim()}
                 onClick={() => void submit()}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-black disabled:opacity-35"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--althea-brand)] text-black disabled:opacity-35"
               >
                 <Send size={17} />
               </button>
