@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import FunnelCommercialSelector, { type FunnelCommercialSelection } from './funnel-commercial-selector'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { Activity, Check, ChevronDown, Copy, Eye, ExternalLink, KeyRound, Layers, Link2, Loader2, Plus, Radio, RefreshCw, Send, ShieldCheck, Webhook, X, Zap } from 'lucide-react'
@@ -103,7 +103,6 @@ function statusMeta(connection: FunnelConnection | null): { label: string; tone:
 
 export default function FunilDominioPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
   const [funnels, setFunnels] = useState<Funnel[]>([])
   const [selectedFunnelId, setSelectedFunnelId] = useState('')
@@ -182,7 +181,7 @@ export default function FunilDominioPage() {
   useEffect(() => { void refresh() }, [refresh])
 
   useEffect(() => {
-    if (searchParams.get('create') !== '1') return
+    if (new URLSearchParams(window.location.search).get('create') !== '1') return
     setCreatingNewFunnel(true)
     setSelectedFunnelId('')
     setFunnelType('sales')
@@ -190,7 +189,7 @@ export default function FunilDominioPage() {
     setError('')
     setSuccess('')
     router.replace('/dashboard/funil', { scroll: false })
-  }, [router, searchParams])
+  }, [router])
 
   useEffect(() => {
     if (!selectedFunnelId) return
