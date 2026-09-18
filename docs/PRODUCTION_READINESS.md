@@ -32,8 +32,8 @@ Retired compatibility functions are intentionally absent from the repository. Th
 - Dependency versions are pinned and `package-lock.json` is committed.
 - TypeScript typecheck passes.
 - ESLint passes with zero warnings.
-- 23 test files / 91 tests passed at the latest completed funnel-control checkpoint; the funnel control suite now also includes runtime-auth/ACL regression coverage. Two integration files / 4 tests remain intentionally skipped without external fixtures.
-- Next.js production build compiles and generates 57 pages.
+- 27 test files / 117 tests passed at the latest completed operational-mirror checkpoint; 2 integration files / 4 tests remain intentionally skipped without external fixtures.
+- Next.js production build compiles and generates 58 pages.
 - Production-safe load smoke is implemented, but the last audited CI run skipped the external HTTP check because `ALTHEA_HEALTH_URL` was not configured.
 - Release preflight passes.
 - Security workflow passes.
@@ -70,12 +70,21 @@ Retired compatibility functions are intentionally absent from the repository. Th
 - Minimal `service_role` table ACLs are explicitly granted for the control-plane tables that backend workers must read/write; no equivalent grants were added for `anon`.
 - Database triggers enforce organization/funnel/gateway integrity for remote gateway mappings, command targets and drift events.
 - `types/supabase.ts` has been regenerated from the live project after the control-plane schema changes.
+- The per-funnel operational mirror unifies checkout events, gateway transactions/attempts, sales, transaction audit, remote chat delivery, connector health, gateway command/drift state, inbound webhook health and outbound webhook delivery into one `security_invoker` read model without copying operational data into a second source of truth.
+- Chat delivery failures are mirrored onto the canonical CRM message, so retry/DLQ state appears in the funnel timeline without exposing the internal outbox table to the browser.
+- Operational incident counters deduplicate the same underlying failure by transaction/checkout identity instead of inflating counts across projections.
+- Async checkout-engine transaction transitions preserve `funnel_id` and project approved/pending/failed/refund/chargeback state back into checkout, sales and integration events.
+- The external `althea-public-api` exposes `GET /v1/funnels/:id/operational-timeline` under the existing `funnels:read` scope with category/severity/source/before filters and deduplicated incident summary.
+- Public API key authentication was repaired to use `extensions.digest` explicitly inside the hardened SECURITY DEFINER function; the Edge route parser was also corrected for the hosted function-name prefix.
+- A controlled public-API E2E using a temporary scoped API key returned HTTP 200 and the expected payment event from the operational timeline. All temporary key, funnel, event, rate-limit and log fixtures were removed afterwards and verified at zero.
+- `althea-public-api` and `crm-channel-outbox-dispatcher` deployed sources were re-compared with GitHub and matched exactly after these changes.
 - The live Supabase migration history records the audit corrections under the exact remote versions documented in `docs/MIGRATION_RECONCILIATION.md`.
 
 ## YELLOW — environment/E2E validation still required
 
 These checks require live provider credentials, live external systems or a deployable preview environment:
 - Real remote funnel gateway switch against at least one external scarcity-funnel API, proving A → B mutation and B re-read before `verified`.
+- Real commercial funnel chat roundtrip proving customer → external funnel API → Althea CRM → operator reply → external funnel API → customer.
 - Real rollback of that remote funnel back to its previously observed gateway.
 - Deliberate out-of-band remote gateway change proving drift detection opens and resolves the expected event.
 - End-to-end checkout with a real supported provider.
