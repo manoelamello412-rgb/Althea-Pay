@@ -3,10 +3,12 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 type Json = Record<string, unknown>;
 
-const HEADERS = {
-  "Content-Type": "application/json",
-  "Cache-Control": "no-store",
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type, x-althea-internal-secret",
+  "Access-Control-Allow-Methods": "POST,OPTIONS",
 };
+const HEADERS = { ...CORS, "Content-Type": "application/json", "Cache-Control": "no-store" };
 
 const isObject = (value: unknown): value is Json =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -27,48 +29,66 @@ const constantTimeEqual = (left: string, right: string): boolean => {
 };
 
 Deno.serve(async (request) => {
-  if (request.method !== "POST") {
-    return json({ ok: false, error: "method_not_allowed" }, 405);
-  }
+  if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const internalSecret = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
-  const suppliedSecret = request.headers.get("x-internal-secret") ?? "";
-
   if (!supabaseUrl || !serviceRole || !internalSecret) {
     return json({ ok: false, error: "server_configuration_error" }, 500);
   }
-  if (!constantTimeEqual(internalSecret, suppliedSecret)) {
-    return json({ ok: false, error: "unauthorized" }, 401);
-  }
 
   const requestBody = await request.json().catch(() => ({})) as Json;
+  const batchId = text(requestBody.batch_id) || null;
   const requestedLimit = Number(requestBody.limit ?? 20);
-  const limit = Math.min(
-    Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 20, 1),
-    50,
-  );
+  const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 20, 1), 50);
 
   const db = createClient(supabaseUrl, serviceRole, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const workerId = `funnel-command-worker:${crypto.randomUUID()}`;
 
-  const claimed = await db.rpc("claim_funnel_command_targets", {
-    p_worker_id: workerId,
-    p_limit: limit,
-  });
-  if (claimed.error) {
-    console.error("funnel_command.claim_failed", { code: claimed.error.code });
-    return json({ ok: false, error: "command_claim_failed" }, 500);
+  const suppliedSecret = request.headers.get("x-althea-internal-secret") ?? "";
+  const internalCaller = constantTimeEqual(internalSecret, suppliedSecret);
+
+  if (!internalCaller) {
+    const authorization = request.headers.get("authorization") ?? "";
+    if (!authorization.toLowerCase().startsWith("bearer ")) {
+      return json({ ok: false, error: "unauthorized" }, 401);
+    }
+    if (!batchId) return json({ ok: false, error: "batch_id_required" }, 422);
+
+    const token = authorization.slice(7).trim();
+    const userResult = await db.auth.getUser(token);
+    const userId = userResult.data.user?.id;
+    if (userResult.error || !userId) return json({ ok: false, error: "unauthorized" }, 401);
+
+    const batchResult = await db
+      .from("funnel_command_batches")
+      .select("id,organization_id")
+      .eq("id", batchId)
+      .maybeSingle();
+    if (batchResult.error || !batchResult.data) return json({ ok: false, error: "batch_not_found" }, 404);
+
+    const membership = await db
+      .from("organization_members")
+      .select("role")
+      .eq("organization_id", batchResult.data.organization_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const role = text(membership.data?.role);
+    if (membership.error || !["owner", "admin", "manager", "operator", "supervisor"].includes(role)) {
+      return json({ ok: false, error: "forbidden" }, 403);
+    }
   }
 
-  const targets = Array.isArray(claimed.data) ? claimed.data : [];
+  const workerId = `funnel-command-worker:${crypto.randomUUID()}`;
   let verified = 0;
   let preflighted = 0;
   let retried = 0;
   let failed = 0;
+  let claimedTotal = 0;
 
   async function invokeAdapter(
     connectionId: string,
@@ -111,9 +131,7 @@ Deno.serve(async (request) => {
     } catch (error) {
       return {
         ok: false,
-        payload: {
-          error: error instanceof Error ? error.message : "adapter_network_error",
-        },
+        payload: { error: error instanceof Error ? error.message : "adapter_network_error" },
         retryable: true,
       };
     }
@@ -125,103 +143,66 @@ Deno.serve(async (request) => {
     retryable: boolean,
     remoteBefore: Json | null = null,
   ) {
-    const errorCode =
-      text(payload.failure_code) ||
-      text(payload.error) ||
-      "remote_command_failed";
-    const errorMessage =
-      text(payload.error) ||
-      text(payload.message) ||
-      "Falha ao executar comando remoto.";
-
     const result = await db.rpc("fail_funnel_command_target", {
       p_target_id: targetId,
-      p_error_code: errorCode.slice(0, 120),
-      p_error_message: errorMessage.slice(0, 2_000),
+      p_error_code: (text(payload.failure_code) || text(payload.error) || "remote_command_failed").slice(0, 120),
+      p_error_message: (text(payload.error) || text(payload.message) || "Falha ao executar comando remoto.").slice(0, 2_000),
       p_retryable: retryable,
       p_remote_before: remoteBefore,
     });
     if (result.error) {
-      console.error("funnel_command.fail_persist_failed", {
-        target_id: targetId,
-        code: result.error.code,
-      });
+      console.error("funnel_command.fail_persist_failed", { target_id: targetId, code: result.error.code });
+      failed += 1;
       return;
     }
-
-    const state = isObject(result.data) ? text(result.data.status) : "";
-    if (state === "queued" || state === "running") retried += 1;
+    if (retryable) retried += 1;
     else failed += 1;
   }
 
-  for (const rawTarget of targets) {
-    if (!isObject(rawTarget)) continue;
-
+  async function processTarget(rawTarget: Json) {
     const targetId = text(rawTarget.id);
-    const batchId = text(rawTarget.batch_id);
+    const targetBatchId = text(rawTarget.batch_id);
     const connectionId = text(rawTarget.connection_id);
     const targetRemoteGatewayRef = text(rawTarget.target_remote_gateway_ref);
     const targetCorrelationId = text(rawTarget.correlation_id);
 
-    if (!targetId || !batchId || !connectionId || !targetRemoteGatewayRef) {
+    if (!targetId || !targetBatchId || !connectionId || !targetRemoteGatewayRef) {
       if (targetId) {
-        await markFailure(
-          targetId,
-          { error: "invalid_command_target", failure_code: "invalid_command_target" },
-          false,
-        );
+        await markFailure(targetId, { error: "invalid_command_target", failure_code: "invalid_command_target" }, false);
       }
-      continue;
+      return;
     }
 
     const batchResult = await db
       .from("funnel_command_batches")
       .select("id,status,dry_run,metadata")
-      .eq("id", batchId)
+      .eq("id", targetBatchId)
       .maybeSingle();
 
     if (batchResult.error || !batchResult.data) {
-      await markFailure(
-        targetId,
-        { error: "command_batch_not_found", failure_code: "command_batch_not_found" },
-        false,
-      );
-      continue;
+      await markFailure(targetId, { error: "command_batch_not_found", failure_code: "command_batch_not_found" }, false);
+      return;
     }
 
-    const batchMetadata = isObject(batchResult.data.metadata)
-      ? batchResult.data.metadata
-      : {};
-    const phase = text(batchMetadata.phase) || "preflight";
+    const metadata = isObject(batchResult.data.metadata) ? batchResult.data.metadata : {};
+    const phase = text(metadata.phase) || "preflight";
 
-    const before = await invokeAdapter(
-      connectionId,
-      "get_gateway",
-      null,
-      targetCorrelationId,
-    );
-
+    const before = await invokeAdapter(connectionId, "get_gateway", null, targetCorrelationId);
     if (!before.ok) {
       await markFailure(targetId, before.payload, before.retryable);
-      continue;
+      return;
     }
 
     const observedBefore = text(before.payload.observed_remote_gateway_ref);
-    const beforePayload = isObject(before.payload.response)
-      ? before.payload.response as Json
-      : before.payload;
-
+    const beforePayload = isObject(before.payload.response) ? before.payload.response as Json : before.payload;
     if (!observedBefore) {
       await markFailure(
         targetId,
-        {
-          error: "remote_gateway_reference_missing",
-          failure_code: "remote_gateway_reference_missing",
-        },
+        { error: "remote_gateway_reference_missing", failure_code: "remote_gateway_reference_missing" },
         false,
         beforePayload,
       );
-      continue;
+      return;
     }
 
     if (phase === "preflight") {
@@ -229,30 +210,19 @@ Deno.serve(async (request) => {
         p_target_id: targetId,
         p_observed_remote_gateway_ref: observedBefore,
         p_remote_before: beforePayload,
-        p_result_payload: {
-          phase: "preflight",
-          checked_at: new Date().toISOString(),
-        },
+        p_result_payload: { phase: "preflight", checked_at: new Date().toISOString() },
       });
-
       if (completed.error) {
-        console.error("funnel_command.preflight_finalize_failed", {
-          target_id: targetId,
-          code: completed.error.code,
-        });
         await markFailure(
           targetId,
-          {
-            error: "preflight_finalize_failed",
-            failure_code: "preflight_finalize_failed",
-          },
+          { error: "preflight_finalize_failed", failure_code: "preflight_finalize_failed" },
           true,
           beforePayload,
         );
       } else {
         preflighted += 1;
       }
-      continue;
+      return;
     }
 
     await db
@@ -273,61 +243,30 @@ Deno.serve(async (request) => {
         p_observed_after: observedBefore,
         p_remote_before: beforePayload,
         p_remote_after: beforePayload,
-        p_result_payload: {
-          phase: "execute",
-          already_effective: true,
-          verified_at: new Date().toISOString(),
-        },
+        p_result_payload: { phase: "execute", already_effective: true, verified_at: new Date().toISOString() },
       });
-
       if (finalized.error) {
-        await markFailure(
-          targetId,
-          {
-            error: "local_finalize_failed",
-            failure_code: "local_finalize_failed",
-          },
-          true,
-          beforePayload,
-        );
+        await markFailure(targetId, { error: "local_finalize_failed", failure_code: "local_finalize_failed" }, true, beforePayload);
       } else {
         verified += 1;
       }
-      continue;
+      return;
     }
 
-    const changed = await invokeAdapter(
-      connectionId,
-      "set_gateway",
-      targetRemoteGatewayRef,
-      targetCorrelationId,
-    );
-
+    const changed = await invokeAdapter(connectionId, "set_gateway", targetRemoteGatewayRef, targetCorrelationId);
     if (!changed.ok) {
-      // A timeout can happen after the provider has accepted the mutation.
-      // The durable retry always performs GET first and will finalize without
-      // issuing a second write when the desired state is already effective.
       await markFailure(targetId, changed.payload, changed.retryable, beforePayload);
-      continue;
+      return;
     }
 
-    const after = await invokeAdapter(
-      connectionId,
-      "get_gateway",
-      null,
-      targetCorrelationId,
-    );
-
+    const after = await invokeAdapter(connectionId, "get_gateway", null, targetCorrelationId);
     if (!after.ok) {
       await markFailure(targetId, after.payload, after.retryable, beforePayload);
-      continue;
+      return;
     }
 
     const observedAfter = text(after.payload.observed_remote_gateway_ref);
-    const afterPayload = isObject(after.payload.response)
-      ? after.payload.response as Json
-      : after.payload;
-
+    const afterPayload = isObject(after.payload.response) ? after.payload.response as Json : after.payload;
     if (observedAfter !== targetRemoteGatewayRef) {
       await markFailure(
         targetId,
@@ -340,7 +279,7 @@ Deno.serve(async (request) => {
         true,
         beforePayload,
       );
-      continue;
+      return;
     }
 
     const finalized = await db.rpc("finalize_funnel_gateway_switch_target", {
@@ -349,40 +288,55 @@ Deno.serve(async (request) => {
       p_observed_after: observedAfter,
       p_remote_before: beforePayload,
       p_remote_after: afterPayload,
-      p_result_payload: {
-        phase: "execute",
-        already_effective: false,
-        verified_at: new Date().toISOString(),
-      },
+      p_result_payload: { phase: "execute", already_effective: false, verified_at: new Date().toISOString() },
     });
 
     if (finalized.error) {
-      console.error("funnel_command.finalize_failed", {
-        target_id: targetId,
-        code: finalized.error.code,
-      });
-      await markFailure(
-        targetId,
-        {
-          error: "local_finalize_failed",
-          failure_code: "local_finalize_failed",
-        },
-        true,
-        beforePayload,
-      );
-      continue;
+      await markFailure(targetId, { error: "local_finalize_failed", failure_code: "local_finalize_failed" }, true, beforePayload);
+      return;
+    }
+    verified += 1;
+  }
+
+  // For an interactive batch, cycle twice so a successful preflight can move
+  // immediately into the execution phase. Cron/internal callers stay bounded.
+  const maxCycles = batchId ? 3 : 1;
+  for (let cycle = 0; cycle < maxCycles; cycle += 1) {
+    const claimed = await db.rpc("claim_funnel_command_targets", {
+      p_worker_id: workerId,
+      p_limit: limit,
+      p_batch_id: batchId,
+    });
+    if (claimed.error) {
+      console.error("funnel_command.claim_failed", { code: claimed.error.code });
+      return json({ ok: false, error: "command_claim_failed" }, 500);
     }
 
-    verified += 1;
+    const targets = Array.isArray(claimed.data) ? claimed.data.filter(isObject) : [];
+    claimedTotal += targets.length;
+    if (!targets.length) break;
+
+    for (const target of targets) await processTarget(target);
+  }
+
+  let batch: Json | null = null;
+  if (batchId) {
+    const finalBatch = await db
+      .from("funnel_command_batches")
+      .select("id,correlation_id,status,dry_run,total_targets,succeeded_targets,failed_targets,pending_targets,metadata,completed_at")
+      .eq("id", batchId)
+      .maybeSingle();
+    if (finalBatch.data) batch = finalBatch.data as Json;
   }
 
   return json({
     ok: true,
     worker_id: workerId,
-    claimed: targets.length,
+    claimed: claimedTotal,
     preflighted,
     verified,
     retried,
     failed,
+    batch,
   });
 });
