@@ -60,12 +60,13 @@ export default function DashboardProduction() {
 
   const d = data ?? {}
   const currencyOptions = (Array.isArray(d.filters?.currency) ? d.filters.currency : []).map((value: any) => String(value).trim().toUpperCase()).filter(Boolean)
-  const monetaryCurrency = selected.currency || (currencyOptions.length === 1 ? currencyOptions[0] : '')
+  const monetaryCurrency = selected.currency
   const currency = monetaryCurrency || 'BRL'
+  const revenuePlaceholder = currencyOptions.length === 0 ? 'N/D' : currencyOptions.length === 1 ? `Selecione ${currencyOptions[0]}` : `${currencyOptions.length} moedas`
   const moneyMetric = (value: any) => monetaryCurrency ? money(value, currency) : '—'
   const explicitCurrencyMetric = (value: any) => selected.currency ? money(value, selected.currency) : '—'
   const cards = [
-    ['Receita aprovada', monetaryCurrency ? d.financial?.revenue : null, monetaryCurrency ? d.previous?.revenue : null, monetaryCurrency ? money(d.financial?.revenue, currency) : `${currencyOptions.length || 'Várias'} moedas`, Wallet, '/dashboard/pagamentos'],
+    ['Receita aprovada', monetaryCurrency ? d.financial?.revenue : null, monetaryCurrency ? d.previous?.revenue : null, monetaryCurrency ? money(d.financial?.revenue, currency) : revenuePlaceholder, Wallet, '/dashboard/pagamentos'],
     ['Vendas aprovadas', d.sales?.approved, d.previous?.sales, number(d.sales?.approved), ShoppingCart, '/dashboard/vendas'],
     ['Conversão de checkout', d.checkouts?.conversion, d.previous?.conversion, percent(d.checkouts?.conversion), BarChart3, '/dashboard/checkouts'],
     ['Aprovação de gateway', d.gateways?.approvalRate, null, percent(d.gateways?.approvalRate), Gauge, '/dashboard/gateways'],
