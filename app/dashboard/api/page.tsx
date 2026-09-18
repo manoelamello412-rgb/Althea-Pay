@@ -25,7 +25,7 @@ export default function ApiPage() {
       if (!auth.user) { setKeys([]); setLogs([]); return }
       const uid = auth.user.id
       const [keyResult, logResult] = await Promise.all([
-        db.from('api_keys').select('id,name,key_prefix,scopes,expires_at,last_used_at,revoked_at,created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(200),
+        db.from('api_keys').select('id,name,key_prefix,scopes,expires_at,last_used_at,revoked_at,created_at').order('created_at', { ascending: false }).limit(200),
         db.from('api_request_logs').select('id,api_key_id,request_id,method,path,status_code,latency_ms,scope,created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(100),
       ])
       if (keyResult.error) throw keyResult.error; if (logResult.error) throw logResult.error
