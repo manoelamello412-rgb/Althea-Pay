@@ -35,6 +35,31 @@ type Mapping = {
   remote_gateway_ref: string
 }
 
+type CommandRow = {
+  id: string
+  batch_id: string
+  status: string
+  target_gateway_id: string
+  previous_gateway_id: string | null
+  correlation_id: string
+  last_error_message: string | null
+  created_at: string
+  verified_at: string | null
+  completed_at: string | null
+}
+
+type DriftRow = {
+  id: string
+  status: string
+  correlation_id: string
+  expected_gateway_id: string | null
+  observed_gateway_id: string | null
+  observed_remote_gateway_ref: string | null
+  detected_at: string
+  last_seen_at: string
+  resolved_at: string | null
+}
+
 type StateResponse = {
   ok?: boolean
   error?: string
@@ -65,6 +90,8 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
   const [connection, setConnection] = useState<ConnectionState | null>(null)
   const [gateways, setGateways] = useState<Gateway[]>([])
   const [mappingRefs, setMappingRefs] = useState<Record<string, string>>({})
+  const [commands, setCommands] = useState<CommandRow[]>([])
+  const [drifts, setDrifts] = useState<DriftRow[]>([])
   const [remoteBaseUrl, setRemoteBaseUrl] = useState('')
   const [remoteFunnelId, setRemoteFunnelId] = useState('')
   const [token, setToken] = useState('')
@@ -96,6 +123,26 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
       setConnection(next)
       setGateways((state.gateways || []).filter(item => ['connected', 'degraded'].includes(item.status.toLowerCase())))
       setMappingRefs(Object.fromEntries((state.mappings || []).map(item => [item.gateway_id, item.remote_gateway_ref])))
+
+      const [commandHistory, driftHistory] = await Promise.all([
+        db
+          .from('funnel_command_targets')
+          .select('id,batch_id,status,target_gateway_id,previous_gateway_id,correlation_id,last_error_message,created_at,verified_at,completed_at')
+          .eq('funnel_id', funnelId)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        db
+          .from('funnel_control_drift_events')
+          .select('id,status,correlation_id,expected_gateway_id,observed_gateway_id,observed_remote_gateway_ref,detected_at,last_seen_at,resolved_at')
+          .eq('funnel_id', funnelId)
+          .order('detected_at', { ascending: false })
+          .limit(5),
+      ])
+
+      if (commandHistory.error) throw commandHistory.error
+      if (driftHistory.error) throw driftHistory.error
+      setCommands((commandHistory.data || []) as CommandRow[])
+      setDrifts((driftHistory.data || []) as DriftRow[])
 
       if (next) {
         setRemoteBaseUrl(next.remote_base_url || '')
@@ -324,6 +371,59 @@ export function FunnelRemoteControl({ funnelId }: { funnelId: string }) {
           <button type="button" onClick={() => void saveMappings()} disabled={savingMappings || !connection} className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] text-[9px] font-bold text-emerald-400 disabled:opacity-40">
             {savingMappings ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Network className="h-3.5 w-3.5" />} SALVAR MAPEAMENTOS
           </button>
+        </div>
+      )}
+
+      {drifts.length > 0 && (
+        <div className="space-y-2 border-t border-white/[0.04] pt-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Drift remoto</h4>
+            <span className="text-[8px] font-mono text-zinc-700">{drifts.filter(item => item.status === 'open').length} aberto(s)</span>
+          </div>
+          {drifts.slice(0, 3).map(item => (
+            <div key={item.id} className="rounded-xl border border-white/[0.04] bg-[#121214] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-[9px] font-bold ${item.status === 'open' ? 'text-amber-400' : 'text-emerald-500'}`}>
+                  {item.status === 'open' ? 'DIVERGÊNCIA ABERTA' : 'RESOLVIDO'}
+                </span>
+                <span className="text-[8px] font-mono text-zinc-700">{item.correlation_id}</span>
+              </div>
+              <p className="mt-1 text-[9px] text-zinc-500">
+                Esperada: {item.expected_gateway_id || '—'} · Observada: {item.observed_gateway_id || item.observed_remote_gateway_ref || 'não mapeada'}
+              </p>
+              <p className="mt-1 text-[8px] text-zinc-700">Última leitura: {new Date(item.last_seen_at).toLocaleString('pt-BR')}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {commands.length > 0 && (
+        <div className="space-y-2 border-t border-white/[0.04] pt-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Histórico de comandos</h4>
+            <span className="text-[8px] text-zinc-700">últimos {Math.min(commands.length, 5)}</span>
+          </div>
+          {commands.map(item => {
+            const ok = item.status === 'verified' || item.status === 'preflight_succeeded'
+            const bad = item.status === 'failed' || item.status === 'blocked' || item.status === 'cancelled'
+            return (
+              <div key={item.id} className="rounded-xl border border-white/[0.04] bg-[#121214] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`text-[9px] font-bold uppercase ${ok ? 'text-emerald-400' : bad ? 'text-rose-400' : 'text-sky-400'}`}>
+                    {item.status.replaceAll('_', ' ')}
+                  </span>
+                  <span className="text-[8px] font-mono text-zinc-700">{item.correlation_id}</span>
+                </div>
+                <p className="mt-1 text-[9px] text-zinc-500">
+                  {item.previous_gateway_id ? item.previous_gateway_id + ' → ' : ''}{item.target_gateway_id}
+                </p>
+                {item.last_error_message && <p className="mt-1 text-[8px] text-rose-300">{item.last_error_message}</p>}
+                <p className="mt-1 text-[8px] text-zinc-700">
+                  {new Date(item.completed_at || item.verified_at || item.created_at).toLocaleString('pt-BR')}
+                </p>
+              </div>
+            )
+          })}
         </div>
       )}
 
