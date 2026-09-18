@@ -85,6 +85,9 @@ export default function FunnelCreateWorkspace({ context = 'funnel' }: { context?
       const ingestion = payload.ingestion && typeof payload.ingestion === 'object'
         ? payload.ingestion as Record<string, unknown>
         : {}
+      const connector = payload.connector && typeof payload.connector === 'object'
+        ? payload.connector as Record<string, unknown>
+        : {}
       const funnelId = typeof created.id === 'string' ? created.id : ''
 
       if (!funnelId) throw new Error('O provisionamento não retornou o ID do funil.')
@@ -93,6 +96,9 @@ export default function FunnelCreateWorkspace({ context = 'funnel' }: { context?
         funnelId,
         token: typeof ingestion.token === 'string' ? ingestion.token : '',
         eventEndpoint: typeof ingestion.event_endpoint === 'string' ? ingestion.event_endpoint : '',
+        clientTokenEndpoint: typeof connector.client_token_endpoint === 'string' ? connector.client_token_endpoint : '',
+        browserSdkUrl: typeof connector.browser_sdk_url === 'string' ? connector.browser_sdk_url : '',
+        origin: integrationContext ? 'integration_hub' : 'funnel',
       }
 
       if (connectionType === 'webhook') {
