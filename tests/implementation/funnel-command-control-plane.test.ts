@@ -34,6 +34,11 @@ describe('funnel remote command control plane', () => {
     expect(migration).toContain('to authenticated')
   })
 
+  test('control-center metrics count controllable funnels distinctly', () => {
+    const migration = source('supabase/migrations/20260918180801_gateway_control_center_metrics_v34.sql')
+    expect(migration).toContain('count(distinct c.funnel_id)')
+  })
+
   test('routing UI requires a fresh successful preflight before execution', () => {
     const ui = source('app/dashboard/routing/page.tsx')
     expect(ui).toContain("setPreflightGatewayId(selectedGateway.id)")
