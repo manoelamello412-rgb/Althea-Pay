@@ -53,14 +53,136 @@ export default function ApiPage() {
   const successful = logs.filter(log => (log.status_code ?? 500) < 400).length
   const scopes = (value: unknown) => Array.isArray(value) ? value.map(String) : []
 
-  return <main className="min-h-screen bg-[#070A09] px-4 py-6 text-slate-100 lg:px-8"><div className="mx-auto max-w-[1700px]">
-    <header className="mb-7 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="mb-2 text-[10px] font-black uppercase tracking-[.28em] text-emerald-400">ALTHEA PAY // API</div><h1 className="text-3xl font-black tracking-tight">API</h1><p className="mt-1 text-sm text-slate-500">Credenciais, escopos e telemetria da API pública da operação.</p></div><button type="button" onClick={() => void load()} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[.03] px-4 text-sm font-semibold hover:bg-white/[.06] disabled:opacity-50"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/>Sincronizar</button></header>
-    <section className="mb-6 grid gap-3 sm:grid-cols-3"><article className="rounded-2xl border border-white/10 bg-white/[.025] p-5"><span className="text-[10px] uppercase tracking-widest text-slate-500">Chaves ativas</span><strong className="mt-2 block text-2xl font-black">{active}</strong></article><article className="rounded-2xl border border-white/10 bg-white/[.025] p-5"><span className="text-[10px] uppercase tracking-widest text-slate-500">Chaves revogadas/expiradas</span><strong className="mt-2 block text-2xl font-black">{revoked}</strong></article><article className="rounded-2xl border border-white/10 bg-white/[.025] p-5"><span className="text-[10px] uppercase tracking-widest text-slate-500">Requests registrados</span><strong className="mt-2 block text-2xl font-black">{logs.length}</strong></article></section>
-    <div className="mb-6 rounded-2xl border border-emerald-400/10 bg-emerald-400/[.025] p-4 text-sm text-slate-400"><div className="flex gap-3"><ShieldCheck size={19} className="mt-0.5 shrink-0 text-emerald-400"/><p><b className="text-slate-200">Segurança:</b> a interface nunca consulta <code className="text-emerald-300">key_hash</code> nem tenta revelar credenciais secretas. Ela exibe somente prefixos e metadados permitidos.</p></div></div>
-    {error && <div className="mb-5 rounded-xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-red-300">{error}</div>}
-    {loading ? <div className="flex min-h-72 items-center justify-center gap-3 text-sm text-slate-500"><RefreshCw size={20} className="animate-spin"/>Carregando dados reais…</div> : <div className="grid gap-6 xl:grid-cols-[1.05fr_.95fr]">
-      <section className="rounded-2xl border border-white/10 bg-white/[.02] p-5"><div className="mb-5 flex items-center gap-3"><KeyRound size={19} className="text-emerald-400"/><div><h2 className="font-black">Credenciais</h2><p className="text-xs text-slate-600">Somente metadados seguros da chave.</p></div></div>{keys.length === 0 ? <p className="py-12 text-center text-sm text-slate-600">Nenhuma chave de API cadastrada.</p> : <div className="space-y-2">{keys.map(key => { const status = statusOf(key); return <div key={key.id} className="rounded-xl border border-white/[.07] bg-black/10 p-4"><div className="flex items-start justify-between gap-3"><div><b className="text-sm">{key.name}</b><p className="mt-1 font-mono text-xs text-slate-500">{key.key_prefix}••••••</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${statusClass(status)}`}>{status}</span></div><div className="mt-4 flex flex-wrap gap-2">{scopes(key.scopes).slice(0, 8).map(scope => <span key={scope} className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-slate-500">{scope}</span>)}{scopes(key.scopes).length === 0 && <span className="text-[10px] text-slate-600">Sem escopos informados</span>}</div><div className="mt-3 grid grid-cols-2 gap-3 text-xs"><span><small className="block text-slate-600">Criada</small><b>{fmt(key.created_at)}</b></span><span><small className="block text-slate-600">Último uso</small><b>{fmt(key.last_used_at)}</b></span></div></div> })}</div>}</section>
-      <section className="rounded-2xl border border-white/10 bg-white/[.02] p-5"><div className="mb-5 flex items-center gap-3"><Activity size={19} className="text-emerald-400"/><div><h2 className="font-black">Requests recentes</h2><p className="text-xs text-slate-600">Auditoria operacional da API.</p></div></div>{logs.length === 0 ? <p className="py-12 text-center text-sm text-slate-600">Nenhum request registrado.</p> : <div className="space-y-2">{logs.map(log => { const ok = (log.status_code ?? 500) < 400; return <div key={log.id} className="rounded-xl border border-white/[.07] p-3"><div className="flex items-center gap-2"><span className="rounded border border-white/10 px-2 py-1 font-mono text-[10px]">{log.method}</span><b className="min-w-0 truncate text-xs">{log.path}</b>{ok ? <ShieldCheck size={14} className="ml-auto text-emerald-400"/> : <XCircle size={14} className="ml-auto text-red-400"/>}</div><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-600"><span>HTTP {log.status_code ?? '—'}</span><span>{log.latency_ms ?? '—'}ms</span><span>{log.scope || 'sem escopo'}</span><span>{fmt(log.created_at)}</span></div></div> })}</div>}<p className="mt-4 text-[10px] text-slate-700">{successful} dos {logs.length} requests recentes tiveram status HTTP abaixo de 400.</p></section>
-    </div>}
-  </div></main>
+  return (
+    <div className="w-full space-y-5">
+      <section className="flex flex-col gap-5 border-b border-white/[.055] pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Desenvolvedores</p>
+          <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">API</h1>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--althea-muted)]">Credenciais, escopos e telemetria da API pública da operação.</p>
+        </div>
+        <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex h-10 items-center gap-2 self-start rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white disabled:opacity-50 lg:self-auto">
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Atualizar
+        </button>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-3">
+        <Metric label="Chaves ativas" value={String(active)} />
+        <Metric label="Revogadas / expiradas" value={String(revoked)} />
+        <Metric label="Requests registrados" value={String(logs.length)} />
+      </section>
+
+      <section className="rounded-2xl border border-[rgba(29,184,84,.10)] bg-[rgba(29,184,84,.035)] p-4">
+        <div className="flex gap-3">
+          <ShieldCheck size={17} className="mt-0.5 shrink-0 text-[var(--althea-brand)]" />
+          <p className="text-[10px] leading-5 text-[var(--althea-muted)]">
+            <b className="font-semibold text-white">Segurança:</b> a interface não consulta <code className="text-[var(--althea-brand)]">key_hash</code> nem tenta revelar credenciais secretas. Apenas prefixos e metadados permitidos são exibidos.
+          </p>
+        </div>
+      </section>
+
+      {error && <div className="rounded-xl border border-red-400/15 bg-red-400/[.05] p-4 text-xs text-red-200">{error}</div>}
+
+      {loading ? (
+        <div className="grid min-h-[300px] place-items-center rounded-2xl border border-white/[.055] bg-[var(--althea-surface)]">
+          <RefreshCw size={20} className="animate-spin text-[var(--althea-brand)]" />
+        </div>
+      ) : (
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,.95fr)]">
+          <article className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5">
+            <div className="flex items-start gap-3">
+              <KeyRound size={17} className="text-[var(--althea-brand)]" />
+              <div>
+                <h2 className="text-sm font-semibold text-white">Credenciais</h2>
+                <p className="mt-1 text-[10px] text-[var(--althea-muted)]">Somente metadados seguros das chaves.</p>
+              </div>
+            </div>
+
+            {keys.length === 0 ? (
+              <div className="mt-4 grid min-h-[220px] place-items-center rounded-xl border border-dashed border-white/[.06] bg-[var(--althea-bg)] text-center">
+                <div>
+                  <KeyRound size={22} className="mx-auto text-[var(--althea-brand)] opacity-55" />
+                  <p className="mt-3 text-xs font-medium text-white">Nenhuma chave de API cadastrada</p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-2">
+                {keys.map(key => {
+                  const status = statusOf(key)
+                  return (
+                    <div key={key.id} className="rounded-xl border border-white/[.045] bg-[var(--althea-bg)] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <b className="text-[10px] font-semibold text-white">{key.name}</b>
+                          <p className="mt-1 font-mono text-[9px] text-[var(--althea-muted)]">{key.key_prefix}••••••</p>
+                        </div>
+                        <span className={'rounded-full border px-2 py-1 text-[8px] font-semibold uppercase ' + statusClass(status)}>{status}</span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {scopes(key.scopes).slice(0, 8).map(scope => <span key={scope} className="rounded-full border border-white/[.05] px-2 py-1 text-[8px] text-[var(--althea-muted)]">{scope}</span>)}
+                        {scopes(key.scopes).length === 0 && <span className="text-[8px] text-[var(--althea-muted)]">Sem escopos informados</span>}
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-[9px]">
+                        <span><small className="block text-[var(--althea-muted)]">Criada</small><b className="mt-1 block font-medium text-white">{fmt(key.created_at)}</b></span>
+                        <span><small className="block text-[var(--althea-muted)]">Último uso</small><b className="mt-1 block font-medium text-white">{fmt(key.last_used_at)}</b></span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </article>
+
+          <article className="rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-5">
+            <div className="flex items-start gap-3">
+              <Activity size={17} className="text-[var(--althea-brand)]" />
+              <div>
+                <h2 className="text-sm font-semibold text-white">Requests recentes</h2>
+                <p className="mt-1 text-[10px] text-[var(--althea-muted)]">Auditoria operacional da API.</p>
+              </div>
+            </div>
+
+            {logs.length === 0 ? (
+              <div className="mt-4 grid min-h-[220px] place-items-center rounded-xl border border-dashed border-white/[.06] bg-[var(--althea-bg)] text-center">
+                <p className="text-[10px] text-[var(--althea-muted)]">Nenhum request registrado.</p>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-2">
+                {logs.map(log => {
+                  const ok = (log.status_code ?? 500) < 400
+                  return (
+                    <div key={log.id} className="rounded-xl border border-white/[.045] bg-[var(--althea-bg)] p-3">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded border border-white/[.05] px-2 py-1 font-mono text-[8px] text-[var(--althea-muted)]">{log.method}</span>
+                        <b className="min-w-0 truncate text-[9px] font-medium text-white">{log.path}</b>
+                        {ok ? <ShieldCheck size={13} className="ml-auto text-[var(--althea-brand)]" /> : <XCircle size={13} className="ml-auto text-red-300" />}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[8px] text-[var(--althea-muted)]">
+                        <span>HTTP {log.status_code ?? '—'}</span>
+                        <span>{log.latency_ms ?? '—'}ms</span>
+                        <span>{log.scope || 'sem escopo'}</span>
+                        <span>{fmt(log.created_at)}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <p className="mt-4 text-[8px] text-[#5f6c65]">{successful} dos {logs.length} requests recentes tiveram status HTTP abaixo de 400.</p>
+          </article>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="min-h-[112px] rounded-2xl border border-white/[.055] bg-[var(--althea-surface)] p-4">
+      <p className="text-[10px] text-[var(--althea-muted)]">{label}</p>
+      <strong className="mt-4 block text-[24px] font-semibold tracking-[-.035em] text-white">{value}</strong>
+    </article>
+  )
 }
