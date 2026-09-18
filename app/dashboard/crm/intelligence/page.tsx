@@ -9,7 +9,6 @@ type Row = { key:string; events:number; amount:number }
 type Signal = { event_id:string; customer:string; email:string|null; status:string; amount:number; reason:string|null; transaction_id:string|null; received_at:string }
 type Intelligence = { window_days:number; metrics:Metric; loss_by_funnel:Row[]; loss_by_gateway:Row[]; recent_recovery_signals:Signal[]; generated_at:string }
 
-const amount=(value:number)=>new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(value||0))
 const time=(seconds:number)=>{if(!seconds)return '—'; if(seconds<60)return `${Math.round(seconds)}s`; if(seconds<3600)return `${Math.floor(seconds/60)}min`; return `${Math.floor(seconds/3600)}h ${Math.floor((seconds%3600)/60)}min`}
 const date=(value:string)=>{const d=new Date(value);return Number.isNaN(d.getTime())?'—':d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
 
