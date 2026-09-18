@@ -61,7 +61,7 @@ export default function FunnelCentralPage() {
     setMetrics({ sales: approved.length, revenue: approved.reduce((sum, s) => sum + Number(s.amount ?? 0), 0), events: Number(connectionResult.data?.event_count ?? eventList.length), failedEvents: Number(connectionResult.data?.error_count ?? eventList.filter((e) => e.status === 'failed' || e.error_message).length), approval: sales.length ? approved.length / sales.length * 100 : 0 })
   }, [selectedId, supabase])
 
-  useEffect(() => { void load().catch((e) => setError(e instanceof Error ? e.message : 'Não foi possível carregar a central.')).finally(() => setLoading(false)) }, [load])
+  useEffect(() => { const requestedFunnelId = new URLSearchParams(window.location.search).get('funnel')?.trim() || ''; void load(requestedFunnelId || undefined).catch((e) => setError(e instanceof Error ? e.message : 'Não foi possível carregar a central.')).finally(() => setLoading(false)) }, [load])
 
   useEffect(() => {
     if (!selectedId) return
