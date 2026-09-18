@@ -309,7 +309,7 @@ export default function FunilDominioPage() {
           </button>
           <button
             type="button"
-            onClick={() => void refresh()
+            onClick={() => void refresh()}
             disabled={refreshing}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white disabled:opacity-50"
           >
