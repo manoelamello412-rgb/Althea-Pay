@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, Network, RefreshCw, Router, Zap } from 'lucide-react'
+import Link from 'next/link'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { DynamicGatewayConnector } from '@/components/dynamic-gateway-connector'
 
@@ -150,14 +151,19 @@ export default function GatewaysManagementPage() {
           <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--althea-brand)]">Infraestrutura de pagamentos</p>
           <h1 className="mt-2 text-[30px] font-semibold tracking-[-.04em] text-white sm:text-[34px]">Gateways</h1>
           <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--althea-muted)]">
-            Conecte, teste e acompanhe os provedores usados pela Althea. A troca global de gateway passa pelo preflight e só confirma vínculos que foram validados externamente.
+            Conecte, teste e acompanhe provedores. Trocas globais, preflight, rollback e drift ficam na Central de Roteamento para manter uma única autoridade operacional.
           </p>
         </div>
 
-        <button type="button" onClick={() => void loadGatewayTelemetry()} disabled={loading} className="inline-flex h-10 items-center gap-2 self-start rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white disabled:opacity-50 lg:self-auto">
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Atualizar status
-        </button>
+        <div className="flex flex-wrap gap-2 self-start lg:self-auto">
+          <Link href="/dashboard/routing" className="inline-flex h-10 items-center gap-2 rounded-xl border border-[rgba(29,184,84,.16)] bg-[rgba(29,184,84,.05)] px-4 text-[10px] font-semibold text-[var(--althea-brand)] transition hover:bg-[rgba(29,184,84,.08)]">
+            <Router size={14} /> Roteamento & Commands
+          </Link>
+          <button type="button" onClick={() => void loadGatewayTelemetry()} disabled={loading} className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[.06] bg-[var(--althea-surface)] px-4 text-[10px] font-semibold text-[var(--althea-muted)] transition hover:text-white disabled:opacity-50">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Atualizar status
+          </button>
+        </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
