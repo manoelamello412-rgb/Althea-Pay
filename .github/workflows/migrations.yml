@@ -6,11 +6,13 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'supabase/config.toml'
+      - '.github/workflows/migrations.yml'
   push:
     branches: [main]
     paths:
       - 'supabase/migrations/**'
       - 'supabase/config.toml'
+      - '.github/workflows/migrations.yml'
   workflow_dispatch:
 
 permissions:
@@ -26,37 +28,50 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
+      - name: Validate repository migration safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f supabase/config.toml
+          test -d supabase/migrations
+          if grep -R --line-number --exclude='migrations.yml' -E 'supabase[[:space:]]+db[[:space:]]+push' .github scripts 2>/dev/null; then
+            echo "Automatic supabase db push is forbidden while local and remote histories are being reconciled." >&2
+            exit 1
+          fi
+          echo "Repository migration safety checks passed."
+
+      - name: Detect remote audit credentials
+        id: credentials
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        shell: bash
+        run: |
+          if [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] && [ -n "${SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Remote migration comparison skipped: SUPABASE_DB_PASSWORD is not configured in GitHub Actions."
+          fi
+
       - name: Setup Supabase CLI
+        if: steps.credentials.outputs.available == 'true'
         uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      - name: Validate audit credentials
+      - name: Compare local and remote migration history
+        if: steps.credentials.outputs.available == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: |
-          set -euo pipefail
-          test -n "${SUPABASE_ACCESS_TOKEN:-}" || { echo "SUPABASE_ACCESS_TOKEN is not configured."; exit 1; }
-          test -n "${SUPABASE_DB_PASSWORD:-}" || { echo "SUPABASE_DB_PASSWORD is not configured."; exit 1; }
-
-      - name: Link production project read-only for migration audit
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        shell: bash
         run: |
           set -euo pipefail
           supabase link --project-ref "hkraryqoziravulvqkid" --password "$SUPABASE_DB_PASSWORD"
-
-      - name: Compare local and remote migration history
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: |
-          set -euo pipefail
           supabase migration list --linked --password "$SUPABASE_DB_PASSWORD"
-          echo "Database deployment is intentionally disabled in CI. Reconcile remote-only migrations before running supabase db push manually."
+          echo "Database deployment remains intentionally disabled in CI."
