@@ -22,6 +22,7 @@ const menuSections: MenuSection[] = [
   { title: 'CONFIGURAÇÃO DA OPERAÇÃO', items: [
     { label: 'Produtos', href: '/dashboard/produtos', icon: Package },
     { label: 'Gateways e conexões', href: '/dashboard/gateways', icon: Network },
+    { label: 'Roteamento e commands', href: '/dashboard/routing', icon: Network },
     { label: 'Funis', href: '/dashboard/funil', icon: GitBranch },
     { label: 'Checkouts', href: '/dashboard/checkouts', icon: CircleDollarSign },
     { label: 'Pagamentos', href: '/dashboard/pagamentos', icon: CircleDollarSign },
@@ -63,6 +64,7 @@ function sectionLabel(pathname: string): string {
   if (pathname.startsWith('/dashboard/ia')) return 'IA'
   if (pathname.startsWith('/dashboard/produtos')) return 'PRODUTOS'
   if (pathname.startsWith('/dashboard/gateways')) return 'GATEWAYS'
+  if (pathname.startsWith('/dashboard/routing')) return 'ROTEAMENTO'
   if (pathname.startsWith('/dashboard/checkouts')) return 'CHECKOUTS'
   if (pathname.startsWith('/dashboard/pagamentos')) return 'PAGAMENTOS'
   if (pathname.startsWith('/dashboard/clientes')) return 'CLIENTES'
