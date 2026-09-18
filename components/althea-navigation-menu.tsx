@@ -8,9 +8,9 @@ type MenuItem = readonly [string, string, typeof LayoutDashboard]
 type MenuSection = { title: string; items: readonly MenuItem[] }
 
 const sections: readonly MenuSection[] = [
-  { title: 'OPERAR', items: [['Dashboard', '/dashboard', LayoutDashboard], ['Vendas', 'vendas', CircleDollarSign]] },
+  { title: 'OPERAR', items: [['Dashboard', '/dashboard', LayoutDashboard], ['Vendas', '/dashboard/vendas', CircleDollarSign]] },
   { title: 'RECEBER', items: [['Gateways', '/dashboard/gateways', Network], ['Pagamentos', '/dashboard/pagamentos', CreditCard]] },
-  { title: 'VENDER', items: [['Funis', 'funis', GitBranch], ['Checkouts', '/dashboard/checkouts', CreditCard]] },
+  { title: 'VENDER', items: [['Funis', '/dashboard/funil', GitBranch], ['Checkouts', '/dashboard/checkouts', CreditCard]] },
   { title: 'RELACIONAR', items: [['Clientes', '/dashboard/clientes', Users], ['Chat / CRM', '/dashboard/crm', MessageCircle]] },
   { title: 'ANALISAR', items: [['Analytics', '/dashboard/analytics', BarChart3], ['IA', '/dashboard/ia', ShieldCheck]] },
   { title: 'INTEGRAÇÕES', items: [['Integration Hub', '/dashboard/integration-hub', Plug], ['API', '/dashboard/api', KeyRound], ['Webhooks', '/dashboard/webhooks', Webhook]] },
@@ -40,10 +40,6 @@ export function AltheaNavigationMenu() {
 
   const navigate = (target: string) => {
     setOpen(false)
-    if (target === 'vendas' || target === 'funis') {
-      window.dispatchEvent(new CustomEvent('althea-mobile-page', { detail: target }))
-      return
-    }
     router.push(target)
   }
 
