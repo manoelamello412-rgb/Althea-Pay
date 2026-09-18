@@ -231,25 +231,88 @@ export const DynamicGatewayConnector: React.FC = () => {
   const switchAllFunnels = async (gateway: Gateway) => {
     const operational = ['connected', 'degraded'].includes(gateway.status.toLowerCase())
     if (!operational || switchingAll || testing) return
+
     const confirmed = window.confirm(
-      'Usar esta gateway como principal em todos os funis que já possuem uma gateway principal? Novos pagamentos usarão a nova rota; transações antigas não serão alteradas.'
+      'Trocar de verdade a gateway de todos os funis conectados e compatíveis? A Althea fará preflight, alterará cada funil pela API externa e confirmará o estado remoto antes de atualizar o vínculo interno.'
     )
     if (!confirmed) return
 
     setSwitchingAll(gateway.id)
     setError(null)
     setMessage(null)
+
     try {
-      const { data, error: switchError } = await db.rpc('switch_all_funnel_primary_gateways', {
+      const idempotencyKey = `global-gateway-switch:${gateway.id}:${crypto.randomUUID()}`
+      const { data: requested, error: requestError } = await db.rpc('request_global_funnel_gateway_switch', {
         p_gateway_id: gateway.id,
+        p_dry_run: false,
+        p_allow_partial: false,
+        p_idempotency_key: idempotencyKey,
       })
-      if (switchError) throw switchError
-      const count = Number((data as { switched_count?: unknown } | null)?.switched_count ?? 0)
-      setMessage(
-        count === 1
-          ? 'Gateway aplicada como principal em 1 funil. Transações antigas foram preservadas.'
-          : `Gateway aplicada como principal em ${count} funis. Transações antigas foram preservadas.`
-      )
+      if (requestError) throw requestError
+
+      const batch = (requested ?? {}) as {
+        batch_id?: string
+        correlation_id?: string
+        status?: string
+        total_targets?: number
+        failed_targets?: number
+        blocked_targets?: number
+      }
+
+      if (!batch.batch_id) throw new Error('O Command Engine não retornou o identificador da operação.')
+
+      if (batch.status === 'preflight_failed' || batch.status === 'failed') {
+        const { data: blocked } = await db
+          .from('funnel_command_targets')
+          .select('funnel_id,last_error_message')
+          .eq('batch_id', batch.batch_id)
+          .in('status', ['blocked', 'failed'])
+          .limit(3)
+
+        const detail = (blocked ?? [])
+          .map(item => item.last_error_message || `Funil ${item.funnel_id} não está pronto.`)
+          .join(' · ')
+
+        throw new Error(
+          `Preflight bloqueado: ${Number(batch.failed_targets ?? batch.blocked_targets ?? 0)} funil(is) precisam de atenção.${detail ? ` ${detail}` : ''}`
+        )
+      }
+
+      const { data: executed, error: workerError } = await db.functions.invoke('funnel-command-worker', {
+        body: { batch_id: batch.batch_id, limit: 50 },
+      })
+      if (workerError) throw new Error(workerError.message)
+
+      const finalBatch = (executed?.batch ?? {}) as {
+        correlation_id?: string
+        status?: string
+        total_targets?: number
+        succeeded_targets?: number
+        failed_targets?: number
+        pending_targets?: number
+      }
+
+      const correlation = finalBatch.correlation_id || batch.correlation_id || batch.batch_id
+      const total = Number(finalBatch.total_targets ?? batch.total_targets ?? 0)
+      const successCount = Number(finalBatch.succeeded_targets ?? 0)
+      const failedCount = Number(finalBatch.failed_targets ?? 0)
+      const pendingCount = Number(finalBatch.pending_targets ?? 0)
+
+      if (finalBatch.status === 'succeeded') {
+        setMessage(
+          `Troca remota confirmada em ${successCount}/${total} funil(is). Operação ${correlation}. O vínculo interno só foi atualizado após a verificação externa.`
+        )
+      } else if (finalBatch.status === 'partial' || finalBatch.status === 'failed' || finalBatch.status === 'preflight_failed') {
+        throw new Error(
+          `Operação ${correlation}: ${successCount}/${total} confirmados, ${failedCount} com falha. A Althea não marcou os funis não verificados como concluídos.`
+        )
+      } else {
+        setMessage(
+          `Operação ${correlation} em processamento: ${successCount}/${total} confirmados e ${pendingCount} pendentes. O worker continuará os retries automaticamente.`
+        )
+      }
+
       await load()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível trocar a gateway dos funis.')
