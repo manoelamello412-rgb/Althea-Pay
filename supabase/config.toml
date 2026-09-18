@@ -130,3 +130,6 @@ verify_jwt = false
 
 [functions.funnel-connection-control]
 verify_jwt = true
+
+[functions.funnel-drift-worker]
+verify_jwt = false
