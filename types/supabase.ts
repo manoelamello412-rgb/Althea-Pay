@@ -9926,6 +9926,23 @@ export type Database = {
         Args: { p_name?: string; p_secret: string }
         Returns: string
       }
+      request_funnel_gateway_rollback: {
+        Args: {
+          p_allow_partial?: boolean
+          p_batch_id: string
+          p_idempotency_key?: string
+        }
+        Returns: Json
+      }
+      request_global_funnel_gateway_switch: {
+        Args: {
+          p_allow_partial?: boolean
+          p_dry_run?: boolean
+          p_gateway_id: string
+          p_idempotency_key?: string
+        }
+        Returns: Json
+      }
       switch_all_funnel_primary_gateways: {
         Args: { p_gateway_id: string }
         Returns: Json
