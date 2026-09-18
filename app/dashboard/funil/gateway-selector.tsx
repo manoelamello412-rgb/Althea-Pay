@@ -25,7 +25,7 @@ export default function FunnelGatewaySelector({ funnelId }: { funnelId: string }
       const rows = Array.isArray(body?.gateways) ? body.gateways as Gateway[] : []
       const bindings = Array.isArray(body?.bindings) ? body.bindings as Binding[] : []
       const primary = bindings.find((item) => item.is_primary && item.status === 'active')?.gateway_id ?? ''
-      setGateways(rows.filter((item) => !['disabled', 'inactive', 'disconnected'].includes(String(item.status ?? '').toLowerCase())))
+      setGateways(rows.filter((item) => ['active', 'connected', 'degraded'].includes(String(item.status ?? '').toLowerCase())))
       setCurrent(primary); setNext(primary)
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao carregar gateways.') } finally { setLoading(false) }
   }
