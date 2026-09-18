@@ -49,6 +49,15 @@ const menuSections: MenuSection[] = [
   ] },
 ]
 
+const searchItems = [
+  { section: 'INÍCIO', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  ...menuSections.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title }))),
+]
+
+function normalizeSearch(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR')
+}
+
 function sectionLabel(pathname: string): string {
   if (pathname.startsWith('/dashboard/funil')) return 'FUNIS'
   if (pathname.startsWith('/dashboard/vendas')) return 'VENDAS'
@@ -82,6 +91,10 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
   const [query, setQuery] = useState('')
   const [user, setUser] = useState({ name: 'Usuário', email: '—' })
   const [signingOut, setSigningOut] = useState(false)
+  const normalizedQuery = normalizeSearch(query.trim())
+  const searchResults = normalizedQuery
+    ? searchItems.filter((item) => normalizeSearch(`${item.label} ${item.section}`).includes(normalizedQuery)).slice(0, 8)
+    : []
 
   useEffect(() => {
     let active = true
@@ -104,15 +117,15 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
     return () => { active = false; unsubscribe?.() }
   }, [])
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => window.dispatchEvent(new CustomEvent('althea-global-search', { detail: { query: query.trim() } })), 180)
-    return () => window.clearTimeout(timer)
-  }, [query])
-
   useEffect(() => { setSearchOpen(false); setQuery(''); setMenuOpen(false) }, [pathname])
 
   const selectTab = (tab: MobileShellTab) => onTabChange(tab)
   const navigateMenuItem = (item: MenuItem) => { if (item.href !== pathname) router.push(item.href); setMenuOpen(false) }
+  const navigateSearchItem = (item: { href: string }) => {
+    if (item.href !== pathname) router.push(item.href)
+    setSearchOpen(false)
+    setQuery('')
+  }
   const handleSignOut = async () => {
     if (signingOut) return
     setSigningOut(true)
@@ -140,7 +153,7 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
             <button type="button" aria-label="Abrir menu de configurações" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)} className={`grid h-9 w-9 place-items-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 ${menuOpen ? 'bg-emerald-500/[0.08] text-emerald-400' : 'text-zinc-500 hover:bg-white/[0.03] hover:text-white'}`}><Settings2 size={18} strokeWidth={1.7} /></button>
           </div>
         </div>
-        <AnimatePresence initial={false}>{searchOpen && <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 42 }} exit={{ opacity: 0, height: 0 }} className="absolute left-0 right-0 top-14 border-b border-white/[0.04] bg-[rgba(7,12,10,0.98)] px-4 py-2 backdrop-blur-xl"><div className="mx-auto flex h-[42px] max-w-[1180px] items-center gap-2 rounded-xl border border-white/[0.055] bg-[var(--althea-surface)] px-3"><Search size={15} className="text-[var(--althea-muted)]" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar na Althea Pay..." aria-label="Pesquisar na plataforma" className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[var(--althea-muted)]" /><button type="button" aria-label="Fechar pesquisa" onClick={() => { setQuery(''); setSearchOpen(false) }} className="grid h-9 w-9 place-items-center text-[var(--althea-muted)] hover:text-white"><X size={16} /></button></div></motion.div>}</AnimatePresence>
+        <AnimatePresence initial={false}>{searchOpen && <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="absolute left-0 right-0 top-14 border-b border-white/[0.04] bg-[rgba(7,12,10,0.98)] px-4 py-2 backdrop-blur-xl"><div className="mx-auto max-w-[1180px] overflow-hidden rounded-xl border border-white/[0.055] bg-[var(--althea-surface)]"><div className="flex h-[42px] items-center gap-2 px-3"><Search size={15} className="text-[var(--althea-muted)]" /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') { setQuery(''); setSearchOpen(false) } else if (event.key === 'Enter' && searchResults[0]) navigateSearchItem(searchResults[0]) }} placeholder="Buscar módulos e áreas..." aria-label="Buscar módulos e áreas da plataforma" className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[var(--althea-muted)]" /><button type="button" aria-label="Fechar pesquisa" onClick={() => { setQuery(''); setSearchOpen(false) }} className="grid h-9 w-9 place-items-center text-[var(--althea-muted)] hover:text-white"><X size={16} /></button></div>{query.trim() && <div className="border-t border-white/[0.05] p-2">{searchResults.length > 0 ? searchResults.map((item) => { const Icon = item.icon; return <button key={item.href} type="button" onClick={() => navigateSearchItem(item)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30">{Icon ? <Icon size={16} className="shrink-0 text-emerald-400" strokeWidth={1.7} /> : <span className="h-4 w-4" />}<span className="min-w-0 flex-1"><span className="block truncate text-sm text-white">{item.label}</span><span className="block truncate text-[9px] font-bold tracking-[0.14em] text-[var(--althea-muted)]">{item.section}</span></span></button> }) : <div className="px-3 py-4 text-sm text-[var(--althea-muted)]">Nenhum módulo encontrado.</div>}</div>}</div></motion.div>}</AnimatePresence>
       </header>
 
       <AnimatePresence>{menuOpen && <><motion.button aria-label="Fechar menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMenuOpen(false)} className="fixed inset-0 z-[110] bg-black/70 backdrop-blur-sm" /><motion.aside initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', stiffness: 320, damping: 32 }} className="fixed right-0 top-0 z-[120] flex h-full w-[min(400px,94vw)] flex-col border-l border-white/[0.08] bg-[rgba(7,12,10,0.985)] shadow-[-30px_0_80px_rgba(0,0,0,0.65)]">
