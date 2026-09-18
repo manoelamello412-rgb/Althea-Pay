@@ -94,17 +94,28 @@ Deno.serve(async(req)=>{const rid=requestId(req),started=performance.now();if(re
   if(req.method==="GET"&&resource==="transactions"){if(!scopeOk(scopes,"transactions:read"))return respond({error:"insufficient_scope"},403,"transactions:read","insufficient_scope");let q=admin.from("gateway_transactions").select("id,funnel_id,product_id,gateway_id,external_id,idempotency_key,amount,currency,status,customer,metadata,error_message,created_at,updated_at,attempt_count,completed_at,failure_code,routing_metadata").eq("user_id",key.user_id).order("created_at",{ascending:false}).limit(limitOf(url.searchParams.get("limit")));if(url.searchParams.get("funnel_id"))q=q.eq("funnel_id",url.searchParams.get("funnel_id")!);if(url.searchParams.get("status"))q=q.eq("status",url.searchParams.get("status")!);const{data,error}=await q;if(error)return respond({error:"database_error"},500,"transactions:read","database_error");return respond({data},200,"transactions:read");}
   if(req.method==="POST"&&resource==="events"){
    if(!scopeOk(scopes,"events:write"))return respond({error:"insufficient_scope"},403,"events:write","insufficient_scope");
-   const body=await req.json().catch(()=>null)as Record<string,unknown>|null,type=typeof body?.event_type==="string"?body.event_type.trim().slice(0,120):"",externalId=typeof body?.external_id==="string"?body.external_id.trim().slice(0,255):null,funnelId=typeof body?.funnel_id==="string"?body.funnel_id:null;
-   if(!type)return respond({error:"invalid_event"},400,"events:write","invalid_event");
-   if(funnelId){const{data:funnel,error:fe}=await admin.from("funnels").select("id").eq("id",funnelId).eq("user_id",key.user_id).maybeSingle();if(fe)return respond({error:"database_error"},500,"events:write","database_error");if(!funnel)return respond({error:"funnel_not_found"},404,"events:write","funnel_not_found");}
-   if(externalId){const{data:existing}=await admin.from("integration_events").select("id,event_type,external_id,status,created_at").eq("user_id",key.user_id).eq("external_id",externalId).maybeSingle();if(existing)return respond({duplicate:true,data:existing},200,"events:write");}
-   const eventKey=`${key.user_id}:api:${externalId??crypto.randomUUID()}`;
-   const{data:event,error}=await admin.from("integration_events").insert({user_id:key.user_id,funnel_id:funnelId,event_type:type,event_key:eventKey,external_id:externalId,status:"processing",payload:body?.payload&&typeof body.payload==="object"?body.payload:body,occurred_at:typeof body?.occurred_at==="string"?body.occurred_at:new Date().toISOString()}).select("id,event_type,external_id,status,occurred_at,created_at").single();
-   if(error)return respond({error:error.code==="23505"?"duplicate_event":"event_rejected"},error.code==="23505"?200:400,"events:write",error.code==="23505"?undefined:"event_rejected");
-   const internalResult=await admin.rpc("get_althea_internal_secret");const internal=!internalResult.error&&typeof internalResult.data==="string"?internalResult.data:"";let automation="not_configured";
-   if(internal){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),3500);try{const ar=await fetch(`${SUPABASE_URL}/functions/v1/automation-engine-v2`,{method:"POST",signal:controller.signal,headers:{"content-type":"application/json","x-internal-secret":internal},body:JSON.stringify({user_id:key.user_id,funnel_id:funnelId,event_id:event.id,event_type:type,transaction_id:body?.transaction_id,checkout_id:body?.checkout_id,sale_id:body?.sale_id,external_id:externalId,payload:body?.payload??body})});automation=ar.ok?"triggered":`failed_${ar.status}`;}catch{automation="failed_timeout_or_network";}finally{clearTimeout(timer);}}
-   const finalStatus=automation==="triggered"||automation==="not_configured"?"processed":"retry";await admin.from("integration_events").update({status:finalStatus,processed_at:finalStatus==="processed"?new Date().toISOString():null,error_message:finalStatus==="retry"?automation:null}).eq("id",event.id);
-   return respond({accepted:true,event_id:event.id,status:finalStatus,automation},202,"events:write");
+   const body=await req.json().catch(()=>null)as Record<string,unknown>|null;
+   const eventType=typeof body?.event_type==="string"?body.event_type.trim().slice(0,80):"";
+   const funnelId=typeof body?.funnel_id==="string"?body.funnel_id.trim():"";
+   if(!eventType)return respond({error:"invalid_event"},400,"events:write","invalid_event");
+   if(!funnelId)return respond({error:"funnel_id_required"},400,"events:write","funnel_id_required");
+   const internalResult=await admin.rpc("get_althea_internal_secret");
+   const internal=!internalResult.error&&typeof internalResult.data==="string"?internalResult.data:"";
+   if(!internal)return respond({error:"event_pipeline_unavailable"},503,"events:write","event_pipeline_unavailable");
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);
+   try{
+     const upstream=await fetch(`${SUPABASE_URL}/functions/v1/funnel-events`,{
+       method:"POST",
+       signal:controller.signal,
+       headers:{"content-type":"application/json","x-internal-secret":internal,"x-request-id":rid},
+       body:JSON.stringify({...body,user_id:key.user_id})
+     });
+     const payload=await upstream.json().catch(()=>({error:"event_pipeline_invalid_response"}));
+     const errorCode=!upstream.ok&&payload&&typeof payload==="object"&&"error" in payload?String((payload as Record<string,unknown>).error):undefined;
+     return respond(payload,upstream.status,"events:write",errorCode);
+   }catch{
+     return respond({error:"event_pipeline_unavailable"},503,"events:write","event_pipeline_unavailable");
+   }finally{clearTimeout(timer);}
   }
   return respond({error:"not_found"},404,undefined,"not_found");
  }catch{return respond({error:"internal_error"},500,undefined,"internal_error");}
