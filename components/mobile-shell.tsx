@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { CircleDollarSign, GitBranch, LayoutDashboard, LogOut, MessageCircle, Network, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
+import { CircleDollarSign, GitBranch, LayoutDashboard, LogOut, MessageCircle, Network, Package, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -22,6 +22,7 @@ const menuSections: MenuSection[] = [
   { title: 'CONFIGURAÇÃO DA OPERAÇÃO', items: [
     { label: 'Gateways e conexões', href: '/dashboard/gateways', icon: Network },
     { label: 'Funis', href: '/dashboard/funil', icon: GitBranch },
+    { label: 'Produtos', href: '/dashboard/produtos', icon: Package },
     { label: 'Checkouts', href: '/dashboard/checkouts', icon: CircleDollarSign },
     { label: 'Pagamentos', href: '/dashboard/pagamentos', icon: CircleDollarSign },
   ] },
