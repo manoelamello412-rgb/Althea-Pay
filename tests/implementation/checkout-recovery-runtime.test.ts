@@ -41,6 +41,13 @@ describe('checkout recovery runtime', () => {
     expect(source).not.toContain('auth.role()')
   })
 
+  it('prevents direct execution of recovery trigger functions', async () => {
+    const source = await readFile('supabase/migrations/20260918175743_recovery_trigger_acl_v32.sql', 'utf8')
+
+    expect(source).toContain('sync_checkout_recovery_from_outbox_v1() from public,anon,authenticated')
+    expect(source).toContain('mark_checkout_recovery_recovered_v1() from public,anon,authenticated')
+  })
+
   it('bounds recovery operation lists before aggregation', async () => {
     const source = await readFile('supabase/migrations/20260918175635_recovery_operations_bounded_v31.sql', 'utf8')
 
