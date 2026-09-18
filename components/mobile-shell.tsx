@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { CircleDollarSign, GitBranch, LayoutDashboard, LogOut, MessageCircle, Network, Package, RefreshCw, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
+import { CircleDollarSign, GitBranch, HeartPulse, LayoutDashboard, LogOut, MessageCircle, Network, Package, RefreshCw, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -35,6 +35,7 @@ const menuSections: MenuSection[] = [
   { title: 'DADOS E INTELIGÊNCIA', items: [
     { label: 'Vendas', href: '/dashboard/vendas', icon: CircleDollarSign },
     { label: 'Analytics', href: '/dashboard/analytics', icon: CircleDollarSign },
+    { label: 'NOC / Observabilidade', href: '/dashboard/noc', icon: HeartPulse },
     { label: 'IARA', href: '/dashboard/ia', icon: Sparkles },
   ] },
   { title: 'INTEGRAÇÕES', items: [
@@ -69,6 +70,7 @@ function sectionLabel(pathname: string): string {
   if (pathname.startsWith('/dashboard/pagamentos')) return 'PAGAMENTOS'
   if (pathname.startsWith('/dashboard/clientes')) return 'CLIENTES'
   if (pathname.startsWith('/dashboard/analytics')) return 'ANALYTICS'
+  if (pathname.startsWith('/dashboard/noc')) return 'NOC'
   if (pathname.startsWith('/dashboard/recovery')) return 'RECOVERY'
   if (pathname.startsWith('/dashboard/integration-hub')) return 'INTEGRAÇÕES'
   if (pathname.startsWith('/dashboard/api')) return 'API'
