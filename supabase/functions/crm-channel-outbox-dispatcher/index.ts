@@ -315,6 +315,37 @@ async function markLocalMessageDelivered(row: Outbox, delivery: DeliveryResult, 
   if (inserted.error) throw inserted.error;
 }
 
+async function markLocalMessageFailure(row: Outbox, status: string, errorMessage: string) {
+  if (!row.conversation_id) return;
+  const existing = await db
+    .from("crm_messages")
+    .select("id,metadata")
+    .eq("user_id", row.user_id)
+    .eq("conversation_id", row.conversation_id)
+    .contains("metadata", { outbox_id: row.id })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (existing.error) throw existing.error;
+  if (!existing.data?.id) return;
+
+  const currentMetadata = isObject(existing.data.metadata) ? existing.data.metadata : {};
+  const updated = await db
+    .from("crm_messages")
+    .update({
+      metadata: {
+        ...currentMetadata,
+        outbox_id: row.id,
+        delivery_status: status,
+        delivery_error: errorMessage,
+        delivery_updated_at: new Date().toISOString(),
+      },
+    })
+    .eq("id", existing.data.id)
+    .eq("user_id", row.user_id);
+  if (updated.error) throw updated.error;
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
   if (!supabaseUrl || !adminKey) return json({ ok: false, error: "server_configuration_error" }, 500);
