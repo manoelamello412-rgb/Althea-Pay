@@ -37,6 +37,13 @@ export default function CRMPage(){
  const loadedPages = useRef(1)
  const requests = useRef(createRequestGuard())
  const reconciling = useRef(false)
+ const organizationId=access?.organization_id??''
+ const canViewChats=hasOrganizationCapability(access,'can_view_chats')
+ const canReplyChats=hasOrganizationCapability(access,'can_reply_chats')
+ const canViewValues=hasOrganizationCapability(access,'can_view_values')
+ const canViewCustomers=hasOrganizationCapability(access,'can_view_customers')
+ const canManageGateways=hasOrganizationCapability(access,'can_manage_gateways')
+ const ownsSelected=Boolean(selectedRecordRef.current?.user_id&&selectedRecordRef.current.user_id===uid)
  useEffect(() => { conversationsRef.current = conversations }, [conversations])
  useEffect(() => () => { requests.current.invalidate() }, [])
 
@@ -109,14 +116,18 @@ export default function CRMPage(){
  const loadEvents = useCallback(async (c: Conversation|null) => {
    const valid = requests.current.begin('events')
    if (!c || selectedIdRef.current !== c.id) return
-   if (!c.transaction_id) { setEvents([]); return }
+   if (!c.transaction_id || !organizationId || !canViewValues) { setEvents([]); return }
    try {
-     const r = await supabase.from('crm_webhook_events').select('*').eq('user_id',uid).eq('transaction_id',c.transaction_id).order('received_at',{ascending:false}).limit(50)
+     const columns=canViewCustomers
+       ? 'id,transaction_id,status,error_reason,buyer_email,buyer_name,payload,received_at'
+       : 'id,transaction_id,status,error_reason,received_at'
+     const r = await supabase.from('crm_webhook_events').select(columns).eq('organization_id',organizationId).eq('transaction_id',c.transaction_id).order('received_at',{ascending:false}).limit(50)
      if (!valid() || selectedIdRef.current !== c.id) return
      if (r.error) throw r.error
-     setEvents(((r.data ?? []) as Event[]).filter(event => eventBelongsToConversation(event,c)))
+     const rows=(r.data??[]).map(row=>({...row,buyer_email:canViewCustomers?text((row as Json).buyer_email):null,buyer_name:canViewCustomers?text((row as Json).buyer_name):null,payload:canViewCustomers?obj((row as Json).payload):{}})) as Event[]
+     setEvents(rows.filter(event => eventBelongsToConversation(event,c)))
    } catch (cause) { if (valid() && selectedIdRef.current === c.id) setError(String((cause as Json)?.message ?? 'Falha ao carregar eventos.')) }
- }, [supabase,uid])
+ }, [supabase,organizationId,canViewValues,canViewCustomers])
 
  const load = useCallback(async (silent=false) => {
    const current = requests.current.begin('workspace')
@@ -124,7 +135,21 @@ export default function CRMPage(){
    if (!current()) return false
    if(a.error||!a.data.user){setError('Sessão expirada.');setLoading(false);return false}
    const id=a.data.user.id;setUid(id)
-   const[c,f,p,ag,tm]=await Promise.all([loadConversations(true,silent),supabase.from('funnels').select('id,nome').eq('user_id',id).is('deleted_at',null),supabase.from('products').select('id,name,data').eq('user_id',id),supabase.from('crm_agents').select('id,name,status').eq('user_id',id).order('name'),supabase.from('crm_teams').select('id,name,active').eq('user_id',id).eq('active',true).order('name')])
+   const accessResult=await supabase.rpc('organization_my_access_v1',{p_organization_id:null})
+   if(!current())return false
+   if(accessResult.error)throw accessResult.error
+   const effectiveAccess=parseOrganizationAccess(accessResult.data)
+   if(!effectiveAccess){setError('Não foi possível carregar suas permissões.');setLoading(false);return false}
+   setAccess(effectiveAccess)
+   if(!effectiveAccess.capabilities.can_view_chats){setError('Seu acesso não permite visualizar o CRM.');setLoading(false);return false}
+   const org=effectiveAccess.organization_id
+   const[c,f,p,ag,tm]=await Promise.all([
+     loadConversations(true,silent),
+     supabase.from('funnels').select('id,nome').eq('organization_id',org).is('deleted_at',null),
+     supabase.from('products').select('id,name,data').eq('organization_id',org),
+     supabase.from('crm_agents').select('id,name,status').eq('organization_id',org).order('name'),
+     supabase.from('crm_teams').select('id,name,active').eq('organization_id',org).eq('active',true).order('name')
+   ])
    if(!current()||!c)return false
    if(!f.error)setFunnels((f.data??[]) as Funnel[]);if(!p.error)setProducts((p.data??[]) as Product[]);if(!ag.error)setAgents((ag.data??[]) as Agent[]);if(!tm.error)setTeams((tm.data??[]) as Team[])
    return true
