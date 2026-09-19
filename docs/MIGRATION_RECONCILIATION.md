@@ -1,68 +1,46 @@
 # Althea Pay — Migration Reconciliation
 
-## Verified state
+## Current canonical state
 
-Audit date: 2026-09-17/18.
+Reconciliation completed on 2026-09-18.
 
-The live Supabase project and the GitHub repository do **not** share a reproducible migration history.
+The active GitHub migration directory is now rebuilt from the migration history actually applied to the live Supabase project.
 
-Verified counts at audit time:
-- Live Supabase migration history: **561** rows in `supabase_migrations.schema_migrations`.
-- GitHub audit branch: **329** SQL migration files after the audit hardening migrations.
-- Comparing migration names before the final audit migration:
-  - **284** remote migration names had no matching local migration file.
-  - **51** local migration names had no matching remote history row.
-- The final audit performance migration increases the local-only side by one until it is deliberately applied.
+Verified canonical inventory:
+- Live Supabase migration history: **624** migrations.
+- GitHub `supabase/migrations`: **624** migrations.
+- Migration filename/version set: **exact match** with the live history.
+- Legacy local-only migrations: removed from the active repository history.
+- Supabase Edge Functions: **46 active**.
+- GitHub Edge Function directories: **46**.
+- `supabase/config.toml` function entries: **46**.
+- `types/supabase.ts`: regenerated from the live production schema.
 
-This drift is historical. It does **not** mean the current application schema is missing hundreds of runtime objects. During the audit, the active frontend/backend contracts were compared directly against the live Supabase schema and the canonical runtime objects were verified.
+## Source-of-truth rule
 
-## Canonical current-schema contract
+GitHub is the canonical source for application code, reviewed database migrations, Supabase Edge Functions, configuration, and generated database types.
 
-`types/supabase.ts` is generated from the **live Supabase project** and is committed as a snapshot of the current tables, views, functions and enums.
+Supabase is the live runtime/backend state. Direct production changes that are not represented in GitHub are drift and must not become the new canonical state automatically.
 
-It is the current contract reference for application development. Regenerate it after reviewed schema changes.
+When drift is detected:
+1. compare the live change against tests, security contracts, runtime dependencies, and the current canonical code;
+2. keep only changes that are valid and intentional;
+3. reject regressions, duplicates, obsolete implementations, and untracked parallel versions;
+4. update GitHub first with the reviewed canonical result;
+5. deploy the reviewed canonical result back to the runtime.
 
-It is **not** a replacement for migration history and must not be executed as SQL.
+## Deployment rules
 
-## Mandatory deployment rule
+- Production database changes remain review-gated; CI must not run an automatic `supabase db push`.
+- Edge Function inventory must match `supabase/config.toml`.
+- Migration versions in `supabase/migrations` must be unique and use canonical timestamped filenames.
+- Generated Supabase types must be refreshed after reviewed schema changes.
+- The Edge Function deployment may use `--prune` only when the repository inventory has passed CI and is the reviewed canonical inventory.
 
-Do not run an automatic `supabase db push` against production from the historical migration folder.
+## Important reconciliation decision
 
-Before any database deployment:
+The live Supabase backend was **not** copied blindly.
 
-1. Run `supabase migration list --linked`.
-2. Generate a current linked schema dump/baseline in a controlled maintenance task.
-3. Compare the baseline with the repository's current schema contract and the proposed forward migrations.
-4. Decide explicitly which old migration files are archive/history and which are part of the future canonical baseline.
-5. Apply only reviewed **forward** migrations.
-6. Verify Supabase Advisors and application E2E after the change.
+During reconciliation, a live `automation-engine-v2` revision that had lost the required `ALTHEA_INTERNAL_SECRET` protection was rejected. The protected canonical implementation was retained instead.
 
-The GitHub migration workflow intentionally audits history and forbids automatic `db push` while this reconciliation is open.
-
-## Recommended baseline strategy
-
-The safe long-term cleanup is:
-
-1. Preserve the existing historical migration directory in an archival tag/branch.
-2. Create a fresh canonical baseline from the live production schema using the Supabase CLI/pg_dump in a controlled environment.
-3. Record the production migration-history reconciliation deliberately; do not fabricate old timestamps or mark unexecuted SQL as applied.
-4. Keep only new forward migrations after that baseline in the active migration chain.
-5. Test a clean database created from the new baseline plus forward migrations before changing the production workflow.
-
-Do not attempt to reconstruct the 561-row production history by guessing SQL from object names.
-
-## Audit migrations waiting for reviewed application
-
-The audit branch contains forward migrations that are intentionally **not** auto-applied:
-
-- `20260917203000_security_definer_access_hardening.sql`
-- `20260917204000_crm_workers_pg_cron.sql`
-- `20260917205000_gateway_rls_and_fk_performance_cleanup.sql`
-
-They must be reviewed against the linked production schema immediately before application.
-
-## Edge Functions are separate
-
-Edge Function source has been reconciled independently from database migration history.
-
-The GitHub repository now contains the canonical Edge Function inventory. Retired production-only stubs are intentionally absent and the main-branch function deployment uses `--prune` to remove them after merge.
+This is the governing rule for future synchronization: synchronization means aligning the services to the reviewed canonical implementation, not automatically accepting whichever side changed most recently.
