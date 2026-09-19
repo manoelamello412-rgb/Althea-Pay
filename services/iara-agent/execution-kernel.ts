@@ -12,6 +12,7 @@ const FORBIDDEN_DRAFT_PATTERNS = [
 
 interface AiActionRow {
   id: string
+  organization_id: string
   conversation_id: string
   action_type: string
   payload: Record<string, unknown> | null
@@ -30,19 +31,22 @@ export interface IaraExecutionResult {
 export class IaraExecutionKernel {
   constructor(private readonly supabase: SupabaseClient) {}
 
-  async execute(actionId: string, userId: string): Promise<IaraExecutionResult> {
-    const { data: action, error: loadError } = await this.supabase
-      .from('crm_ai_actions')
-      .select('id,conversation_id,action_type,payload,status')
-      .eq('id', actionId)
-      .eq('user_id', userId)
-      .maybeSingle<AiActionRow>()
+  async execute(actionId: string): Promise<IaraExecutionResult> {
+    const { data, error: loadError } = await this.supabase.rpc('crm_ai_action_get', {
+      p_action_id: actionId,
+    })
 
-    if (loadError || !action) throw new IaraKernelError('AI_ACTION_NOT_FOUND', 404)
+    const action = isRecord(data) ? data as unknown as AiActionRow : null
+    if (loadError || !action) throw new IaraKernelError('AI_ACTION_NOT_FOUND', loadError?.code === '42501' ? 403 : 404)
 
     const tool = getIaraToolDefinition(action.action_type)
     if (!tool) throw new IaraKernelError('ACTION_NOT_REGISTERED', 422)
-    if (tool.authorization !== 'authenticated_owner') throw new IaraKernelError('AUTHORIZATION_POLICY_INVALID', 403)
+    if (tool.authorization !== 'organization_operator') {
+      throw new IaraKernelError('AUTHORIZATION_POLICY_INVALID', 403)
+    }
+    if (tool.tenantScope !== 'organization_id') {
+      throw new IaraKernelError('TENANT_SCOPE_INVALID', 403)
+    }
     if (action.status !== 'accepted') throw new IaraKernelError('HUMAN_APPROVAL_REQUIRED', 409)
 
     const payload = action.payload ?? {}
@@ -51,19 +55,19 @@ export class IaraExecutionKernel {
       throw new IaraKernelError('AI_DRAFT_REJECTED', 422)
     }
 
-    const { data, error } = await this.supabase.rpc(tool.executor, {
+    const { data: execution, error } = await this.supabase.rpc(tool.executor, {
       p_action_id: action.id,
       p_body: draft,
     })
 
-    if (error) throw new IaraKernelError('AI_ACTION_EXECUTION_FAILED', 409, error.message)
+    if (error) throw new IaraKernelError('AI_ACTION_EXECUTION_FAILED', error.code === '42501' ? 403 : 409, error.message)
     if (
-      !isExecutionRecord(data)
-      || data.ok !== true
-      || data.action_id !== action.id
-      || data.status !== 'executed'
-      || typeof data.execution_id !== 'string'
-      || !isUuid(data.execution_id)
+      !isExecutionRecord(execution)
+      || execution.ok !== true
+      || execution.action_id !== action.id
+      || execution.status !== 'executed'
+      || typeof execution.execution_id !== 'string'
+      || !isUuid(execution.execution_id)
     ) {
       throw new IaraKernelError('INVALID_EXECUTION_RESULT', 502)
     }
@@ -71,10 +75,10 @@ export class IaraExecutionKernel {
     return {
       ok: true,
       action_id: action.id,
-      execution_id: data.execution_id,
+      execution_id: execution.execution_id,
       status: 'executed',
-      executed_at: typeof data.executed_at === 'string' ? data.executed_at : undefined,
-      message: isRecord(data.message) ? data.message : undefined,
+      executed_at: typeof execution.executed_at === 'string' ? execution.executed_at : undefined,
+      message: isRecord(execution.message) ? execution.message : undefined,
     }
   }
 }
