@@ -63,3 +63,10 @@ The frontend may hide or disable actions based on this contract, but backend aut
 ## Rollout rule
 
 This migration is additive. It does not yet rewrite legacy user-scoped CRM/payment policies. Those paths must be migrated in controlled stages to organization scope plus capabilities before multi-user access is enabled in the UI.
+
+
+## CRM organization-scope migration
+
+Core CRM tables now carry a canonical `organization_id` in addition to the legacy `user_id` owner attribution. Existing rows are backfilled from the owner's default organization, and future rows are guarded against cross-organization mismatches.
+
+This stage is intentionally additive: legacy CRM RLS policies and operator RPCs still use owner-scoped `user_id` checks until the next authorization stage replaces those checks with organization membership, capabilities, and operational history windows.
