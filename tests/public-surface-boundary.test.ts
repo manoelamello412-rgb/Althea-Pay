@@ -37,7 +37,7 @@ describe('public checkout/chat security boundary', () => {
 
   it('pre-grants only the trusted server role during rollout phase A', () => {
     const migration = readFileSync(
-      'supabase/migrations/20260919201500_grant_public_surface_server_executor.sql',
+      'supabase/migrations/20260919201947_grant_public_surface_server_executor.sql',
       'utf8',
     )
 
