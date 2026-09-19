@@ -5,6 +5,7 @@ import { Check, CheckCheck, ChevronLeft, Inbox, MessageCircle, RefreshCw, Search
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { createRequestGuard, eventBelongsToConversation, mergeRows } from '@/lib/crm/frontend-state'
+import { resolveRecoveryEventResponse } from '@/lib/crm/recovery-context'
 
 type Json=Record<string,unknown>
 type Conversation={id:string;user_id:string;funnel_id:string|null;product_id:string|null;transaction_id:string|null;buyer_name:string|null;buyer_email:string|null;status:string;assigned_to:string|null;metadata:Json;public_token:string|null;last_message_at:string|null;unread_count:number;created_at:string;updated_at:string;priority?:string;primary_channel?:string;customer_id?:string|null;customer_whatsapp?:string|null;checkout_status?:string;last_message_direction?:string|null}
@@ -139,26 +140,30 @@ export default function CRMPage(){
    const requested = params.get('conversation')?.trim(), recovery = params.get('recovery_event')?.trim()
    if (!requested && !recovery) return
    const current = requests.current.begin('link')
+   const controller = new AbortController()
    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
    void (async () => {
      if ((requested && !uuid.test(requested)) || (recovery && !uuid.test(recovery))) throw new Error('Contexto de conversa inválido.')
-     let lookup = supabase.from('crm_conversations').select('*').eq('user_id',uid)
-     if (requested) lookup = lookup.eq('id',requested)
-     else {
-       const event = await supabase.from('crm_webhook_events').select('transaction_id').eq('id',recovery!).eq('user_id',uid).maybeSingle()
+     let conversationId = requested
+     if (recovery) {
+       // Revalidate recovery links, including old event-only URLs, against the
+       // canonical contract. Never let a URL hint override unlinked/ambiguous.
+       const response = await fetch('/api/crm/recovery/opportunities?days=30', { cache: 'no-store', signal: controller.signal })
+       const body: unknown = await response.json()
        if (!current()) return
-       if (event.error) throw event.error
-       if (!event.data?.transaction_id) throw new Error('Este evento não possui uma transação vinculada. Selecione a conversa manualmente.')
-       lookup = lookup.eq('transaction_id',event.data.transaction_id)
+       if (!response.ok) throw new Error('Não foi possível validar o contexto de recuperação. Tente novamente.')
+       const context = resolveRecoveryEventResponse(body,recovery)
+       if (context.status !== 'resolved') throw new Error(context.message)
+       conversationId = context.conversationId
      }
-     const result = await lookup.limit(2)
+     const result = await supabase.from('crm_conversations').select('*').eq('user_id',uid).eq('id',conversationId!).limit(2)
      if (!current()) return
      if (result.error) throw result.error
      if (result.data?.length !== 1) throw new Error('Não foi possível identificar uma única conversa para este contexto. Selecione a conversa manualmente.')
      const row = result.data[0] as Conversation
      setConversations(xs => mergeRows(xs,[row])); setSelectedId(row.id,row)
    })().catch(cause => { if (current()) setError(String(cause?.message ?? 'Falha ao abrir o contexto de recuperação.')) })
-   return () => { requests.current.invalidate('link') }
+   return () => { requests.current.invalidate('link'); controller.abort() }
  }, [supabase,uid,setSelectedId])
 
  const activeRecord = conversations.find(c => c.id === selectedId) ?? selectedRecord

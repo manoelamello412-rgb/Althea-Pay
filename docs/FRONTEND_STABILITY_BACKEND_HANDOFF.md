@@ -4,16 +4,15 @@ Escopo desta etapa: recuperação de acesso, callbacks de erro do Next, estado/r
 
 ## BACKEND NECESSÁRIO
 
-### 1. Associação inequívoca entre oportunidade e conversa
+### 1. Associação inequívoca entre oportunidade e conversa — contrato entregue
 
-- **Problema:** a central de recuperação fornece `event_id`, mas não uma conversa canônica. Um evento pode não ter transação; uma transação pode ter mais de uma conversa. E-mail não é vínculo suficiente para escolher uma conversa ou seu contexto financeiro.
-- **Contrato esperado:** ampliar o contrato existente de oportunidades com associação autorizada explícita; não criar automaticamente conversas ao abrir um link.
-- **Request:** `GET /api/crm/recovery/opportunities` com os filtros já suportados e sessão autenticada. Para um resolvedor específico, receber `{ event_id: UUID }`; o nome definitivo deve ser definido pelo backend antes de implementação.
-- **Response por oportunidade:** `{ event_id: UUID, conversation_id: UUID | null, context_status: 'resolved' | 'unlinked' | 'ambiguous', ...camposExistentes }`. Um resolvedor deve retornar esses mesmos campos ou um erro de autorização/não encontrado sem revelar dados de outro tenant.
-- **Tipos:** UUID serializado como string; `conversation_id` anulável; enum discriminando ausência de vínculo e ambiguidade.
-- **Permissões:** validar sessão, propriedade/organização do evento e da conversa, além das permissões do membro; nunca confiar no ID da URL como autorização.
-- **Comportamento esperado:** somente `resolved` abre diretamente a conversa. Outros estados pedem seleção explícita, sem usar e-mail como aproximação e sem enviar mensagens ou acionar recuperação automaticamente.
-- **Mitigação frontend implementada:** consulta de leitura do evento e busca pela transação, ambas com `user_id`. Só seleciona quando encontra exatamente uma conversa. Sem vínculo inequívoco, informa a limitação. Eventos do painel lateral só são aceitos quando possuem a mesma transação da conversa selecionada.
+- **Contrato confirmado:** `crm_recovery_opportunities(p_days integer default 7)` retorna `conversation_id: string | null` e `context_status: 'resolved' | 'unlinked' | 'ambiguous'`. O GET `/api/crm/recovery/opportunities` repassa esses campos.
+- **Consumo frontend:** somente `resolved` com identificador válido permite abrir a conversa indicada. `unlinked`, `ambiguous`, campos ausentes/inválidos ou oportunidade não encontrada não abrem conversa automaticamente.
+- **Links:** a central inclui o identificador canônico e o evento. O CRM revalida o evento pelo GET existente (`days=30`, limite já suportado) antes de selecionar a conversa. Links antigos contendo apenas `recovery_event` seguem essa mesma validação. O parâmetro `conversation` não sobrepõe a decisão canônica quando há um evento.
+- **Fallback:** removido. Não há busca alternativa por transação ou e-mail para resolver uma conversa de recuperação. Uma oportunidade fora da janela ou da lista atual exige seleção manual.
+- **Permissões e efeitos:** a leitura da conversa continua autenticada, limitada por `user_id` e pelas permissões existentes. Abrir um evento não cria conversa, envia mensagem ou aciona recuperação. A ação explícita de recuperação permanece separada e inalterada.
+- **Preservado:** o isolamento dos eventos financeiros do painel lateral por transação continua vigente; trata-se de filtragem dos eventos da conversa já selecionada, não de resolução da conversa.
+- **Backend adicional:** nenhum contrato novo é necessário para esta integração. Validar o comportamento com dados reais na homologação.
 
 ### 2. Garantia de concorrência para metadados de produtos
 

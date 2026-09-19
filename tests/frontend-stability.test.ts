@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { safeNext, authLink } from '@/lib/auth/navigation'
 import { createRequestGuard, eventBelongsToConversation } from '@/lib/crm/frontend-state'
 import CRMPage from '@/app/dashboard/crm/page'
+import RecoveryPage from '@/app/dashboard/crm/recovery/page'
 import ProductsPage from '@/app/dashboard/produtos/page'
 import ErrorPage from '@/app/error'
 import GlobalError from '@/app/global-error'
@@ -14,7 +15,7 @@ type Row = Record<string, any>
 const mock = vi.hoisted(() => ({
   rpc: vi.fn(), tables: {} as Record<string, Row[]>, handlers: {} as Record<string, (event: any) => void>,
   channels: vi.fn(), remove: vi.fn(), subscribe: undefined as undefined | ((status: string) => void),
-  replace: vi.fn(), exchange: vi.fn(), getSession: vi.fn(),
+  replace: vi.fn(), exchange: vi.fn(), getSession: vi.fn(), fetch: vi.fn(), reads: vi.fn(),
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: mock.replace, push: vi.fn(), refresh: vi.fn() }) }))
 vi.mock('next/image', () => ({ default: () => null }))
@@ -27,6 +28,7 @@ const client = {
   },
   rpc: mock.rpc,
   from(table: string) {
+    mock.reads(table)
     const filters: [string, unknown][] = []
     let limit = Infinity
     const result = () => (mock.tables[table] ?? []).filter(row => filters.every(([key,value]) => row[key] === value)).slice(0,limit)
@@ -70,14 +72,15 @@ async function click(text: string) {
   await act(async () => { button!.click() })
 }
 beforeEach(() => {
-  vi.clearAllMocks(); mock.rpc.mockReset(); mock.tables={}; mock.handlers={}
+  vi.clearAllMocks(); mock.rpc.mockReset(); mock.fetch.mockReset(); mock.tables={}; mock.handlers={}
+  mock.fetch.mockResolvedValue({ok:true,json:async()=>({opportunities:[]})});vi.stubGlobal('fetch',mock.fetch)
   mock.subscribe=undefined; window.history.replaceState(null,'','/dashboard/crm')
   Object.assign(globalThis,{ IS_REACT_ACT_ENVIRONMENT:true })
   container=document.createElement('div');document.body.append(container);root=createRoot(container)
   mock.rpc.mockImplementation(async (name: string) => ({ data: name === 'crm_multicrm_conversations_page' ? { items:[a,b],has_more:false } : name === 'crm_multicrm_messages_page' ? {items:[],has_more:false} : {}, error:null }))
   mock.exchange.mockResolvedValue({error:null});mock.getSession.mockResolvedValue({data:{session:{access_token:'test'}},error:null})
 })
-afterEach(async () => { await act(async () => root.unmount());container.remove();vi.useRealTimers() })
+afterEach(async () => { await act(async () => root.unmount());container.remove();vi.useRealTimers();vi.unstubAllGlobals() })
 
 describe('safe auth navigation', () => {
   it('keeps local destinations including query and rejects external URLs and auth loops', () => {
@@ -174,20 +177,67 @@ describe('CRM stability', () => {
     await act(async () => mock.handlers.crm_webhook_events({eventType:'INSERT',new:{id:'right',transaction_id:a.transaction_id,received_at:'2026-09-19',payload:{phone:'RIGHT-PHONE'}}}))
     expect(container.textContent).toContain('RIGHT-PHONE')
   })
-  it('opens recovery only when an owned event resolves to exactly one conversation', async () => {
-    window.history.replaceState(null,'',`/dashboard/crm?recovery_event=${idA}`)
-    mock.tables.crm_webhook_events=[{id:idA,user_id:'owner',transaction_id:b.transaction_id}]
-    mock.tables.crm_conversations=[a,b]
+  it.each([false,true])('uses the canonical conversation even with a conflicting URL hint (hint=%s)', async hint => {
+    window.history.replaceState(null,'',`/dashboard/crm?recovery_event=${idA}${hint?`&conversation=${idA}`:''}`)
+    mock.tables.crm_webhook_events=[{id:idA,user_id:'owner',transaction_id:a.transaction_id}]
+    mock.tables.crm_conversations=[a,{...b,transaction_id:null}]
+    mock.fetch.mockResolvedValue({ok:true,json:async()=>({opportunities:[{event_id:idA,context_status:'resolved',conversation_id:idB,transaction_id:a.transaction_id}]})})
     await mount(CRMPage)
     expect(mock.rpc).toHaveBeenCalledWith('crm_customer_360',{p_conversation_id:idB})
+    expect(mock.rpc).not.toHaveBeenCalledWith('crm_customer_360',{p_conversation_id:idA})
+    expect(mock.reads).not.toHaveBeenCalledWith('crm_webhook_events')
+    expect(mock.fetch).toHaveBeenCalledWith('/api/crm/recovery/opportunities?days=30',expect.objectContaining({cache:'no-store'}))
+    expect(mock.fetch.mock.calls.every(([,options])=>!options?.method||options.method==='GET')).toBe(true)
+    expect(mock.rpc.mock.calls.every(([name])=>['crm_multicrm_conversations_page','crm_multicrm_messages_page','crm_customer_360'].includes(name))).toBe(true)
   })
-  it('does not guess the recovery conversation when the transaction is ambiguous', async () => {
-    window.history.replaceState(null,'',`/dashboard/crm?recovery_event=${idA}`)
+  it.each([
+    {context_status:'unlinked',conversation_id:null},
+    {context_status:'ambiguous',conversation_id:null},
+    {context_status:'unlinked',conversation_id:idA},
+    {context_status:'ambiguous',conversation_id:idA},
+    {},
+    {conversation_id:idA},
+    {context_status:'resolved',conversation_id:null},
+    {context_status:'resolved',conversation_id:'not-an-id'},
+  ])('does not resolve by URL, transaction or email when the contract blocks opening: %j', async context => {
+    window.history.replaceState(null,'',`/dashboard/crm?recovery_event=${idA}&conversation=${idA}`)
     mock.tables.crm_webhook_events=[{id:idA,user_id:'owner',transaction_id:a.transaction_id}]
-    mock.tables.crm_conversations=[a,{...b,transaction_id:a.transaction_id}]
+    mock.tables.crm_conversations=[a]
+    mock.fetch.mockResolvedValue({ok:true,json:async()=>({opportunities:[{event_id:idA,transaction_id:a.transaction_id,buyer_email:'shared@example.com',...context}]})})
     await mount(CRMPage)
-    expect(container.textContent).toContain('uma única conversa')
+    expect(container.textContent).toContain('Selecione a conversa manualmente')
+    expect(mock.rpc.mock.calls.every(([name])=>name==='crm_multicrm_conversations_page')).toBe(true)
+    expect(mock.reads).not.toHaveBeenCalledWith('crm_webhook_events')
+    expect(mock.reads).not.toHaveBeenCalledWith('crm_conversations')
+    expect(mock.fetch.mock.calls.every(([,options])=>!options?.method||options.method==='GET')).toBe(true)
+  })
+  it('does not bypass ownership when the canonical conversation is not accessible', async () => {
+    window.history.replaceState(null,'',`/dashboard/crm?recovery_event=${idA}`)
+    mock.tables.crm_conversations=[{...b,user_id:'another-owner'}]
+    mock.fetch.mockResolvedValue({ok:true,json:async()=>({opportunities:[{event_id:idA,context_status:'resolved',conversation_id:idB}]})})
+    await mount(CRMPage)
     expect(mock.rpc.mock.calls.some(([name])=>name==='crm_customer_360')).toBe(false)
+    expect(container.textContent).toContain('Selecione a conversa manualmente')
+  })
+  it('keeps manual selection when the recovery response arrives late', async () => {
+    const response=deferred<any>()
+    window.history.replaceState(null,'',`/dashboard/crm?recovery_event=${idA}`)
+    mock.fetch.mockReturnValue(response.promise)
+    mock.tables.crm_conversations=[a,b]
+    await mount(CRMPage);await click('Cliente A')
+    await act(async()=>response.resolve({ok:true,json:async()=>({opportunities:[{event_id:idA,context_status:'resolved',conversation_id:idB}]})}))
+    expect(mock.rpc).toHaveBeenCalledWith('crm_customer_360',{p_conversation_id:idA})
+    expect(mock.rpc).not.toHaveBeenCalledWith('crm_customer_360',{p_conversation_id:idB})
+    expect(mock.channels).toHaveBeenCalledTimes(1)
+  })
+  it.each(['missing','http-error','network-error'])('does not fall back when recovery lookup fails: %s', async failure => {
+    window.history.replaceState(null,'',`/dashboard/crm?recovery_event=${idA}&conversation=${idA}`)
+    mock.tables.crm_conversations=[a]
+    if(failure==='network-error')mock.fetch.mockRejectedValue(new Error('Network unavailable'))
+    else mock.fetch.mockResolvedValue({ok:failure!=='http-error',json:async()=>({opportunities:[]})})
+    await mount(CRMPage)
+    expect(mock.rpc.mock.calls.some(([name])=>name==='crm_customer_360')).toBe(false)
+    expect(mock.reads).not.toHaveBeenCalledWith('crm_conversations')
   })
   it('invalidates each request lane and never matches financial context by absent IDs', () => {
     const guard=createRequestGuard(),old=guard.begin('messages'),events=guard.begin('events')
@@ -211,5 +261,32 @@ describe('product editing', () => {
     await act(async () => container.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})))
     expect(mock.rpc).toHaveBeenCalledWith('update_product',expect.objectContaining({p_name:'Nome alterado',p_metadata:metadata,p_version:7}))
     expect(metadata.integration.external_id).toBe('keep-me')
+  })
+})
+
+
+describe('recovery opportunity navigation', () => {
+  const opportunity={event_id:idA,received_at:'2026-09-19T12:00:00Z',status:'failed',transaction_id:null,buyer_name:'Cliente A',buyer_email:null,funnel_id:null,product_id:null,amount:null,currency:null,priority:80,opportunity_type:'checkout',next_action:'Revisar oportunidade'}
+  it('links the resolved conversation without starting recovery on mount', async () => {
+    mock.fetch.mockResolvedValue({ok:true,json:async()=>({opportunities:[{...opportunity,context_status:'resolved',conversation_id:idB}]})})
+    await mount(RecoveryPage)
+    const link=[...container.querySelectorAll('a')].find(el=>el.textContent==='Abrir Multi-CRM')!
+    const url=new URL(link.href)
+    expect(url.searchParams.get('conversation')).toBe(idB)
+    expect(url.searchParams.get('recovery_event')).toBe(idA)
+    expect(mock.fetch).toHaveBeenCalledTimes(1)
+    expect(mock.fetch.mock.calls[0][1].method).toBeUndefined()
+    expect(mock.rpc).not.toHaveBeenCalled()
+  })
+  it.each(['unlinked','ambiguous','absent'])('disables automatic conversation navigation for %s', async status => {
+    const context=status==='absent'?{}:{context_status:status,conversation_id:idB}
+    mock.fetch.mockResolvedValue({ok:true,json:async()=>({opportunities:[{...opportunity,...context}]})})
+    await mount(RecoveryPage)
+    expect([...container.querySelectorAll('a')].some(el=>el.textContent==='Abrir Multi-CRM')).toBe(false)
+    const button=[...container.querySelectorAll('button')].find(el=>el.textContent==='Abrir Multi-CRM')!
+    expect(button.disabled).toBe(true)
+    expect(container.textContent).toContain('Selecione a conversa manualmente')
+    expect(mock.fetch).toHaveBeenCalledTimes(1)
+    expect(mock.rpc).not.toHaveBeenCalled()
   })
 })
