@@ -8,6 +8,7 @@ const aliases: Record<string, string> = { paid: "approved", completed: "approved
 const normalize = (value: unknown) => aliases[String(value ?? "").trim().toLowerCase()] ?? String(value ?? "").trim().toLowerCase();
 const allowed: Record<string, string[]> = { created: ["created", "pending", "approved", "failed"], pending: ["pending", "approved", "failed", "refunded", "chargeback"], approved: ["approved", "refunded", "chargeback"], failed: ["failed"], refunded: ["refunded"], chargeback: ["chargeback"] };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+const uuid = (value: unknown) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value ?? "").trim());
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
   const suppliedSecret = req.headers.get("x-internal-secret") ?? req.headers.get("x-althea-internal-secret") ?? "";
@@ -35,39 +36,50 @@ Deno.serve(async (req) => {
     if (!event) return json({ ok: false, error: "event_not_found" }, 404);
     const payload = (event.payload ?? {}) as Record<string, unknown>;
     const userId = String(event.user_id);
+    const organizationId = String(event.organization_id ?? "").trim();
+    if (!uuid(organizationId)) throw new Error("integration_event_organization_invalid");
+    const organization = await db.from("organizations").select("id").eq("id", organizationId).maybeSingle();
+    if (organization.error) throw organization.error;
+    if (!organization.data) throw new Error("integration_event_organization_not_found");
     const transactionId = payload.transaction_id ? String(payload.transaction_id) : "";
     const checkoutId = payload.checkout_id ? String(payload.checkout_id) : "";
     const status = normalize(payload.status);
     let tx: Record<string, any> | null = null;
     if (transactionId) {
-      const result = await db.from("gateway_transactions").select("*").eq("id", transactionId).eq("user_id", userId).maybeSingle();
+      const result = await db.from("gateway_transactions").select("*").eq("id", transactionId).eq("user_id", userId).eq("organization_id", organizationId).maybeSingle();
       if (result.error) throw result.error;
+      if (!result.data) throw new Error("transaction_tenant_mismatch_or_not_found");
       tx = result.data;
-      if (tx && allowed[normalize(tx.status)]?.includes(status)) {
+      if (allowed[normalize(tx.status)]?.includes(status)) {
         const transition = await db.rpc("transition_gateway_transaction_status", { p_transaction_id: tx.id, p_user_id: userId, p_next_status: status, p_failure_code: payload.failure_code ? String(payload.failure_code) : null, p_external_id: payload.external_id ? String(payload.external_id) : null, p_expected_version: Number(tx.version) });
         if (transition.error) throw transition.error;
         tx = Array.isArray(transition.data) ? transition.data[0] : transition.data;
+        if (!tx || String(tx.organization_id) !== organizationId || String(tx.user_id) !== userId) throw new Error("transaction_transition_tenant_mismatch");
       }
     }
     if (checkoutId) {
+      const checkout = await db.from("checkout_sessions").select("id,user_id,organization_id").eq("id", checkoutId).eq("user_id", userId).eq("organization_id", organizationId).maybeSingle();
+      if (checkout.error) throw checkout.error;
+      if (!checkout.data) throw new Error("checkout_tenant_mismatch_or_not_found");
       const next = status === "approved" ? "completed" : ["refunded", "chargeback"].includes(status) ? "failed" : null;
       if (next) {
-        const result = await db.from("checkout_sessions").update({ status: next, completed_at: next === "completed" ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq("id", checkoutId).eq("user_id", userId);
+        const result = await db.from("checkout_sessions").update({ status: next, completed_at: next === "completed" ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq("id", checkoutId).eq("user_id", userId).eq("organization_id", organizationId).select("id").maybeSingle();
         if (result.error) throw result.error;
+        if (!result.data) throw new Error("checkout_update_tenant_mismatch");
       }
     }
     if (status === "approved" && tx) {
       const externalId = String(payload.external_id ?? tx.external_id ?? event.external_id ?? event.id);
-      const existing = await db.from("sales").select("id").eq("user_id", userId).eq("external_id", externalId).maybeSingle();
+      const existing = await db.from("sales").select("id").eq("organization_id", organizationId).eq("user_id", userId).eq("external_id", externalId).maybeSingle();
       if (existing.error) throw existing.error;
       if (!existing.data) {
-        const sale = await db.from("sales").insert({ id: `sale_${String(event.external_id ?? event.id)}`, user_id: userId, funnel_id: event.funnel_id, checkout_id: checkoutId || null, transaction_id: tx.id, product_id: tx.product_id ?? null, amount: tx.amount ?? payload.amount ?? 0, currency: tx.currency ?? payload.currency ?? "BRL", status: "approved", external_id: externalId, gateway_id: tx.gateway_id ?? null, data: payload, occurred_at: event.occurred_at ?? new Date().toISOString() });
+        const sale = await db.from("sales").insert({ id: `sale_${organizationId}_${String(event.external_id ?? event.id)}`, user_id: userId, organization_id: organizationId, funnel_id: event.funnel_id, checkout_id: checkoutId || null, transaction_id: tx.id, product_id: tx.product_id ?? null, amount: tx.amount ?? payload.amount ?? 0, currency: tx.currency ?? payload.currency ?? "BRL", status: "approved", external_id: externalId, gateway_id: tx.gateway_id ?? null, data: payload, occurred_at: event.occurred_at ?? new Date().toISOString() });
         if (sale.error && sale.error.code !== "23505") throw sale.error;
       }
     }
     if (["refunded", "chargeback"].includes(status)) {
       const externalId = String(payload.external_id ?? tx?.external_id ?? event.external_id ?? event.id);
-      const result = await db.from("sales").update({ status, data: payload }).eq("user_id", userId).eq("external_id", externalId);
+      const result = await db.from("sales").update({ status, data: payload }).eq("organization_id", organizationId).eq("user_id", userId).eq("external_id", externalId);
       if (result.error) throw result.error;
     }
     const controller = new AbortController();
