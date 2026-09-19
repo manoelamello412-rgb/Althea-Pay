@@ -1,5 +1,3 @@
-400;500;600;700&display=swap');
-
 :root{--althea-ink:#0B0B0D;--althea-forest:#0F1A16;--althea-deep:#0D362D;--althea-green:#1DB854;--althea-gold:#D4AF37;--althea-silver:#A6A6A6;--althea-glow:rgba(29,184,84,.22)}
 html,body{font-family:var(--font-space-grotesk,'Space Grotesk'),ui-sans-serif,system-ui,sans-serif!important;background:var(--althea-ink)}
 body{letter-spacing:.005em}
