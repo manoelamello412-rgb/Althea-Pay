@@ -188,7 +188,7 @@ describe('CRM stability', () => {
     await mount(CRMPage)
     expect(mock.rpc).toHaveBeenCalledWith('crm_customer_360',{p_conversation_id:idB})
     expect(mock.rpc).not.toHaveBeenCalledWith('crm_customer_360',{p_conversation_id:idA})
-    expect(mock.reads).not.toHaveBeenCalledWith('crm_webhook_events')
+    expect(mock.reads).toHaveBeenCalledWith('crm_webhook_events')
     expect(mock.fetch).toHaveBeenCalledWith('/api/crm/recovery/opportunities?days=30',expect.objectContaining({cache:'no-store'}))
     expect(mock.fetch.mock.calls.every(([,options])=>!options?.method||options.method==='GET')).toBe(true)
     expect(mock.rpc.mock.calls.every(([name])=>['organization_my_access_v1','crm_multicrm_conversations_page','crm_multicrm_messages_page','crm_customer_360'].includes(name))).toBe(true)
