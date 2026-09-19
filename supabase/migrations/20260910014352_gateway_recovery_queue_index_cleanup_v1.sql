@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.uq_gateway_recovery_active_attempt;
