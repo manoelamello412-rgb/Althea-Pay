@@ -117,13 +117,24 @@ export default function CRMPage(){
    if (!c || selectedIdRef.current !== c.id) return
    if (!c.transaction_id || !organizationId || !canViewValues) { setEvents([]); return }
    try {
-     const columns=canViewCustomers
-       ? 'id,transaction_id,status,error_reason,buyer_email,buyer_name,payload,received_at'
-       : 'id,transaction_id,status,error_reason,received_at'
-     const r = await supabase.from('crm_webhook_events').select(columns).eq('organization_id',organizationId).eq('transaction_id',c.transaction_id).order('received_at',{ascending:false}).limit(50)
+     let rawRows:unknown[]=[]
+     if(canViewCustomers){
+       const r=await supabase.from('crm_webhook_events')
+         .select('id,transaction_id,status,error_reason,buyer_email,buyer_name,payload,received_at')
+         .eq('organization_id',organizationId).eq('transaction_id',c.transaction_id)
+         .order('received_at',{ascending:false}).limit(50)
+       if(r.error)throw r.error
+       rawRows=(r.data??[]) as unknown[]
+     }else{
+       const r=await supabase.from('crm_webhook_events')
+         .select('id,transaction_id,status,error_reason,received_at')
+         .eq('organization_id',organizationId).eq('transaction_id',c.transaction_id)
+         .order('received_at',{ascending:false}).limit(50)
+       if(r.error)throw r.error
+       rawRows=(r.data??[]) as unknown[]
+     }
      if (!valid() || selectedIdRef.current !== c.id) return
-     if (r.error) throw r.error
-     const rows=(r.data??[]).map(row=>({...row,buyer_email:canViewCustomers?text((row as Json).buyer_email):null,buyer_name:canViewCustomers?text((row as Json).buyer_name):null,payload:canViewCustomers?obj((row as Json).payload):{}})) as Event[]
+     const rows=rawRows.map(value=>{const row=obj(value);return{id:String(row.id??''),transaction_id:text(row.transaction_id),status:text(row.status)??'',error_reason:text(row.error_reason),buyer_email:canViewCustomers?text(row.buyer_email):null,buyer_name:canViewCustomers?text(row.buyer_name):null,payload:canViewCustomers?obj(row.payload):{},received_at:text(row.received_at)??''}}) as Event[]
      setEvents(rows.filter(event => eventBelongsToConversation(event,c)))
    } catch (cause) { if (valid() && selectedIdRef.current === c.id) setError(String((cause as Json)?.message ?? 'Falha ao carregar eventos.')) }
  }, [supabase,organizationId,canViewValues,canViewCustomers])
