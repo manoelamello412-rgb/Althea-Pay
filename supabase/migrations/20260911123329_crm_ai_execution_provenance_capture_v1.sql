@@ -1,6 +1,3 @@
--- Canonical AI execution provenance capture.
--- Reuses crm_ai_actions as the existing action ledger; no parallel evidence table.
-
 alter table public.crm_ai_actions
   add column if not exists executing_at timestamptz,
   add column if not exists execution_message_id uuid,

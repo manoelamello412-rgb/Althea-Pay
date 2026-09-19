@@ -1,0 +1,48 @@
+create unique index if not exists crm_messages_user_client_message_id_uq on public.crm_messages(user_id,client_message_id) where client_message_id is not null;
+
+create or replace function public.crm_operator_send_message(p_conversation_id uuid,p_body text,p_client_message_id text default null) returns public.crm_messages language plpgsql security definer set search_path=public as $$
+declare
+ v_user_id uuid:=auth.uid();
+ v_body text:=btrim(coalesce(p_body,''));
+ c public.crm_conversations%rowtype;
+ a public.crm_channel_accounts%rowtype;
+ v_message public.crm_messages;
+ outbox_id uuid;
+ idem text;
+ client_id text:=nullif(trim(p_client_message_id),'');
+begin
+ if v_user_id is null then raise exception 'AUTH_REQUIRED' using errcode='42501'; end if;
+ if v_body='' then raise exception 'MESSAGE_EMPTY' using errcode='22023'; end if;
+ if length(v_body)>10000 then raise exception 'MESSAGE_TOO_LONG' using errcode='22001'; end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_conversation_id::text,0));
+ select * into c from public.crm_conversations where id=p_conversation_id and user_id=v_user_id for update;
+ if not found then raise exception 'CONVERSATION_NOT_FOUND' using errcode='P0002'; end if;
+ if client_id is null then client_id:='operator:'||c.id::text||':'||encode(digest(v_body||now()::text,'sha256'),'hex'); end if;
+ select * into v_message from public.crm_messages where user_id=v_user_id and client_message_id=client_id limit 1;
+ if found then return v_message; end if;
+ if coalesce(c.primary_channel,'funnel_chat')='funnel_chat' then
+   insert into public.crm_messages(conversation_id,user_id,direction,channel,body,metadata,sender_id,client_message_id)
+   values(c.id,v_user_id,'outbound','funnel_chat',v_body,jsonb_build_object('source','crm_operator','mutation','atomic'),v_user_id,client_id)
+   on conflict (user_id,client_message_id) where client_message_id is not null do nothing
+   returning * into v_message;
+   if v_message.id is null then select * into v_message from public.crm_messages where user_id=v_user_id and client_message_id=client_id limit 1; end if;
+   return v_message;
+ end if;
+ if c.channel_account_id is null or c.channel_account_id='' then raise exception 'CHANNEL_ACCOUNT_REQUIRED'; end if;
+ select * into a from public.crm_channel_accounts where id=c.channel_account_id::uuid and user_id=v_user_id and channel=c.primary_channel and status='active' for update;
+ if not found then raise exception 'CHANNEL_ACCOUNT_NOT_FOUND_OR_INACTIVE'; end if;
+ idem:='operator:'||c.id::text||':'||client_id;
+ insert into public.crm_channel_message_outbox(user_id,conversation_id,channel_account_id,channel,external_message_id,idempotency_key,direction,body,status,max_attempts,next_attempt_at,metadata)
+ values(v_user_id,c.id,a.id,c.primary_channel,null,idem,'outbound',v_body,'queued',5,now(),jsonb_build_object('source','crm_operator','client_message_id',client_id))
+ on conflict(user_id,idempotency_key) do update set updated_at=now()
+ returning id into outbox_id;
+ insert into public.crm_messages(conversation_id,user_id,direction,channel,body,metadata,sender_id,client_message_id,provider,channel_account_id)
+ values(c.id,v_user_id,'outbound',c.primary_channel,v_body,jsonb_build_object('source','crm_operator','outbox_id',outbox_id,'delivery_status','queued'),v_user_id,client_id,a.provider,a.id::text)
+ on conflict (user_id,client_message_id) where client_message_id is not null do nothing
+ returning * into v_message;
+ if v_message.id is null then select * into v_message from public.crm_messages where user_id=v_user_id and client_message_id=client_id limit 1; end if;
+ return v_message;
+end; $$;
+
+revoke all on function public.crm_operator_send_message(uuid,text,text) from public,anon;
+grant execute on function public.crm_operator_send_message(uuid,text,text) to authenticated;
