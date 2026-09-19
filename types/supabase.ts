@@ -477,7 +477,8 @@ export type Database = {
           user_id: string
         }
         Update: {
-          action_type?: string | null
+          action_type?: string
+          actor_id?: string | null | null
           attempt_count?: number
           cancellation_reason?: string | null
           cancelled_at?: string | null
@@ -1095,6 +1096,7 @@ export type Database = {
       crm_ai_actions: {
         Row: {
           action_type: string
+          actor_id: string | null
           conversation_id: string | null
           created_at: string
           executed_at: string | null
@@ -1104,6 +1106,7 @@ export type Database = {
           execution_provenance: Json
           id: string
           idempotency_key: string | null
+          organization_id: string
           payload: Json
           rationale: string
           score: number
@@ -1112,6 +1115,7 @@ export type Database = {
         }
         Insert: {
           action_type: string
+          actor_id?: string | null
           conversation_id?: string | null
           created_at?: string
           executed_at?: string | null
@@ -1121,6 +1125,7 @@ export type Database = {
           execution_provenance?: Json
           id?: string
           idempotency_key?: string | null
+          organization_id: string
           payload?: Json
           rationale?: string
           score?: number
@@ -1138,6 +1143,7 @@ export type Database = {
           execution_provenance?: Json
           id?: string
           idempotency_key?: string | null
+          organization_id?: string
           payload?: Json
           rationale?: string
           score?: number
@@ -1941,6 +1947,7 @@ export type Database = {
       crm_predictive_evaluations: {
         Row: {
           actual_conversion: boolean | null
+          actor_id: string | null
           actual_ltv: number | null
           actual_recovery: boolean | null
           conversation_id: string
@@ -1948,6 +1955,7 @@ export type Database = {
           evaluated_at: string | null
           id: string
           model_version: string
+          organization_id: string
           predicted_conversion: number
           predicted_ltv: number
           predicted_recovery: number
@@ -1955,6 +1963,7 @@ export type Database = {
         }
         Insert: {
           actual_conversion?: boolean | null
+          actor_id?: string | null
           actual_ltv?: number | null
           actual_recovery?: boolean | null
           conversation_id: string
@@ -1962,6 +1971,7 @@ export type Database = {
           evaluated_at?: string | null
           id?: string
           model_version: string
+          organization_id: string
           predicted_conversion: number
           predicted_ltv: number
           predicted_recovery: number
@@ -1969,6 +1979,7 @@ export type Database = {
         }
         Update: {
           actual_conversion?: boolean | null
+          actor_id?: string | null
           actual_ltv?: number | null
           actual_recovery?: boolean | null
           conversation_id?: string
@@ -1976,6 +1987,7 @@ export type Database = {
           evaluated_at?: string | null
           id?: string
           model_version?: string
+          organization_id?: string
           predicted_conversion?: number
           predicted_ltv?: number
           predicted_recovery?: number
@@ -9312,10 +9324,28 @@ export type Database = {
         }
         Returns: boolean
       }
+      crm_ai_action_create: {
+        Args: {
+          p_action_type: string
+          p_conversation_id: string
+          p_idempotency_key?: string | null
+          p_payload?: Json
+          p_rationale: string
+          p_score: number
+          p_status?: string
+        }
+        Returns: Json
+      }
+      crm_ai_action_get: { Args: { p_action_id: string }; Returns: Json }
+      crm_ai_actions_list: {
+        Args: { p_conversation_id: string }
+        Returns: Json
+      }
       crm_claim_ai_action: {
         Args: { p_action_id: string }
         Returns: {
           action_type: string
+          actor_id: string | null
           conversation_id: string | null
           created_at: string
           executed_at: string | null
@@ -9325,6 +9355,7 @@ export type Database = {
           execution_provenance: Json
           id: string
           idempotency_key: string | null
+          organization_id: string
           payload: Json
           rationale: string
           score: number
