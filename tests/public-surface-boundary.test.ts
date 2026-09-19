@@ -44,4 +44,15 @@ describe('public checkout/chat security boundary', () => {
     expect(migration).toContain('to service_role')
     expect(migration).not.toMatch(/revoke\s+execute[^;]+from\s+(anon|authenticated)/i)
   })
+  it('revokes direct browser execution after rollout phase B', () => {
+    const migration = readFileSync(
+      'supabase/migrations/20260919203327_revoke_direct_public_rpc_execute.sql',
+      'utf8',
+    )
+
+    expect(migration).toMatch(/revoke\s+execute[\s\S]+from\s+public,\s*anon,\s*authenticated/i)
+    expect(migration.match(/to service_role/g)?.length).toBe(4)
+    expect(migration).not.toMatch(/grant\s+execute[\s\S]+to\s+(anon|authenticated)/i)
+  })
+
 })
