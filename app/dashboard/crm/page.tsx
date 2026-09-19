@@ -43,7 +43,6 @@ export default function CRMPage(){
  const canViewValues=hasOrganizationCapability(access,'can_view_values')
  const canViewCustomers=hasOrganizationCapability(access,'can_view_customers')
  const canManageGateways=hasOrganizationCapability(access,'can_manage_gateways')
- const ownsSelected=Boolean(selectedRecordRef.current?.user_id&&selectedRecordRef.current.user_id===uid)
  useEffect(() => { conversationsRef.current = conversations }, [conversations])
  useEffect(() => () => { requests.current.invalidate() }, [])
 
@@ -161,7 +160,7 @@ export default function CRMPage(){
  }, [load])
 
  useEffect(() => {
-   if (!uid) return
+   if (!uid || !access || !canViewChats) return
    const params = new URLSearchParams(window.location.search)
    const requested = params.get('conversation')?.trim(), recovery = params.get('recovery_event')?.trim()
    if (!requested && !recovery) return
@@ -182,15 +181,32 @@ export default function CRMPage(){
        if (context.status !== 'resolved') throw new Error(context.message)
        conversationId = context.conversationId
      }
-     const result = await supabase.from('crm_conversations').select('*').eq('user_id',uid).eq('id',conversationId!).limit(2)
-     if (!current()) return
-     if (result.error) throw result.error
-     if (result.data?.length !== 1) throw new Error('Não foi possível identificar uma única conversa para este contexto. Selecione a conversa manualmente.')
-     const row = result.data[0] as Conversation
-     setConversations(xs => mergeRows(xs,[row])); setSelectedId(row.id,row)
+     let row=conversationsRef.current.find(item=>item.id===conversationId)??null
+     let cursor:Cursor|null=null
+     for(let page=0;!row&&page<20;page++){
+       const result=await supabase.rpc('crm_multicrm_conversations_page',{
+         p_limit:100,
+         p_cursor_updated_at:cursor?.updated_at??null,
+         p_cursor_id:cursor?.id??null,
+         p_query:null,
+         p_filter:'all',
+         p_agent_id:null,
+         p_team_id:null,
+         p_priority:null,
+       })
+       if(!current())return
+       if(result.error)throw result.error
+       const data=obj(result.data),items=Array.isArray(data.items)?data.items as Conversation[]:[]
+       row=items.find(item=>item.id===conversationId)??null
+       const next=obj(data.next_cursor)
+       cursor=next.updated_at&&next.id?{updated_at:String(next.updated_at),id:String(next.id)}:null
+       if(!data.has_more||!cursor)break
+     }
+     if (!row) throw new Error('Esta conversa não está disponível dentro do seu acesso operacional atual.')
+     setConversations(xs => mergeRows(xs,[row!])); setSelectedId(row.id,row)
    })().catch(cause => { if (current()) setError(String(cause?.message ?? 'Falha ao abrir o contexto de recuperação.')) })
    return () => { requests.current.invalidate('link'); controller.abort() }
- }, [supabase,uid,setSelectedId])
+ }, [supabase,uid,access,canViewChats,setSelectedId])
 
  const activeRecord = conversations.find(c => c.id === selectedId) ?? selectedRecord
  useEffect(() => { selectedRecordRef.current = activeRecord }, [activeRecord])
@@ -198,15 +214,18 @@ export default function CRMPage(){
    if (!selectedId) return
    const current = requests.current.begin('customer')
    void loadMessages(selectedId,true)
+   const record=conversationsRef.current.find(item=>item.id===selectedId)??selectedRecordRef.current
+   const canUseLegacy360=Boolean(record&&record.user_id===uid&&canViewCustomers)
+   if(!canUseLegacy360){setCustomer360(null);setLoading360(false);return()=>{requests.current.invalidate('messages','customer')}}
    setLoading360(true)
    void supabase.rpc('crm_customer_360',{p_conversation_id:selectedId}).then(r => {
      if (!current() || selectedIdRef.current !== selectedId) return
-     if (r.error) { setError(r.error.message); setCustomer360(null) }
+     if (r.error) { setCustomer360(null) }
      else setCustomer360((r.data??null) as Customer360|null)
-   }).catch(() => { if (current()) setError('Falha ao carregar Customer 360.') })
+   }).catch(() => { if (current()) setCustomer360(null) })
      .finally(() => { if (current()) setLoading360(false) })
    return () => { requests.current.invalidate('messages','customer') }
- }, [selectedId,loadMessages,supabase])
+ }, [selectedId,loadMessages,supabase,uid,canViewCustomers])
  const activeTransaction = activeRecord?.transaction_id
  useEffect(() => {
    void loadEvents(selectedRecordRef.current)
@@ -214,7 +233,7 @@ export default function CRMPage(){
  }, [selectedId,activeTransaction,loadEvents])
  const unread = activeRecord?.unread_count ?? 0
  useEffect(() => {
-   if (!selectedId || unread <= 0) return
+   if (!selectedId || unread <= 0 || !canReplyChats) return
    let cancelled = false
    void supabase.rpc('crm_operator_mark_read',{p_conversation_id:selectedId}).then(r => {
      if (cancelled) return
@@ -222,10 +241,10 @@ export default function CRMPage(){
      else setConversations(xs => xs.map(x => x.id === selectedId ? {...x,unread_count:0} : x))
    })
    return () => { cancelled = true }
- }, [selectedId,unread,supabase])
+ }, [selectedId,unread,supabase,canReplyChats])
 
  const reconcile = useCallback(async () => {
-   if (!uid || reconciling.current) return false
+   if (!uid || !access || !canViewChats || reconciling.current) return false
    reconciling.current = true
    const current = requests.current.begin('reconcile')
    setRt('reconnecting')
@@ -237,7 +256,7 @@ export default function CRMPage(){
      if (ok && current()) setRt('synchronized')
      return ok
    } finally { reconciling.current = false }
- }, [uid,loadConversations,loadMessages,loadEvents])
+ }, [uid,access,canViewChats,loadConversations,loadMessages,loadEvents])
  const reconcileRef = useRef(reconcile)
  useEffect(() => { reconcileRef.current = reconcile }, [reconcile])
  useEffect(() => {
