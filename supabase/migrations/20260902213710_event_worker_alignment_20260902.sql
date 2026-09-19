@@ -1,0 +1,1 @@
+create index if not exists idx_integration_events_worker_pick on public.integration_events (created_at) where status in ('pending','failed');

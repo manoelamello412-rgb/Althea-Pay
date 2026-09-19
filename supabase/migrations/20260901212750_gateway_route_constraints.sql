@@ -1,0 +1,1 @@
+create unique index if not exists gateway_routes_unique_scope on public.gateway_routes(user_id,funnel_id,coalesce(product_id,''),gateway_id); create index if not exists gateway_routes_conditions_gin on public.gateway_routes using gin(conditions);

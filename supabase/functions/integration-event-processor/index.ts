@@ -3,7 +3,6 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const internalSecret = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
 const db = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 const aliases: Record<string, string> = { paid: "approved", completed: "approved", success: "approved", refund: "refunded", reversed: "refunded", charged_back: "chargeback" };
 const normalize = (value: unknown) => aliases[String(value ?? "").trim().toLowerCase()] ?? String(value ?? "").trim().toLowerCase();
@@ -11,7 +10,14 @@ const allowed: Record<string, string[]> = { created: ["created", "pending", "app
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
-  if (!internalSecret || req.headers.get("x-internal-secret") !== internalSecret) return json({ ok: false, error: "unauthorized" }, 401);
+  const suppliedSecret = req.headers.get("x-internal-secret") ?? req.headers.get("x-althea-internal-secret") ?? "";
+  if (!suppliedSecret) return json({ ok: false, error: "unauthorized" }, 401);
+  const verified = await db.rpc("verify_althea_internal_secret", { p_secret: suppliedSecret });
+  if (verified.error) return json({ ok: false, error: "internal_auth_unavailable" }, 500);
+  if (verified.data !== true) return json({ ok: false, error: "unauthorized" }, 401);
+  const canonical = await db.rpc("get_althea_internal_secret");
+  if (canonical.error || typeof canonical.data !== "string" || !canonical.data) return json({ ok: false, error: "internal_auth_unavailable" }, 500);
+  const internalSecret = canonical.data;
   let eventId = "";
   try {
     const body = await req.json() as { event_id?: string };
@@ -67,7 +73,7 @@ Deno.serve(async (req) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3500);
     try {
-      const automation = await fetch(`${supabaseUrl}/functions/v1/automation-engine-v2`, { method: "POST", signal: controller.signal, headers: { "content-type": "application/json", "x-internal-secret": internalSecret }, body: JSON.stringify({ user_id: userId, funnel_id: event.funnel_id, event_id: event.id, event_type: event.event_type, transaction_id: transactionId || null, checkout_id: checkoutId || null, external_id: payload.external_id ?? null, payload }) });
+      const automation = await fetch(`${supabaseUrl}/functions/v1/automation-engine-v2`, { method: "POST", signal: controller.signal, headers: { "content-type": "application/json", "x-internal-secret": internalSecret }, body: JSON.stringify({ user_id: userId, organization_id: event.organization_id, funnel_id: event.funnel_id, event_id: event.id, event_type: event.event_type, transaction_id: transactionId || null, checkout_id: checkoutId || null, external_id: payload.external_id ?? null, payload }) });
       if (!automation.ok) throw new Error(`automation_http_${automation.status}`);
     } finally {
       clearTimeout(timer);

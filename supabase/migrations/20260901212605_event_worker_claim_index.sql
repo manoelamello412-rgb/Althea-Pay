@@ -1,0 +1,1 @@
+create index if not exists integration_events_retry_due_idx on public.integration_events(next_retry_at,created_at) where status='retry' and next_retry_at is not null; create index if not exists integration_events_processing_stale_idx on public.integration_events(claimed_at) where status='processing' and claimed_at is not null;

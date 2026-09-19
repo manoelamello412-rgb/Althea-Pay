@@ -1,5 +1,3 @@
--- CRM recovery messages must use the canonical internal channel.
--- The crm_messages.channel CHECK does not allow the legacy 'system' value.
 DO $$
 declare
   v_def text;

@@ -1,0 +1,7 @@
+create unique index if not exists funnel_connections_user_funnel_uidx on public.funnel_connections(user_id,funnel_id);
+create index if not exists integration_events_funnel_created_idx on public.integration_events(funnel_id,created_at desc);
+create index if not exists integration_events_user_created_idx on public.integration_events(user_id,created_at desc);
+create index if not exists integration_events_external_idx on public.integration_events(funnel_id,external_id);
+create or replace function public.ensure_funnel_connection() returns trigger language plpgsql security definer set search_path=public as $$ begin insert into public.funnel_connections(user_id,funnel_id,connection_type,status,config,last_event_at,created_at,updated_at) values(new.user_id,new.id,'webhook','active','{}'::jsonb,null,now(),now()) on conflict(user_id,funnel_id) do update set status=case when public.funnel_connections.status='disconnected' then 'active' else public.funnel_connections.status end, updated_at=now(); return new; end; $$;
+drop trigger if exists trg_ensure_funnel_connection on public.funnels;
+create trigger trg_ensure_funnel_connection after insert on public.funnels for each row execute function public.ensure_funnel_connection();

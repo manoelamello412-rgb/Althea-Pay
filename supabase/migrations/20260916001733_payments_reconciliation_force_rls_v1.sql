@@ -1,0 +1,1 @@
+alter table public.reconciliation_items force row level security;

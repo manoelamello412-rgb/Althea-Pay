@@ -1,0 +1,4 @@
+CREATE INDEX IF NOT EXISTS idx_gateway_interchange_fees_gateway_fk ON public.gateway_interchange_fees(gateway_id);
+CREATE INDEX IF NOT EXISTS idx_gateway_orchestration_traces_transaction_fk ON public.gateway_orchestration_traces(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_gateway_orchestration_traces_funnel_fk ON public.gateway_orchestration_traces(funnel_id);
+DROP POLICY IF EXISTS gateway_interchange_fees_select_own ON public.gateway_interchange_fees;

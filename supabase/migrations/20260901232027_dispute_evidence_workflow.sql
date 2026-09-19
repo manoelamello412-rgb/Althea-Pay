@@ -1,0 +1,5 @@
+create table if not exists public.dispute_evidence (id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade, dispute_id uuid not null references public.disputes(id) on delete cascade, evidence_type text not null, title text not null, content text, storage_path text, metadata jsonb not null default '{}'::jsonb, created_at timestamptz not null default now());
+alter table public.dispute_evidence enable row level security;
+do $$ begin if not exists (select 1 from pg_policies where schemaname='public' and tablename='dispute_evidence' and policyname='dispute_evidence_owner_read') then create policy dispute_evidence_owner_read on public.dispute_evidence for select to authenticated using (user_id=auth.uid()); end if; end $$;
+create index if not exists dispute_evidence_dispute_idx on public.dispute_evidence(dispute_id, created_at desc);
+create index if not exists dispute_evidence_user_idx on public.dispute_evidence(user_id, created_at desc);

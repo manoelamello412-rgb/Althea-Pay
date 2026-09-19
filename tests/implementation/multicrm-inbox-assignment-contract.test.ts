@@ -15,7 +15,7 @@ describe('Multi-CRM inbox operational contracts',()=>{
   })
 
   it('preserves explicit unassignment and concurrency semantics in the canonical RPC migration',()=>{
-    const migration=read('supabase/migrations/20260911190000_crm_assignment_concurrency_unassignment_sync_v1.sql')
+    const migration=read('supabase/migrations/20260911062247_crm_assignment_concurrency_unassignment_sync_v1.sql')
     expect(migration).toContain('set assigned_to=p_agent_id')
     expect(migration).toContain('pg_advisory_xact_lock')
     expect(migration).toContain("when p_team_id is null then coalesce(metadata,'{}'::jsonb) - 'team_id'")
@@ -25,7 +25,7 @@ describe('Multi-CRM inbox operational contracts',()=>{
   })
 
   it('keeps team reads tenant-scoped through RLS while granting the required table privilege',()=>{
-    const migration=read('supabase/migrations/20260911152500_crm_team_select_grant_v1.sql')
+    const migration=read('supabase/migrations/20260911061436_crm_team_select_grant_v1.sql')
     const page=read('app/dashboard/crm/page.tsx')
     expect(migration).toContain('grant select on table public.crm_teams to authenticated')
     expect(page).toContain(".eq('user_id',id)")

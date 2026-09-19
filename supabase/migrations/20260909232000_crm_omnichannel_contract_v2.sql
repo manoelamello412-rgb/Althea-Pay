@@ -1,0 +1,11 @@
+create table if not exists public.crm_channel_accounts (id uuid primary key default gen_random_uuid(), user_id uuid not null, channel text not null check (channel in ('funnel_chat','whatsapp','instagram','messenger','email','sms')), provider text not null, external_account_id text, display_name text, status text not null default 'active' check (status in ('active','inactive','error')), credentials_ref text, metadata jsonb not null default '{}'::jsonb, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create unique index if not exists crm_channel_accounts_user_provider_external_idx on public.crm_channel_accounts(user_id,channel,provider,external_account_id) where external_account_id is not null;
+create table if not exists public.crm_channel_identities (id uuid primary key default gen_random_uuid(), user_id uuid not null, customer_id text, conversation_id uuid references public.crm_conversations(id) on delete set null, channel text not null, external_user_id text not null, phone_e164 text, email text, display_name text, metadata jsonb not null default '{}'::jsonb, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create unique index if not exists crm_channel_identities_user_channel_external_idx on public.crm_channel_identities(user_id,channel,external_user_id);
+create index if not exists crm_channel_identities_user_customer_idx on public.crm_channel_identities(user_id,customer_id);
+alter table public.crm_channel_accounts enable row level security;
+alter table public.crm_channel_identities enable row level security;
+drop policy if exists crm_channel_accounts_owner on public.crm_channel_accounts;
+create policy crm_channel_accounts_owner on public.crm_channel_accounts for all to authenticated using (user_id=auth.uid()) with check (user_id=auth.uid());
+drop policy if exists crm_channel_identities_owner on public.crm_channel_identities;
+create policy crm_channel_identities_owner on public.crm_channel_identities for all to authenticated using (user_id=auth.uid()) with check (user_id=auth.uid());

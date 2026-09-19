@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS crm_messages_user_provider_external_id_uq ON public.crm_messages(user_id,provider,external_message_id) WHERE external_message_id IS NOT NULL;

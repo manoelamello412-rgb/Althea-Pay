@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.idx_gateway_payment_attempts_tenant_gateway;

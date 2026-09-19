@@ -1,0 +1,1 @@
+create index if not exists gateway_payment_links_user_status_idx on public.gateway_payment_links(user_id,status,created_at desc);

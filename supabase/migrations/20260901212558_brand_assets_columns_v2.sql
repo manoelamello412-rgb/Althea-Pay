@@ -1,0 +1,1 @@
+alter table public.brand_identity_settings add column if not exists logo_light_url text not null default '/althea-mark.svg', add column if not exists logo_dark_url text not null default '/althea-mark.svg', add column if not exists favicon_url text not null default '/althea-mark.svg';

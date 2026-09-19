@@ -1,6 +1,8 @@
+-- Remove redundant permissive SELECT policies; the ALL owner policy already covers SELECT.
 drop policy if exists gateway_transactions_select_own on public.gateway_transactions;
 drop policy if exists sales_select_own on public.sales;
 
+-- Keep auth.uid() as an initplan so it is evaluated once per statement rather than once per row.
 alter policy gateway_payment_attempts_select_own on public.gateway_payment_attempts using (user_id = (select auth.uid()));
 alter policy outbound_webhook_deliveries_select_own on public.outbound_webhook_deliveries using (user_id = (select auth.uid()));
 alter policy outbound_webhooks_select_own on public.outbound_webhooks using (user_id = (select auth.uid()));
@@ -12,10 +14,12 @@ alter policy reconciliation_runs_owner_read on public.reconciliation_runs using 
 alter policy risk_assessments_select_own on public.risk_assessments using (user_id = (select auth.uid()));
 alter policy transaction_routing_logs_select_own on public.transaction_routing_logs using (user_id = (select auth.uid()));
 
+-- Cover foreign-key columns used by high-volume/internal relations.
 create index if not exists core_job_queue_user_id_idx on public.core_job_queue(user_id);
 create index if not exists gateway_health_snapshots_user_id_idx on public.gateway_health_snapshots(user_id);
 create index if not exists gateway_payment_attempts_routing_rule_id_idx on public.gateway_payment_attempts(routing_rule_id);
 create index if not exists transaction_audit_events_actor_user_id_idx on public.transaction_audit_events(actor_user_id);
 
+-- Remove exact duplicate indexes; retain the canonical/older index names used by existing migrations.
 drop index if exists public.gateway_transactions_user_idempotency_idx;
 drop index if exists public.transaction_audit_events_type_created_idx;

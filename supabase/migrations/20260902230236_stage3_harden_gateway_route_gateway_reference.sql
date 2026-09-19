@@ -1,0 +1,1 @@
+ALTER TABLE public.gateway_routes DROP CONSTRAINT IF EXISTS gateway_routes_gateway_id_fkey; ALTER TABLE public.gateway_routes ADD CONSTRAINT gateway_routes_gateway_id_fkey FOREIGN KEY (gateway_id) REFERENCES public.gateways(id) ON DELETE RESTRICT;

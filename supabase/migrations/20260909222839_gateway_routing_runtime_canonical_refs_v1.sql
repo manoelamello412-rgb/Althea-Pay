@@ -1,0 +1,1 @@
+create or replace function public.gateway_routing_graph_validate_target_refs(p_graph jsonb) returns boolean language plpgsql immutable as $$ begin return public.gateway_routing_graph_validator_v4(p_graph); exception when others then return false; end $$;

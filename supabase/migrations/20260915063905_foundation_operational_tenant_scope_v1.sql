@@ -1,6 +1,3 @@
--- Foundation: organization tenant scope for core operational surfaces.
--- Provider-agnostic; user_id remains actor/creator identity.
-
 alter table public.funnels add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
 alter table public.products add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
 alter table public.sales add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
@@ -40,6 +37,7 @@ alter table public.api_keys alter column organization_id set not null;
 alter table public.funnel_connections alter column organization_id set not null;
 alter table public.funnel_ingestion_tokens alter column organization_id set not null;
 
+-- Canonical operational RLS: organization membership is the tenant boundary; user_id remains the actor/creator identity.
 drop policy if exists owner_select on public.funnels; drop policy if exists owner_insert on public.funnels; drop policy if exists owner_update on public.funnels; drop policy if exists owner_delete on public.funnels;
 create policy tenant_select on public.funnels for select to authenticated using (private.is_org_member(organization_id));
 create policy tenant_insert on public.funnels for insert to authenticated with check (private.has_org_role(organization_id,array['owner','admin','manager','operator']));
@@ -73,13 +71,20 @@ create policy tenant_audit_read on public.audit_logs for select to authenticated
 drop policy if exists owner_select on public.api_keys;
 create policy tenant_api_key_read on public.api_keys for select to authenticated using (private.is_org_member(organization_id));
 
-drop policy if exists owner_select on public.funnel_connections; drop policy if exists owner_insert on public.funnel_connections; drop policy if exists owner_update on public.funnel_connections; drop policy if exists owner_delete on public.funnel_connections;
+drop policy if exists owner_select on public.funnel_connections;
+drop policy if exists owner_insert on public.funnel_connections;
+drop policy if exists owner_update on public.funnel_connections;
+drop policy if exists owner_delete on public.funnel_connections;
 create policy tenant_select on public.funnel_connections for select to authenticated using (private.is_org_member(organization_id));
 create policy tenant_insert on public.funnel_connections for insert to authenticated with check (private.has_org_role(organization_id,array['owner','admin','manager','operator']));
 create policy tenant_update on public.funnel_connections for update to authenticated using (private.has_org_role(organization_id,array['owner','admin','manager','operator'])) with check (private.has_org_role(organization_id,array['owner','admin','manager','operator']));
 create policy tenant_delete on public.funnel_connections for delete to authenticated using (private.has_org_role(organization_id,array['owner','admin']));
 
-drop policy if exists owner_select on public.funnel_ingestion_tokens; drop policy if exists owner_insert on public.funnel_ingestion_tokens; drop policy if exists owner_update on public.funnel_ingestion_tokens; drop policy if exists owner_delete on public.funnel_ingestion_tokens;
+-- Ingestion tokens are secrets; authenticated clients may not read or mutate them directly.
+drop policy if exists owner_select on public.funnel_ingestion_tokens;
+drop policy if exists owner_insert on public.funnel_ingestion_tokens;
+drop policy if exists owner_update on public.funnel_ingestion_tokens;
+drop policy if exists owner_delete on public.funnel_ingestion_tokens;
 
 create or replace function public.provision_funnel_atomic(p_name text,p_url text,p_connection_type text,p_funnel_type text,p_event_endpoint text)
 returns jsonb language plpgsql security definer set search_path=public as $$

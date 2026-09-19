@@ -1,0 +1,10 @@
+create table if not exists public.funnel_ingestion_tokens ( id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade, funnel_id text not null, token_prefix text not null, token_hash text not null, enabled boolean not null default true, expires_at timestamptz, last_used_at timestamptz, created_at timestamptz not null default now(), revoked_at timestamptz, unique(user_id, token_hash) );
+create index if not exists funnel_ingestion_tokens_lookup_idx on public.funnel_ingestion_tokens(token_hash) where enabled = true;
+create index if not exists funnel_ingestion_tokens_funnel_idx on public.funnel_ingestion_tokens(user_id,funnel_id) where enabled = true;
+alter table public.funnel_ingestion_tokens enable row level security;
+create policy funnel_ingestion_tokens_owner_select on public.funnel_ingestion_tokens for select to authenticated using (user_id = auth.uid());
+create policy funnel_ingestion_tokens_owner_insert on public.funnel_ingestion_tokens for insert to authenticated with check (user_id = auth.uid());
+create policy funnel_ingestion_tokens_owner_update on public.funnel_ingestion_tokens for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+create or replace function public.resolve_funnel_ingestion_token(p_token_hash text) returns table(user_id uuid, funnel_id text, token_id uuid) language sql security definer set search_path=public as $$ select t.user_id,t.funnel_id,t.id from public.funnel_ingestion_tokens t where t.token_hash=p_token_hash and t.enabled=true and (t.expires_at is null or t.expires_at>now()) limit 1 $$;
+revoke all on function public.resolve_funnel_ingestion_token(text) from public, anon, authenticated;
+grant execute on function public.resolve_funnel_ingestion_token(text) to service_role;

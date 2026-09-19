@@ -1,0 +1,1 @@
+create or replace function public.can_run_reconciliation() returns boolean language sql security definer set search_path=public as $$ select public.get_althea_internal_secret() is not null $$; revoke all on function public.can_run_reconciliation() from public,anon,authenticated; grant execute on function public.can_run_reconciliation() to service_role;

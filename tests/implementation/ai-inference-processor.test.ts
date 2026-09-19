@@ -5,7 +5,7 @@ const processorPath = 'lib/crm/ai-inference-processor.ts'
 const providerPath = 'lib/crm/ai/provider.ts'
 const executionPath = 'app/api/crm/ai-agent/execute/route.ts'
 const kernelPath = 'services/iara-agent/execution-kernel.ts'
-const migrationPath = 'supabase/migrations/20260910009000_crm_ai_action_channel_aware_execution_v3.sql'
+const migrationPath = 'supabase/migrations/20260910021055_crm_ai_action_channel_aware_execution_v3.sql'
 
 describe('AI Revenue Agent inference contracts', () => {
   it('uses the canonical action vocabulary and strict unknown validation', async () => {

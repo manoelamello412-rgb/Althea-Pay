@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 describe('CRM assignment concurrency contract', () => {
   it('serializes assignment mutations and makes null team/agent an explicit clear', () => {
     const root = resolve(process.cwd())
-    const migration = readFileSync(resolve(root, 'supabase/migrations/20260911000000_crm_assignment_concurrency_and_unassignment_v2.sql'), 'utf8')
+    const migration = readFileSync(resolve(root, 'supabase/migrations/20260911061706_crm_assignment_concurrency_and_unassignment_v2.sql'), 'utf8')
 
     expect(migration).toContain('pg_advisory_xact_lock(hashtextextended(p_conversation_id::text, 0))')
     expect(migration).toContain('assigned_to=p_agent_id')
