@@ -14,6 +14,10 @@ describe('CRM capability authorization rollout', () => {
     'supabase/migrations/20260919210148_fix_organization_access_rpc_private_schema.sql',
     'utf8',
   )
+  const readSurface = readFileSync(
+    'supabase/migrations/20260919210716_harden_crm_capability_read_surface.sql',
+    'utf8',
+  )
 
   it('moves CRM reads to organization scope plus effective capabilities', () => {
     expect(core).toContain('crm_conversations_org_read')
@@ -53,4 +57,14 @@ describe('CRM capability authorization rollout', () => {
     expect(accessFix).toContain('security definer')
     expect(accessFix).toMatch(/grant execute on function public\.organization_my_access_v1\(uuid\) to authenticated/i)
   })
+  it('keeps non-owner direct table reads closed and redacts capability-sensitive metadata', () => {
+    expect(readSurface).toContain('crm_conversations_owner_read')
+    expect(readSurface).toContain('crm_messages_owner_read')
+    expect(readSurface).toContain('private.redact_crm_metadata')
+    expect(readSurface).toContain('can_view_values')
+    expect(readSurface).toContain('can_view_customers')
+    expect(readSurface).toContain("- 'public_token'")
+    expect(readSurface).toContain("'gateway_error_log'")
+  })
+
 })
