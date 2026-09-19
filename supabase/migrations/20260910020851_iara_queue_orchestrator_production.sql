@@ -1,0 +1,15 @@
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS pgmq;
+SELECT pgmq.create('iara-telemetry-process') WHERE NOT EXISTS (SELECT 1 FROM pgmq.list_queues() WHERE queue_name='iara-telemetry-process');
+SELECT pgmq.create('iara-crm-injection') WHERE NOT EXISTS (SELECT 1 FROM pgmq.list_queues() WHERE queue_name='iara-crm-injection');
+SELECT pgmq.create('iara-financial-pix-retry') WHERE NOT EXISTS (SELECT 1 FROM pgmq.list_queues() WHERE queue_name='iara-financial-pix-retry');
+SELECT pgmq.create('iara-dead-letter') WHERE NOT EXISTS (SELECT 1 FROM pgmq.list_queues() WHERE queue_name='iara-dead-letter');
+CREATE TABLE IF NOT EXISTS public.iara_queue_jobs(id UUID PRIMARY KEY,tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,idempotency_key UUID NOT NULL,queue_type TEXT NOT NULL CHECK(queue_type IN('TELEMETRY_PROCESS','CRM_INJECTION','FINANCIAL_PIX_RETRY')),payload JSONB NOT NULL DEFAULT '{}'::jsonb,attempts_made INTEGER NOT NULL DEFAULT 0 CHECK(attempts_made>=0),max_attempts INTEGER NOT NULL DEFAULT 5 CHECK(max_attempts BETWEEN 1 AND 20),status TEXT NOT NULL DEFAULT 'QUEUED' CHECK(status IN('QUEUED','PROCESSING','COMPLETED','RETRYING','DEAD_LETTER')),last_error_code TEXT,last_error_message TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),completed_at TIMESTAMPTZ,CONSTRAINT iara_queue_job_idempotency_unique UNIQUE(tenant_id,idempotency_key));
+CREATE INDEX IF NOT EXISTS idx_iara_queue_jobs_tenant_status_created ON public.iara_queue_jobs(tenant_id,status,created_at DESC); CREATE INDEX IF NOT EXISTS idx_iara_queue_jobs_queue_status ON public.iara_queue_jobs(queue_type,status,created_at ASC);
+CREATE TABLE IF NOT EXISTS public.iara_queue_dead_letters(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),job_id UUID NOT NULL REFERENCES public.iara_queue_jobs(id) ON DELETE RESTRICT,tenant_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,queue_type TEXT NOT NULL,attempts_made INTEGER NOT NULL,payload JSONB NOT NULL,error_code TEXT,error_message TEXT,quarantined_at TIMESTAMPTZ NOT NULL DEFAULT now(),CONSTRAINT iara_queue_dlq_job_unique UNIQUE(job_id));
+CREATE INDEX IF NOT EXISTS idx_iara_queue_dlq_tenant_quarantined ON public.iara_queue_dead_letters(tenant_id,quarantined_at DESC);
+ALTER TABLE public.iara_queue_jobs ENABLE ROW LEVEL SECURITY; ALTER TABLE public.iara_queue_dead_letters ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS iara_queue_jobs_select_own ON public.iara_queue_jobs; CREATE POLICY iara_queue_jobs_select_own ON public.iara_queue_jobs FOR SELECT TO authenticated USING(tenant_id=auth.uid());
+DROP POLICY IF EXISTS iara_queue_dlq_select_own ON public.iara_queue_dead_letters; CREATE POLICY iara_queue_dlq_select_own ON public.iara_queue_dead_letters FOR SELECT TO authenticated USING(tenant_id=auth.uid());
+REVOKE INSERT,UPDATE,DELETE ON public.iara_queue_jobs FROM anon,authenticated; REVOKE INSERT,UPDATE,DELETE ON public.iara_queue_dead_letters FROM anon,authenticated;
+COMMIT;

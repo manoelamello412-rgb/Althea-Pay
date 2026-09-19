@@ -1,0 +1,2 @@
+alter table public.iara_funnel_drafts add column if not exists funnel_id text references public.funnels(id);
+create index if not exists iara_funnel_drafts_funnel_idx on public.iara_funnel_drafts(funnel_id);
