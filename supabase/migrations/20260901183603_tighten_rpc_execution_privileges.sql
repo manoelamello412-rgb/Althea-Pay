@@ -1,0 +1,15 @@
+revoke execute on function public.broadcast_funnel_health() from public;
+revoke execute on function public.broadcast_funnel_health() from anon;
+revoke execute on function public.broadcast_funnel_health() from authenticated;
+revoke execute on function public.broadcast_integration_event() from public;
+revoke execute on function public.broadcast_integration_event() from anon;
+revoke execute on function public.broadcast_integration_event() from authenticated;
+revoke execute on function public.ensure_funnel_connection() from public;
+revoke execute on function public.ensure_funnel_connection() from anon;
+revoke execute on function public.ensure_funnel_connection() from authenticated;
+revoke execute on function public.get_funnel_connection_health(uuid) from public;
+revoke execute on function public.get_funnel_connection_health(uuid) from anon;
+revoke execute on function public.get_funnel_connection_health(uuid) from authenticated;
+revoke execute on function public.register_integration_event(text,text,text,jsonb,timestamptz) from public;
+revoke execute on function public.register_integration_event(text,text,text,jsonb,timestamptz) from anon;
+revoke execute on function public.register_integration_event(text,text,text,jsonb,timestamptz) from authenticated;

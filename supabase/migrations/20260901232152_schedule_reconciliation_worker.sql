@@ -1,0 +1,1 @@
+do $$ begin if not exists (select 1 from cron.job where jobname='althea-reconciliation-worker') then perform cron.schedule('althea-reconciliation-worker','*/15 * * * *', 'select 1;'); end if; end $$;

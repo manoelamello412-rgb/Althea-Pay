@@ -1,0 +1,2 @@
+create unique index if not exists checkout_sessions_user_id_idempotency_key_uidx on public.checkout_sessions (user_id, ((metadata ->> 'idempotency_key'))) where metadata ? 'idempotency_key';
+create index if not exists checkout_events_checkout_id_created_at_idx on public.checkout_events (checkout_id, created_at desc);

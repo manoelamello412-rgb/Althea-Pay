@@ -1,0 +1,1 @@
+comment on table public.reconciliation_runs is 'Financial mirror reconciliation runs. Worker invocation is authenticated with Vault-backed ALTHEA_INTERNAL_SECRET.';
