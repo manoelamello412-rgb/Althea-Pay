@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const migration = readFileSync(
-  resolve(process.cwd(), 'supabase/migrations/20260911070000_crm_multicrm_keyset_pagination_v1.sql'),
+  resolve(process.cwd(), 'supabase/migrations/20260911062301_crm_multicrm_keyset_pagination_v1.sql'),
   'utf8',
 ).toLowerCase()
 
