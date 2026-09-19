@@ -55,8 +55,9 @@ const client = {
 
 const idA = '11111111-1111-4111-8111-111111111111'
 const idB = '22222222-2222-4222-8222-222222222222'
-const conversation = (id: string, name: string) => ({ id, buyer_name:name, user_id:'owner', transaction_id:`tx-${id}`, updated_at:'2026-09-19', created_at:'2026-09-19', status:'open', unread_count:0, metadata:{} })
+const conversation = (id: string, name: string) => ({ id, organization_id:'org-owner', buyer_name:name, buyer_email:null, customer_whatsapp:null, funnel_id:null, product_id:null, public_token:null, user_id:'owner', transaction_id:`tx-${id}`, updated_at:'2026-09-19', created_at:'2026-09-19', last_message_at:null, status:'open', unread_count:0, assigned_to:null, metadata:{} })
 const a = conversation(idA,'Cliente A'), b = conversation(idB,'Cliente B')
+const organizationAccess={organization_id:'org-owner',user_id:'owner',role:'owner',capabilities:{can_view_chats:true,can_reply_chats:true,can_view_values:true,can_manage_gateways:true,can_change_funnel_gateway:true,can_view_customers:true,can_manage_members:true,can_view_audit:true,can_manage_funnels:true,can_manage_products:true,can_manage_automations:true,can_manage_integrations:true},operational_history_hours:2160,retention_policy:'separate_from_visibility'}
 const deferred = <T,>() => {
   let resolve!: (value: T) => void
   const promise = new Promise<T>(done => { resolve=done })
@@ -77,7 +78,7 @@ beforeEach(() => {
   mock.subscribe=undefined; window.history.replaceState(null,'','/dashboard/crm')
   Object.assign(globalThis,{ IS_REACT_ACT_ENVIRONMENT:true })
   container=document.createElement('div');document.body.append(container);root=createRoot(container)
-  mock.rpc.mockImplementation(async (name: string) => ({ data: name === 'crm_multicrm_conversations_page' ? { items:[a,b],has_more:false } : name === 'crm_multicrm_messages_page' ? {items:[],has_more:false} : {}, error:null }))
+  mock.rpc.mockImplementation(async (name: string) => ({ data: name === 'organization_my_access_v1' ? organizationAccess : name === 'crm_multicrm_conversations_page' ? { items:[a,b],has_more:false } : name === 'crm_multicrm_messages_page' ? {items:[],has_more:false} : {}, error:null }))
   mock.exchange.mockResolvedValue({error:null});mock.getSession.mockResolvedValue({data:{session:{access_token:'test'}},error:null})
 })
 afterEach(async () => { await act(async () => root.unmount());container.remove();vi.useRealTimers();vi.unstubAllGlobals() })
@@ -119,6 +120,7 @@ describe('CRM stability', () => {
   it('ignores an older search response without reconnecting realtime', async () => {
     const stale=deferred<any>()
     mock.rpc.mockImplementation(async (name: string,args: Row) => {
+      if(name==='organization_my_access_v1')return {data:organizationAccess,error:null}
       if(name!=='crm_multicrm_conversations_page')return {data:{},error:null}
       if(args.p_query==='old')return stale.promise
       return {data:{items:args.p_query==='new'?[b]:[a,b],has_more:false},error:null}
@@ -134,7 +136,7 @@ describe('CRM stability', () => {
     expect(mock.channels).toHaveBeenCalledTimes(1)
   })
   it('appends pages without resetting the list or recreating subscriptions; reconnect keeps loaded pages', async () => {
-    mock.rpc.mockImplementation(async (name: string, args: Row) => ({ data:name==='crm_multicrm_conversations_page' ? args.p_cursor_id ? {items:[b],has_more:false} : {items:[a],has_more:true,next_cursor:{id:idA,updated_at:a.updated_at}} : {items:[],has_more:false},error:null }))
+    mock.rpc.mockImplementation(async (name: string, args: Row) => ({ data:name==='organization_my_access_v1' ? organizationAccess : name==='crm_multicrm_conversations_page' ? args.p_cursor_id ? {items:[b],has_more:false} : {items:[a],has_more:true,next_cursor:{id:idA,updated_at:a.updated_at}} : {items:[],has_more:false},error:null }))
     await mount(CRMPage)
     await click('Carregar mais conversas')
     expect(container.textContent).toContain('Cliente A');expect(container.textContent).toContain('Cliente B')
@@ -150,6 +152,7 @@ describe('CRM stability', () => {
     const oldMessages=deferred<any>(),oldCustomer=deferred<any>()
     let messageCalls=0,customerCalls=0
     mock.rpc.mockImplementation(async (name: string,args: Row) => {
+      if(name==='organization_my_access_v1')return {data:organizationAccess,error:null}
       if(name==='crm_multicrm_conversations_page')return {data:{items:[a,b]},error:null}
       if(name==='crm_multicrm_messages_page') {
         if(args.p_conversation_id===idA && ++messageCalls===1)return oldMessages.promise
@@ -185,10 +188,10 @@ describe('CRM stability', () => {
     await mount(CRMPage)
     expect(mock.rpc).toHaveBeenCalledWith('crm_customer_360',{p_conversation_id:idB})
     expect(mock.rpc).not.toHaveBeenCalledWith('crm_customer_360',{p_conversation_id:idA})
-    expect(mock.reads).not.toHaveBeenCalledWith('crm_webhook_events')
+    expect(mock.reads).toHaveBeenCalledWith('crm_webhook_events')
     expect(mock.fetch).toHaveBeenCalledWith('/api/crm/recovery/opportunities?days=30',expect.objectContaining({cache:'no-store'}))
     expect(mock.fetch.mock.calls.every(([,options])=>!options?.method||options.method==='GET')).toBe(true)
-    expect(mock.rpc.mock.calls.every(([name])=>['crm_multicrm_conversations_page','crm_multicrm_messages_page','crm_customer_360'].includes(name))).toBe(true)
+    expect(mock.rpc.mock.calls.every(([name])=>['organization_my_access_v1','crm_multicrm_conversations_page','crm_multicrm_messages_page','crm_customer_360'].includes(name))).toBe(true)
   })
   it.each([
     {context_status:'unlinked',conversation_id:null},
@@ -206,18 +209,22 @@ describe('CRM stability', () => {
     mock.fetch.mockResolvedValue({ok:true,json:async()=>({opportunities:[{event_id:idA,transaction_id:a.transaction_id,buyer_email:'shared@example.com',...context}]})})
     await mount(CRMPage)
     expect(container.textContent).toContain('Selecione a conversa manualmente')
-    expect(mock.rpc.mock.calls.every(([name])=>name==='crm_multicrm_conversations_page')).toBe(true)
+    expect(mock.rpc.mock.calls.every(([name])=>['organization_my_access_v1','crm_multicrm_conversations_page'].includes(name))).toBe(true)
     expect(mock.reads).not.toHaveBeenCalledWith('crm_webhook_events')
     expect(mock.reads).not.toHaveBeenCalledWith('crm_conversations')
     expect(mock.fetch.mock.calls.every(([,options])=>!options?.method||options.method==='GET')).toBe(true)
   })
-  it('does not bypass ownership when the canonical conversation is not accessible', async () => {
+  it('does not bypass organization access when the canonical conversation is not accessible', async () => {
     window.history.replaceState(null,'',`/dashboard/crm?recovery_event=${idA}`)
-    mock.tables.crm_conversations=[{...b,user_id:'another-owner'}]
     mock.fetch.mockResolvedValue({ok:true,json:async()=>({opportunities:[{event_id:idA,context_status:'resolved',conversation_id:idB}]})})
+    mock.rpc.mockImplementation(async (name: string) => {
+      if(name==='organization_my_access_v1')return {data:organizationAccess,error:null}
+      if(name==='crm_multicrm_conversations_page')return {data:{items:[a],has_more:false},error:null}
+      return {data:{},error:null}
+    })
     await mount(CRMPage)
     expect(mock.rpc.mock.calls.some(([name])=>name==='crm_customer_360')).toBe(false)
-    expect(container.textContent).toContain('Selecione a conversa manualmente')
+    expect(container.textContent).toContain('não está disponível dentro do seu acesso operacional')
   })
   it('keeps manual selection when the recovery response arrives late', async () => {
     const response=deferred<any>()
