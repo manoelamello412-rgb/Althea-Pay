@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { authLink, nextFromSearch } from '@/lib/auth/navigation'
 import BrandLogo from '@/components/brand-logo'
 import { createSupabaseBrowserClient } from '../../lib/supabase/client'
 
@@ -48,7 +49,7 @@ export default function LoginPage() {
           return
         }
         setMessage('Login realizado. Abrindo seu painel...')
-        router.replace('/dashboard')
+        router.replace(nextFromSearch(window.location.search))
         router.refresh()
       } else {
         if (password.length < 6) {
@@ -73,7 +74,7 @@ export default function LoginPage() {
         if (error) throw error
         if (data.session) {
           setMessage('Conta criada e acesso liberado. Abrindo seu painel...')
-          router.replace('/dashboard')
+          router.replace(nextFromSearch(window.location.search))
           router.refresh()
         } else {
           setMessage('Conta criada. Se a confirmação por e-mail estiver ativada, será necessário confirmar o endereço antes de entrar.')
@@ -102,7 +103,7 @@ export default function LoginPage() {
           {mode === 'signup' && <label>Sexo<select value={gender} onChange={e => setGender(e.target.value as Gender | '')} required><option value="" disabled>Selecione</option><option value="F">Feminino</option><option value="M">Masculino</option></select></label>}
           <label>E-mail<input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required /></label>
           <label>Senha<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} required /></label>
-          {mode === 'login' && <button type="button" className="auth-switch auth-forgot" onClick={() => router.push('/forgot-password')}>Esqueci minha senha</button>}
+          {mode === 'login' && <button type="button" className="auth-switch auth-forgot" onClick={() => router.push(authLink('/forgot-password', window.location.search))}>Esqueci minha senha</button>}
           {error && <div className="auth-error" role="alert">{error}</div>}
           {message && <div className="auth-message" role="status">{message}</div>}
           <button className="primary auth-submit" type="submit" disabled={loading}>{loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar conta'}</button>

@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { authLink } from '@/lib/auth/navigation'
 import { createSupabaseBrowserClient } from '../../lib/supabase/client'
 
 const getSiteUrl = () => {
@@ -27,7 +28,7 @@ export default function ForgotPasswordPage() {
     if (!supabase) { setError('O ALTHEA PAY ainda não está conectado ao Supabase neste ambiente.'); return }
     setLoading(true)
     try {
-      const redirectTo = `${getSiteUrl()}/reset-password`
+      const redirectTo = `${getSiteUrl()}${authLink('/reset-password', window.location.search)}`
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo })
       if (error) throw error
       setLastSentAt(now)
@@ -49,6 +50,6 @@ export default function ForgotPasswordPage() {
       {message&&<div className="auth-message" role="status">{message}</div>}
       <button className="primary auth-submit" disabled={loading}>{loading?'Enviando...':'Enviar link de recuperação'}</button>
     </form>
-    <button type="button" className="auth-switch" onClick={()=>router.push('/login')}>← Voltar para o login</button>
+    <button type="button" className="auth-switch" onClick={()=>router.push(authLink('/login', window.location.search))}>← Voltar para o login</button>
   </section></main>
 }

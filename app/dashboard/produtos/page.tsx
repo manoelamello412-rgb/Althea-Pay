@@ -48,7 +48,7 @@ export default function ProductsPage() {
     setSaving(true); setError(''); setNotice('')
     const amount = Number(form.unit_amount.replace(',', '.'))
     if (!form.name.trim() || !Number.isFinite(amount) || amount < 0 || !/^[A-Z]{3}$/.test(form.currency)) { setError('Revise nome, preço e moeda antes de salvar.'); setSaving(false); return }
-    const common = { p_name:form.name.trim(), p_slug:form.slug.trim() || null, p_description:form.description.trim() || null, p_product_type:form.product_type, p_billing_type:form.billing_type, p_unit_amount:amount, p_currency:form.currency, p_billing_interval:form.billing_type === 'subscription' ? form.billing_interval : null, p_interval_count:form.billing_type === 'subscription' ? Number(form.interval_count || 1) : null, p_sku:form.sku.trim() || null, p_metadata:{} }
+    const common = { p_name:form.name.trim(), p_slug:form.slug.trim() || null, p_description:form.description.trim() || null, p_product_type:form.product_type, p_billing_type:form.billing_type, p_unit_amount:amount, p_currency:form.currency, p_billing_interval:form.billing_type === 'subscription' ? form.billing_interval : null, p_interval_count:form.billing_type === 'subscription' ? Number(form.interval_count || 1) : null, p_sku:form.sku.trim() || null, p_metadata:editing?.metadata ?? {} }
     const result = editing
       ? await db.rpc('update_product', { p_product_id:editing.id, p_version:editing.version, ...common, p_status:editing.status })
       : await db.rpc('create_product', common)

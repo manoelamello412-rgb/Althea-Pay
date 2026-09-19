@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { safeNext } from './lib/auth/navigation'
 
 function getSupabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
@@ -19,6 +20,7 @@ export async function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
   const isLogin = pathname === '/login'
+  const isRecovery = pathname === '/forgot-password' || pathname === '/reset-password'
   const isPublicCheckout = pathname === '/checkout' || pathname.startsWith('/checkout/')
   let response = NextResponse.next({ request })
   const supabase = createServerClient(config.url, config.key, {
@@ -37,14 +39,15 @@ export async function proxy(request: NextRequest) {
   const { data: claimsData } = await supabase.auth.getClaims()
   const isAuthenticated = Boolean(claimsData)
 
-  if (!isAuthenticated && !isLogin && !isPublicCheckout) {
+  if (!isAuthenticated && !isLogin && !isRecovery && !isPublicCheckout) {
     const target = request.nextUrl.clone()
     target.pathname = '/login'
-    target.searchParams.set('next', pathname)
+    target.search = ''
+    target.searchParams.set('next', pathname + request.nextUrl.search)
     return NextResponse.redirect(target)
   }
 
-  if (isAuthenticated && isLogin) return NextResponse.redirect(new URL('/dashboard', request.url))
+  if (isAuthenticated && isLogin) return NextResponse.redirect(new URL(safeNext(request.nextUrl.searchParams.get('next')), request.url))
   return response
 }
 

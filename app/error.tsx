@@ -4,10 +4,10 @@ import { useEffect } from 'react'
 
 export default function Error({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string }
-  unstable_retry: () => void
+  retry: () => void
 }) {
   useEffect(() => {
     console.error('ALTHEA PAY route error', error)
@@ -33,7 +33,7 @@ export default function Error({
         </p>
         <button
           type="button"
-          onClick={() => unstable_retry()}
+          onClick={() => retry()}
           style={{
             marginTop: 20,
             border: 0,

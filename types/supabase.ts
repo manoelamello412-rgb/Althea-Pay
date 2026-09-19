@@ -9783,6 +9783,8 @@ export type Database = {
           amount: number
           buyer_email: string
           buyer_name: string
+          conversation_id: string | null
+          context_status: 'resolved' | 'unlinked' | 'ambiguous'
           currency: string
           event_id: string
           funnel_id: string
