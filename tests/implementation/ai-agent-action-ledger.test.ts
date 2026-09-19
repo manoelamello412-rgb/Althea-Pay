@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 const routePath='app/api/crm/ai-agent/route.ts'
 const executePath='app/api/crm/ai-agent/execute/route.ts'
 const kernelPath='services/iara-agent/execution-kernel.ts'
-const migrationPath='supabase/migrations/20260910009000_crm_ai_action_channel_aware_execution_v3.sql'
+const migrationPath='supabase/migrations/20260910021055_crm_ai_action_channel_aware_execution_v3.sql'
 
 describe('AI revenue agent action ledger contract',()=>{
  it('keeps the agent grounded and human-approved',async()=>{const source=await readFile(routePath,'utf8');expect(source).toContain("human_approval_required:true");expect(source).toContain("source:'crm_ai_agent'")})
