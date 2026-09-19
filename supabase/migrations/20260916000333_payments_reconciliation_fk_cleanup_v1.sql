@@ -1,0 +1,1 @@
+alter table public.reconciliation_items drop constraint if exists reconciliation_items_transaction_fk;
