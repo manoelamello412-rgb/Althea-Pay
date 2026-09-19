@@ -1,4 +1,4 @@
-// Generated from the live Althea Pay Supabase project during the 2026-09-17 audit.
+// Generated from the live Althea Pay Supabase project during the 2026-09-18 synchronization.
 // Regenerate after reviewed schema changes. Do not edit by hand.
 
 export type Json =
@@ -237,49 +237,79 @@ export type Database = {
           campaign: string | null
           click_id: string | null
           content: string | null
+          current_event_type: string | null
+          current_page_url: string | null
+          current_step: string | null
+          customer_id: string | null
+          device: Json
+          ended_at: string | null
           first_seen_at: string
           funnel_id: string | null
           id: string
+          identified_at: string | null
           landing_url: string | null
           last_seen_at: string
           medium: string | null
           metadata: Json
+          organization_id: string | null
           session_key: string
+          session_state: string
           source: string | null
           term: string | null
           user_id: string
+          visitor_id: string | null
         }
         Insert: {
           campaign?: string | null
           click_id?: string | null
           content?: string | null
+          current_event_type?: string | null
+          current_page_url?: string | null
+          current_step?: string | null
+          customer_id?: string | null
+          device?: Json
+          ended_at?: string | null
           first_seen_at?: string
           funnel_id?: string | null
           id?: string
+          identified_at?: string | null
           landing_url?: string | null
           last_seen_at?: string
           medium?: string | null
           metadata?: Json
+          organization_id?: string | null
           session_key: string
+          session_state?: string
           source?: string | null
           term?: string | null
           user_id: string
+          visitor_id?: string | null
         }
         Update: {
           campaign?: string | null
           click_id?: string | null
           content?: string | null
+          current_event_type?: string | null
+          current_page_url?: string | null
+          current_step?: string | null
+          customer_id?: string | null
+          device?: Json
+          ended_at?: string | null
           first_seen_at?: string
           funnel_id?: string | null
           id?: string
+          identified_at?: string | null
           landing_url?: string | null
           last_seen_at?: string
           medium?: string | null
           metadata?: Json
+          organization_id?: string | null
           session_key?: string
+          session_state?: string
           source?: string | null
           term?: string | null
           user_id?: string
+          visitor_id?: string | null
         }
         Relationships: []
       }
@@ -342,6 +372,7 @@ export type Database = {
           finished_at: string | null
           id: string
           next_retry_at: string | null
+          organization_id: string
           output: Json | null
           started_at: string
           status: string
@@ -355,6 +386,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           next_retry_at?: string | null
+          organization_id: string
           output?: Json | null
           started_at?: string
           status: string
@@ -368,6 +400,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           next_retry_at?: string | null
+          organization_id?: string
           output?: Json | null
           started_at?: string
           status?: string
@@ -379,6 +412,13 @@ export type Database = {
             columns: ["execution_id"]
             isOneToOne: false
             referencedRelation: "automation_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_execution_attempts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -399,6 +439,7 @@ export type Database = {
           input: Json
           max_attempts: number
           next_retry_at: string | null
+          organization_id: string
           output: Json
           replay_count: number
           replayed_at: string | null
@@ -424,6 +465,7 @@ export type Database = {
           input?: Json
           max_attempts?: number
           next_retry_at?: string | null
+          organization_id: string
           output?: Json
           replay_count?: number
           replayed_at?: string | null
@@ -449,6 +491,7 @@ export type Database = {
           input?: Json
           max_attempts?: number
           next_retry_at?: string | null
+          organization_id?: string
           output?: Json
           replay_count?: number
           replayed_at?: string | null
@@ -468,6 +511,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "automation_executions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "automation_executions_rule_id_fkey"
             columns: ["rule_id"]
             isOneToOne: false
@@ -482,6 +532,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          organization_id: string
           status: string
           trigger_config: Json
           updated_at: string
@@ -492,6 +543,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          organization_id: string
           status?: string
           trigger_config?: Json
           updated_at?: string
@@ -502,12 +554,21 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          organization_id?: string
           status?: string
           trigger_config?: Json
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "automation_rules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       brand_identity_settings: {
         Row: {
@@ -2785,57 +2846,355 @@ export type Database = {
           },
         ]
       }
+      funnel_command_batches: {
+        Row: {
+          allow_partial: boolean
+          command_type: string
+          completed_at: string | null
+          correlation_id: string
+          dry_run: boolean
+          failed_targets: number
+          id: string
+          idempotency_key: string | null
+          metadata: Json
+          organization_id: string
+          pending_targets: number
+          requested_at: string
+          requested_by: string
+          started_at: string | null
+          status: string
+          succeeded_targets: number
+          target_gateway_id: string | null
+          total_targets: number
+          updated_at: string
+        }
+        Insert: {
+          allow_partial?: boolean
+          command_type?: string
+          completed_at?: string | null
+          correlation_id?: string
+          dry_run?: boolean
+          failed_targets?: number
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          organization_id: string
+          pending_targets?: number
+          requested_at?: string
+          requested_by: string
+          started_at?: string | null
+          status?: string
+          succeeded_targets?: number
+          target_gateway_id?: string | null
+          total_targets?: number
+          updated_at?: string
+        }
+        Update: {
+          allow_partial?: boolean
+          command_type?: string
+          completed_at?: string | null
+          correlation_id?: string
+          dry_run?: boolean
+          failed_targets?: number
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          organization_id?: string
+          pending_targets?: number
+          requested_at?: string
+          requested_by?: string
+          started_at?: string | null
+          status?: string
+          succeeded_targets?: number
+          target_gateway_id?: string | null
+          total_targets?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnel_command_batches_target_gateway_id_fkey"
+            columns: ["target_gateway_id"]
+            isOneToOne: false
+            referencedRelation: "gateways"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funnel_command_targets: {
+        Row: {
+          attempt_count: number
+          batch_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          connection_id: string | null
+          correlation_id: string
+          created_at: string
+          funnel_id: string
+          id: string
+          last_error_code: string | null
+          last_error_message: string | null
+          max_attempts: number
+          next_attempt_at: string | null
+          organization_id: string
+          previous_gateway_id: string | null
+          previous_remote_gateway_ref: string | null
+          remote_after: Json | null
+          remote_before: Json | null
+          result_payload: Json
+          started_at: string | null
+          status: string
+          target_gateway_id: string
+          target_remote_gateway_ref: string | null
+          updated_at: string
+          verified_at: string | null
+          worker_id: string | null
+        }
+        Insert: {
+          attempt_count?: number
+          batch_id: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          connection_id?: string | null
+          correlation_id?: string
+          created_at?: string
+          funnel_id: string
+          id?: string
+          last_error_code?: string | null
+          last_error_message?: string | null
+          max_attempts?: number
+          next_attempt_at?: string | null
+          organization_id: string
+          previous_gateway_id?: string | null
+          previous_remote_gateway_ref?: string | null
+          remote_after?: Json | null
+          remote_before?: Json | null
+          result_payload?: Json
+          started_at?: string | null
+          status?: string
+          target_gateway_id: string
+          target_remote_gateway_ref?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          worker_id?: string | null
+        }
+        Update: {
+          attempt_count?: number
+          batch_id?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          connection_id?: string | null
+          correlation_id?: string
+          created_at?: string
+          funnel_id?: string
+          id?: string
+          last_error_code?: string | null
+          last_error_message?: string | null
+          max_attempts?: number
+          next_attempt_at?: string | null
+          organization_id?: string
+          previous_gateway_id?: string | null
+          previous_remote_gateway_ref?: string | null
+          remote_after?: Json | null
+          remote_before?: Json | null
+          result_payload?: Json
+          started_at?: string | null
+          status?: string
+          target_gateway_id?: string
+          target_remote_gateway_ref?: string | null
+          updated_at?: string
+          verified_at?: string | null
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnel_command_targets_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_command_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_command_targets_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_command_targets_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_command_targets_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "v_funnel_commercial_context"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "funnel_command_targets_target_gateway_id_fkey"
+            columns: ["target_gateway_id"]
+            isOneToOne: false
+            referencedRelation: "gateways"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      funnel_connection_gateway_mappings: {
+        Row: {
+          connection_id: string
+          created_at: string
+          funnel_id: string
+          gateway_id: string
+          id: string
+          metadata: Json
+          organization_id: string
+          remote_gateway_ref: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string
+          funnel_id: string
+          gateway_id: string
+          id?: string
+          metadata?: Json
+          organization_id: string
+          remote_gateway_ref: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string
+          funnel_id?: string
+          gateway_id?: string
+          id?: string
+          metadata?: Json
+          organization_id?: string
+          remote_gateway_ref?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnel_connection_gateway_mappings_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_connection_gateway_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_connection_gateway_mappings_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "v_funnel_commercial_context"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "funnel_connection_gateway_mappings_gateway_id_fkey"
+            columns: ["gateway_id"]
+            isOneToOne: false
+            referencedRelation: "gateways"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funnel_connections: {
         Row: {
+          adapter_key: string
+          capabilities: Json
           config: Json
           connected_at: string | null
           connection_type: string
+          control_status: string
           created_at: string
+          credential_secret_id: string | null
+          desired_gateway_id: string | null
           error_count: number | null
           event_count: number | null
           funnel_id: string | null
           health_status: string | null
           id: string
+          last_command_at: string | null
           last_error: string | null
           last_event_at: string | null
+          last_verified_at: string | null
+          observed_gateway_id: string | null
           organization_id: string
+          remote_base_url: string | null
+          remote_funnel_id: string | null
           status: string
           updated_at: string
           user_id: string
+          write_enabled: boolean
         }
         Insert: {
+          adapter_key?: string
+          capabilities?: Json
           config?: Json
           connected_at?: string | null
           connection_type?: string
+          control_status?: string
           created_at?: string
+          credential_secret_id?: string | null
+          desired_gateway_id?: string | null
           error_count?: number | null
           event_count?: number | null
           funnel_id?: string | null
           health_status?: string | null
           id?: string
+          last_command_at?: string | null
           last_error?: string | null
           last_event_at?: string | null
+          last_verified_at?: string | null
+          observed_gateway_id?: string | null
           organization_id: string
+          remote_base_url?: string | null
+          remote_funnel_id?: string | null
           status?: string
           updated_at?: string
           user_id: string
+          write_enabled?: boolean
         }
         Update: {
+          adapter_key?: string
+          capabilities?: Json
           config?: Json
           connected_at?: string | null
           connection_type?: string
+          control_status?: string
           created_at?: string
+          credential_secret_id?: string | null
+          desired_gateway_id?: string | null
           error_count?: number | null
           event_count?: number | null
           funnel_id?: string | null
           health_status?: string | null
           id?: string
+          last_command_at?: string | null
           last_error?: string | null
           last_event_at?: string | null
+          last_verified_at?: string | null
+          observed_gateway_id?: string | null
           organization_id?: string
+          remote_base_url?: string | null
+          remote_funnel_id?: string | null
           status?: string
           updated_at?: string
           user_id?: string
+          write_enabled?: boolean
         }
         Relationships: [
           {
@@ -2861,24 +3220,123 @@ export type Database = {
           },
         ]
       }
+      funnel_control_drift_events: {
+        Row: {
+          connection_id: string
+          correlation_id: string
+          created_at: string
+          details: Json
+          detected_at: string
+          expected_gateway_id: string | null
+          funnel_id: string
+          id: string
+          last_seen_at: string
+          observed_gateway_id: string | null
+          observed_remote_gateway_ref: string | null
+          organization_id: string
+          resolved_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          connection_id: string
+          correlation_id?: string
+          created_at?: string
+          details?: Json
+          detected_at?: string
+          expected_gateway_id?: string | null
+          funnel_id: string
+          id?: string
+          last_seen_at?: string
+          observed_gateway_id?: string | null
+          observed_remote_gateway_ref?: string | null
+          organization_id: string
+          resolved_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          connection_id?: string
+          correlation_id?: string
+          created_at?: string
+          details?: Json
+          detected_at?: string
+          expected_gateway_id?: string | null
+          funnel_id?: string
+          id?: string
+          last_seen_at?: string
+          observed_gateway_id?: string | null
+          observed_remote_gateway_ref?: string | null
+          organization_id?: string
+          resolved_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnel_control_drift_events_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "funnel_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_control_drift_events_expected_gateway_id_fkey"
+            columns: ["expected_gateway_id"]
+            isOneToOne: false
+            referencedRelation: "gateways"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_control_drift_events_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_control_drift_events_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "v_funnel_commercial_context"
+            referencedColumns: ["funnel_id"]
+          },
+          {
+            foreignKeyName: "funnel_control_drift_events_observed_gateway_id_fkey"
+            columns: ["observed_gateway_id"]
+            isOneToOne: false
+            referencedRelation: "gateways"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funnel_event_types: {
         Row: {
+          canonical_event_type: string | null
           created_at: string
+          deprecated: boolean
           description: string
           enabled: boolean
           event_type: string
+          protocol_version: string
         }
         Insert: {
+          canonical_event_type?: string | null
           created_at?: string
+          deprecated?: boolean
           description: string
           enabled?: boolean
           event_type: string
+          protocol_version?: string
         }
         Update: {
+          canonical_event_type?: string | null
           created_at?: string
+          deprecated?: boolean
           description?: string
           enabled?: boolean
           event_type?: string
+          protocol_version?: string
         }
         Relationships: []
       }
@@ -3638,7 +4096,7 @@ export type Database = {
           id: string
           is_healthy: boolean
           latency_ms: number | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           checked_at?: string
@@ -3650,7 +4108,7 @@ export type Database = {
           id?: string
           is_healthy: boolean
           latency_ms?: number | null
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           checked_at?: string
@@ -3662,7 +4120,7 @@ export type Database = {
           id?: string
           is_healthy?: boolean
           latency_ms?: number | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -4863,6 +5321,7 @@ export type Database = {
           id: string
           last_error: string | null
           next_attempt_at: string | null
+          organization_id: string | null
           payload: Json
           processed_at: string | null
           provider: string
@@ -4870,7 +5329,9 @@ export type Database = {
           received_at: string
           signature_timestamp: string
           status: string
+          transaction_id: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           attempts?: number
@@ -4878,6 +5339,7 @@ export type Database = {
           id?: string
           last_error?: string | null
           next_attempt_at?: string | null
+          organization_id?: string | null
           payload?: Json
           processed_at?: string | null
           provider: string
@@ -4885,7 +5347,9 @@ export type Database = {
           received_at?: string
           signature_timestamp: string
           status?: string
+          transaction_id?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           attempts?: number
@@ -4893,6 +5357,7 @@ export type Database = {
           id?: string
           last_error?: string | null
           next_attempt_at?: string | null
+          organization_id?: string | null
           payload?: Json
           processed_at?: string | null
           provider?: string
@@ -4900,7 +5365,9 @@ export type Database = {
           received_at?: string
           signature_timestamp?: string
           status?: string
+          transaction_id?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -6279,6 +6746,7 @@ export type Database = {
           claim_attempt: number
           claimed_at: string | null
           created_at: string
+          customer_id: string | null
           error_message: string | null
           event_key: string | null
           event_type: string
@@ -6289,16 +6757,21 @@ export type Database = {
           next_retry_at: string | null
           occurred_at: string
           organization_id: string
+          original_event_type: string | null
           payload: Json
           processed_at: string | null
+          protocol_version: string
           retry_count: number | null
+          session_id: string | null
           status: string
           user_id: string
+          visitor_id: string | null
         }
         Insert: {
           claim_attempt?: number
           claimed_at?: string | null
           created_at?: string
+          customer_id?: string | null
           error_message?: string | null
           event_key?: string | null
           event_type: string
@@ -6309,16 +6782,21 @@ export type Database = {
           next_retry_at?: string | null
           occurred_at?: string
           organization_id: string
+          original_event_type?: string | null
           payload?: Json
           processed_at?: string | null
+          protocol_version?: string
           retry_count?: number | null
+          session_id?: string | null
           status?: string
           user_id: string
+          visitor_id?: string | null
         }
         Update: {
           claim_attempt?: number
           claimed_at?: string | null
           created_at?: string
+          customer_id?: string | null
           error_message?: string | null
           event_key?: string | null
           event_type?: string
@@ -6329,11 +6807,15 @@ export type Database = {
           next_retry_at?: string | null
           occurred_at?: string
           organization_id?: string
+          original_event_type?: string | null
           payload?: Json
           processed_at?: string | null
+          protocol_version?: string
           retry_count?: number | null
+          session_id?: string | null
           status?: string
           user_id?: string
+          visitor_id?: string | null
         }
         Relationships: [
           {
@@ -7071,33 +7553,57 @@ export type Database = {
       }
       recovery_events: {
         Row: {
+          attempt_count: number
+          channel: string | null
           checkout_id: string | null
+          conversation_id: string | null
           created_at: string
           event_type: string
           id: string
+          last_error: string | null
+          next_attempt_at: string | null
+          organization_id: string | null
+          outbox_id: string | null
           payload: Json
           processed_at: string | null
           status: string
+          updated_at: string
           user_id: string
         }
         Insert: {
+          attempt_count?: number
+          channel?: string | null
           checkout_id?: string | null
+          conversation_id?: string | null
           created_at?: string
           event_type: string
           id?: string
+          last_error?: string | null
+          next_attempt_at?: string | null
+          organization_id?: string | null
+          outbox_id?: string | null
           payload?: Json
           processed_at?: string | null
           status?: string
+          updated_at?: string
           user_id: string
         }
         Update: {
+          attempt_count?: number
+          channel?: string | null
           checkout_id?: string | null
+          conversation_id?: string | null
           created_at?: string
           event_type?: string
           id?: string
+          last_error?: string | null
+          next_attempt_at?: string | null
+          organization_id?: string | null
+          outbox_id?: string | null
           payload?: Json
           processed_at?: string | null
           status?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: [
@@ -7109,6 +7615,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      revenue_sources: {
+        Row: {
+          created_at: string
+          id: string
+          metadata: Json
+          name: string
+          organization_id: string
+          source_ref_id: string | null
+          source_type: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name: string
+          organization_id: string
+          source_ref_id?: string | null
+          source_type: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          name?: string
+          organization_id?: string
+          source_ref_id?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       risk_assessments: {
         Row: {
@@ -7917,6 +8462,107 @@ export type Database = {
           },
         ]
       }
+      v_funnel_live_journeys: {
+        Row: {
+          campaign: string | null
+          click_id: string | null
+          current_event_type: string | null
+          current_page_url: string | null
+          current_step: string | null
+          customer_email: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          device: Json | null
+          first_seen_at: string | null
+          funnel_id: string | null
+          identified_at: string | null
+          idle_seconds: number | null
+          last_seen_at: string | null
+          medium: string | null
+          organization_id: string | null
+          session_id: string | null
+          session_key: string | null
+          session_state: string | null
+          source: string | null
+          user_id: string | null
+          visitor_id: string | null
+        }
+        Insert: {
+          campaign?: string | null
+          click_id?: string | null
+          current_event_type?: string | null
+          current_page_url?: string | null
+          current_step?: string | null
+          customer_email?: never
+          customer_id?: string | null
+          customer_name?: never
+          customer_phone?: never
+          device?: Json | null
+          first_seen_at?: string | null
+          funnel_id?: string | null
+          identified_at?: string | null
+          idle_seconds?: never
+          last_seen_at?: string | null
+          medium?: string | null
+          organization_id?: string | null
+          session_id?: string | null
+          session_key?: string | null
+          session_state?: string | null
+          source?: string | null
+          user_id?: string | null
+          visitor_id?: string | null
+        }
+        Update: {
+          campaign?: string | null
+          click_id?: string | null
+          current_event_type?: string | null
+          current_page_url?: string | null
+          current_step?: string | null
+          customer_email?: never
+          customer_id?: string | null
+          customer_name?: never
+          customer_phone?: never
+          device?: Json | null
+          first_seen_at?: string | null
+          funnel_id?: string | null
+          identified_at?: string | null
+          idle_seconds?: never
+          last_seen_at?: string | null
+          medium?: string | null
+          organization_id?: string | null
+          session_id?: string | null
+          session_key?: string | null
+          session_state?: string | null
+          source?: string | null
+          user_id?: string | null
+          visitor_id?: string | null
+        }
+        Relationships: []
+      }
+      v_funnel_operational_timeline: {
+        Row: {
+          amount: number | null
+          category: string | null
+          checkout_id: string | null
+          currency: string | null
+          event_id: string | null
+          event_type: string | null
+          external_id: string | null
+          funnel_id: string | null
+          gateway_id: string | null
+          message: string | null
+          metadata: Json | null
+          occurred_at: string | null
+          organization_id: string | null
+          severity: string | null
+          source: string | null
+          status: string | null
+          transaction_id: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       acquire_gateway_circuit: {
@@ -8090,6 +8736,37 @@ export type Database = {
           user_id: string
         }[]
       }
+      automation_operations_v1: { Args: { p_limit?: number }; Returns: Json }
+      automation_rule_delete_v1: {
+        Args: { p_rule_id: string }
+        Returns: boolean
+      }
+      automation_rule_upsert_v1: {
+        Args: {
+          p_action_config?: Json
+          p_name?: string
+          p_rule_id?: string
+          p_status?: string
+          p_trigger_config?: Json
+        }
+        Returns: {
+          action_config: Json
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          trigger_config: Json
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "automation_rules"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       bind_funnel_gateway: {
         Args: {
           p_funnel_id: string
@@ -8161,6 +8838,39 @@ export type Database = {
         Returns: boolean
       }
       check_checkout_inactivity: { Args: never; Returns: number }
+      checkout_operations_detail_v1: {
+        Args: { p_checkout_id: string }
+        Returns: Json
+      }
+      checkout_operations_page_v1: {
+        Args: {
+          p_cursor_created_at?: string
+          p_cursor_id?: string
+          p_funnel_id?: string
+          p_limit?: number
+          p_query?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      claim_checkout_recovery_events_v1: {
+        Args: { p_limit?: number }
+        Returns: {
+          amount: number
+          checkout_id: string
+          checkout_metadata: Json
+          currency: string
+          customer: Json
+          event_attempt_count: number
+          event_id: string
+          funnel_id: string
+          funnel_url: string
+          organization_id: string
+          product_id: string
+          recovery_count: number
+          user_id: string
+        }[]
+      }
       claim_core_jobs: {
         Args: { p_limit?: number; p_worker_id: string }
         Returns: {
@@ -8184,6 +8894,43 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "core_job_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_funnel_command_targets: {
+        Args: { p_batch_id?: string; p_limit?: number; p_worker_id: string }
+        Returns: {
+          attempt_count: number
+          batch_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          connection_id: string | null
+          correlation_id: string
+          created_at: string
+          funnel_id: string
+          id: string
+          last_error_code: string | null
+          last_error_message: string | null
+          max_attempts: number
+          next_attempt_at: string | null
+          organization_id: string
+          previous_gateway_id: string | null
+          previous_remote_gateway_ref: string | null
+          remote_after: Json | null
+          remote_before: Json | null
+          result_payload: Json
+          started_at: string | null
+          status: string
+          target_gateway_id: string
+          target_remote_gateway_ref: string | null
+          updated_at: string
+          verified_at: string | null
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "funnel_command_targets"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -8256,6 +9003,19 @@ export type Database = {
         Args: { p_funnel_id: string }
         Returns: boolean
       }
+      command_center_operations_v1: {
+        Args: { p_hours?: number }
+        Returns: Json
+      }
+      complete_funnel_command_preflight: {
+        Args: {
+          p_observed_remote_gateway_ref: string
+          p_remote_before?: Json
+          p_result_payload?: Json
+          p_target_id: string
+        }
+        Returns: Json
+      }
       complete_gateway_payment_link: {
         Args: {
           p_expires_at?: string
@@ -8315,6 +9075,18 @@ export type Database = {
       }
       consume_althea_api_rate_limit: {
         Args: { p_api_key_id: string; p_limit?: number }
+        Returns: {
+          allowed: boolean
+          remaining: number
+          reset_at: string
+        }[]
+      }
+      consume_funnel_event_rate_limit: {
+        Args: {
+          p_bucket_key: string
+          p_limit?: number
+          p_window_seconds?: number
+        }
         Returns: {
           allowed: boolean
           remaining: number
@@ -8500,6 +9272,7 @@ export type Database = {
           input: Json
           max_attempts: number
           next_retry_at: string | null
+          organization_id: string
           output: Json
           replay_count: number
           replayed_at: string | null
@@ -8526,6 +9299,15 @@ export type Database = {
           p_limit?: number
           p_rule_id: string
           p_user_id: string
+          p_window_seconds?: number
+        }
+        Returns: boolean
+      }
+      crm_check_automation_rate_limit_org: {
+        Args: {
+          p_limit?: number
+          p_organization_id: string
+          p_rule_id: string
           p_window_seconds?: number
         }
         Returns: boolean
@@ -8573,6 +9355,7 @@ export type Database = {
           input: Json
           max_attempts: number
           next_retry_at: string | null
+          organization_id: string
           output: Json
           replay_count: number
           replayed_at: string | null
@@ -8637,6 +9420,7 @@ export type Database = {
           input: Json
           max_attempts: number
           next_retry_at: string | null
+          organization_id: string
           output: Json
           replay_count: number
           replayed_at: string | null
@@ -8735,6 +9519,20 @@ export type Database = {
         }
         Returns: Json
       }
+      crm_ingest_funnel_chat_message: {
+        Args: {
+          p_body: string
+          p_buyer_email?: string
+          p_buyer_name?: string
+          p_customer_id?: string
+          p_external_message_id: string
+          p_funnel_id: string
+          p_metadata?: Json
+          p_remote_conversation_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       crm_mark_automation_dead_letter: {
         Args: { p_error: string; p_execution_id: string }
         Returns: {
@@ -8752,6 +9550,7 @@ export type Database = {
           input: Json
           max_attempts: number
           next_retry_at: string | null
+          organization_id: string
           output: Json
           replay_count: number
           replayed_at: string | null
@@ -8804,6 +9603,20 @@ export type Database = {
           rationale: string
           score: number
         }[]
+      }
+      crm_operator_add_note_v1: {
+        Args: { p_body: string; p_conversation_id: string }
+        Returns: Json
+      }
+      crm_operator_create_task_v1: {
+        Args: {
+          p_conversation_id: string
+          p_description?: string
+          p_due_at?: string
+          p_priority?: string
+          p_title: string
+        }
+        Returns: Json
       }
       crm_operator_mark_read: {
         Args: { p_conversation_id: string }
@@ -8921,6 +9734,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      crm_operator_set_tag_v1: {
+        Args: {
+          p_conversation_id: string
+          p_enabled?: boolean
+          p_tag_id: string
+        }
+        Returns: Json
+      }
+      crm_operator_workspace_v1: {
+        Args: { p_conversation_id: string }
+        Returns: Json
+      }
       crm_predictive_capture_outcomes: {
         Args: { p_limit?: number }
         Returns: number
@@ -8987,6 +9812,7 @@ export type Database = {
           input: Json
           max_attempts: number
           next_retry_at: string | null
+          organization_id: string
           output: Json
           replay_count: number
           replayed_at: string | null
@@ -9123,6 +9949,16 @@ export type Database = {
         }
         Returns: Json
       }
+      fail_funnel_command_target: {
+        Args: {
+          p_error_code: string
+          p_error_message: string
+          p_remote_before?: Json
+          p_retryable?: boolean
+          p_target_id: string
+        }
+        Returns: Json
+      }
       fail_gateway_payment_link_execution: {
         Args: {
           p_command_id: string
@@ -9130,6 +9966,17 @@ export type Database = {
           p_error_message: string
           p_retry_seconds?: number
           p_retryable?: boolean
+        }
+        Returns: Json
+      }
+      finalize_funnel_gateway_switch_target: {
+        Args: {
+          p_observed_after: string
+          p_observed_before: string
+          p_remote_after?: Json
+          p_remote_before?: Json
+          p_result_payload?: Json
+          p_target_id: string
         }
         Returns: Json
       }
@@ -9174,6 +10021,7 @@ export type Database = {
         Args: never
         Returns: number
       }
+      gateway_control_center_v1: { Args: { p_limit?: number }; Returns: Json }
       gateway_effective_cost_bps: {
         Args: {
           p_amount_minor: number
@@ -9203,44 +10051,25 @@ export type Database = {
         Args: { p_depth?: number; p_node: Json; p_path?: string[] }
         Returns: boolean
       }
-      gateway_runtime_route_candidates:
-        | {
-            Args: {
-              p_amount: number
-              p_currency: string
-              p_environment: string
-              p_gateway_ids: string[]
-              p_user_id: string
-            }
-            Returns: {
-              approval_rate: number
-              circuit_state: string
-              cost_bps: number
-              gateway_id: string
-              healthy: boolean
-              latency_ms: number
-              routing_score: number
-            }[]
-          }
-        | {
-            Args: {
-              p_amount: number
-              p_card_brand?: string
-              p_currency: string
-              p_environment: string
-              p_gateway_ids: string[]
-              p_user_id: string
-            }
-            Returns: {
-              approval_rate: number
-              circuit_state: string
-              cost_bps: number
-              gateway_id: string
-              healthy: boolean
-              latency_ms: number
-              routing_score: number
-            }[]
-          }
+      gateway_runtime_route_candidates: {
+        Args: {
+          p_amount: number
+          p_card_brand?: string
+          p_currency: string
+          p_environment: string
+          p_gateway_ids: string[]
+          p_user_id: string
+        }
+        Returns: {
+          approval_rate: number
+          circuit_state: string
+          cost_bps: number
+          gateway_id: string
+          healthy: boolean
+          latency_ms: number
+          routing_score: number
+        }[]
+      }
       gateway_token_link_runtime_context: {
         Args: { p_link_id: string; p_user_id: string }
         Returns: Json
@@ -9309,6 +10138,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      health_database_ping_v1: { Args: never; Returns: Json }
       iara_allocate_memory_sequence: {
         Args: { p_tenant_id: string }
         Returns: number
@@ -9420,6 +10250,7 @@ export type Database = {
           webhook_id: string
         }[]
       }
+      integration_hub_overview_v1: { Args: { p_limit?: number }; Returns: Json }
       list_gateway_credentials: {
         Args: never
         Returns: {
@@ -9456,6 +10287,23 @@ export type Database = {
         }
         Returns: Json
       }
+      noc_operations_v1: { Args: { p_minutes?: number }; Returns: Json }
+      payment_operations_detail_v1: {
+        Args: { p_transaction_id: string }
+        Returns: Json
+      }
+      payment_operations_page_v1: {
+        Args: {
+          p_cursor_created_at?: string
+          p_cursor_id?: string
+          p_funnel_id?: string
+          p_gateway_id?: string
+          p_limit?: number
+          p_query?: string
+          p_status?: string
+        }
+        Returns: Json
+      }
       persist_iara_independent_evaluation: {
         Args: {
           p_assertions: Json
@@ -9479,6 +10327,7 @@ export type Database = {
         }
         Returns: string
       }
+      platform_noc_status_v1: { Args: never; Returns: Json }
       platform_release_ready: { Args: never; Returns: boolean }
       post_gateway_financial_journal: {
         Args: {
@@ -9624,7 +10473,7 @@ export type Database = {
           id: string
           is_healthy: boolean
           latency_ms: number | null
-          user_id: string | null
+          user_id: string
         }
         SetofOptions: {
           from: "*"
@@ -9640,6 +10489,15 @@ export type Database = {
       recover_stale_core_jobs: {
         Args: { p_stale_minutes?: number }
         Returns: number
+      }
+      recovery_operations_v1: { Args: { p_days?: number }; Returns: Json }
+      recovery_operator_requeue_checkout_v1: {
+        Args: { p_checkout_id: string }
+        Returns: Json
+      }
+      refresh_funnel_command_batch: {
+        Args: { p_batch_id: string }
+        Returns: Json
       }
       register_dynamic_gateway: {
         Args: {
@@ -9696,6 +10554,23 @@ export type Database = {
         }
         Returns: string
       }
+      request_funnel_gateway_rollback: {
+        Args: {
+          p_allow_partial?: boolean
+          p_batch_id: string
+          p_idempotency_key?: string
+        }
+        Returns: Json
+      }
+      request_global_funnel_gateway_switch: {
+        Args: {
+          p_allow_partial?: boolean
+          p_dry_run?: boolean
+          p_gateway_id: string
+          p_idempotency_key?: string
+        }
+        Returns: Json
+      }
       reserve_idempotency_key: {
         Args: {
           p_idempotency_key: string
@@ -9728,6 +10603,10 @@ export type Database = {
           audit_event_id: string
           reserved: boolean
         }[]
+      }
+      resolve_funnel_connection_secret: {
+        Args: { p_connection_id: string }
+        Returns: Json
       }
       resolve_funnel_ingestion_token: {
         Args: { p_token_hash: string }
@@ -9812,6 +10691,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      revenue_analytics_v1: {
+        Args: { p_days?: number; p_funnel_id?: string; p_gateway_id?: string }
+        Returns: Json
       }
       revoke_gateway_payment_token_link: {
         Args: { p_link_id: string }
@@ -9944,9 +10827,17 @@ export type Database = {
           transaction_id: string
         }[]
       }
+      store_funnel_connection_secret: {
+        Args: { p_name?: string; p_secret: string }
+        Returns: string
+      }
       store_webhook_secret: {
         Args: { p_name?: string; p_secret: string }
         Returns: string
+      }
+      switch_all_funnel_primary_gateways: {
+        Args: { p_gateway_id: string }
+        Returns: Json
       }
       switch_funnel_gateway: {
         Args: { p_funnel_id: string; p_gateway_id: string }
@@ -10050,6 +10941,18 @@ export type Database = {
         }
       }
       trigger_reconciliation_worker: { Args: never; Returns: number }
+      update_checkout_recovery_worker_v1: {
+        Args: {
+          p_channel?: string
+          p_conversation_id?: string
+          p_error?: string
+          p_event_id: string
+          p_outbox_id?: string
+          p_retry_seconds?: number
+          p_status: string
+        }
+        Returns: Json
+      }
       update_dynamic_gateway: {
         Args: {
           p_credentials?: Json
@@ -10058,6 +10961,10 @@ export type Database = {
           p_gateway_id: string
         }
         Returns: Json
+      }
+      update_funnel_connection_secret: {
+        Args: { p_name?: string; p_secret: string; p_secret_id: string }
+        Returns: string
       }
       update_funnel_step: {
         Args: {

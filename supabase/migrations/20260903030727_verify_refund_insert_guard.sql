@@ -1,0 +1,1 @@
+select tg.tgname, p.proname from pg_trigger tg join pg_proc p on p.oid=tg.tgfoid join pg_class c on c.oid=tg.tgrelid where c.oid='public.gateway_transactions'::regclass and tg.tgenabled <> 'D' and tg.tgname='prevent_direct_refunded_transaction_insert';

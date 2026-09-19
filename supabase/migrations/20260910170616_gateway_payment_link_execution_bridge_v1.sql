@@ -1,0 +1,1 @@
+create index if not exists gateway_payment_links_user_idempotency_idx on public.gateway_payment_links(user_id,idempotency_key);

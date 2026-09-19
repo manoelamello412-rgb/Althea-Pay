@@ -1,0 +1,1 @@
+create index if not exists crm_conversations_sla_due_idx on public.crm_conversations(user_id,first_response_due_at) where first_response_at is null and first_response_due_at is not null; create index if not exists automation_executions_key_idx on public.automation_executions(user_id,execution_key);

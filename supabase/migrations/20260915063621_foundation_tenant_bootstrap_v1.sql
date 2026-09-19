@@ -1,12 +1,5 @@
--- ALTHEA PAY foundation: canonical organization/tenant bootstrap.
--- No provider-specific integration is introduced here.
-
 create or replace function public.create_organization_for_current_user(p_name text, p_slug text default null)
-returns uuid
-language plpgsql
-security definer
-set search_path = pg_catalog, public
-as $$
+returns uuid language plpgsql security definer set search_path = pg_catalog, public as $$
 declare v_user_id uuid := auth.uid(); v_name text := btrim(coalesce(p_name,'')); v_slug text := lower(btrim(coalesce(p_slug,''))); v_org_id uuid;
 begin
  if v_user_id is null then raise exception 'AUTH_REQUIRED' using errcode='42501'; end if;

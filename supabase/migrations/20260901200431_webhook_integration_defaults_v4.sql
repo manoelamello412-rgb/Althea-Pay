@@ -1,0 +1,1 @@
+alter table public.webhook_integrations alter column secret drop not null; create index if not exists webhook_integrations_provider_idx on public.webhook_integrations(provider);

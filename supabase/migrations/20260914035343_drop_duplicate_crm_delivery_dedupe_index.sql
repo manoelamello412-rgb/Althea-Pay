@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.crm_channel_delivery_events_dedupe_idx;

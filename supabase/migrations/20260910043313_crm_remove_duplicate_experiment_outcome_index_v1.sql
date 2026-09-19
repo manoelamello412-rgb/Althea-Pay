@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.crm_experiment_outcomes_subject_outcome_uq;

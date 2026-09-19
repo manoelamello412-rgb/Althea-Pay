@@ -1,0 +1,1 @@
+ALTER FUNCTION private.has_org_role(uuid,text[]) SET search_path = pg_catalog, public; ALTER FUNCTION private.is_org_member(uuid) SET search_path = pg_catalog, public;

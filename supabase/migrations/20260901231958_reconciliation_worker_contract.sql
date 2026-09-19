@@ -1,0 +1,2 @@
+create index if not exists reconciliation_items_external_id_idx on public.reconciliation_items(user_id, external_transaction_id) where external_transaction_id is not null;
+create index if not exists settlements_reconciliation_idx on public.settlements(user_id, gateway_id, status, created_at desc);

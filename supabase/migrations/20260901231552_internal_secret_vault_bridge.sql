@@ -1,0 +1,4 @@
+create or replace function public.get_althea_internal_secret() returns text language plpgsql security definer set search_path=public,vault as $$ declare v text; begin select decrypted_secret into v from vault.decrypted_secrets where name='ALTHEA_INTERNAL_SECRET' limit 1; return v; end $$;
+revoke all on function public.get_althea_internal_secret() from public, anon, authenticated;
+grant execute on function public.get_althea_internal_secret() to service_role;
+do $$ begin if not exists (select 1 from vault.decrypted_secrets where name='ALTHEA_INTERNAL_SECRET') then perform vault.create_secret(encode(gen_random_bytes(32),'hex'),'ALTHEA_INTERNAL_SECRET','ALTHEA internal worker authentication secret'); end if; end $$;

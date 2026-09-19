@@ -1,0 +1,1 @@
+create unique index if not exists integration_events_user_event_key_uidx on public.integration_events(user_id, event_key); create index if not exists integration_events_processing_idx on public.integration_events(status, created_at) where status in ('pending','processing','failed');

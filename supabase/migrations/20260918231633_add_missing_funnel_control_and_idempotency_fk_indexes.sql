@@ -1,0 +1,11 @@
+set local lock_timeout='3s'; set local statement_timeout='30s';
+create index if not exists funnel_command_batches_target_gateway_fk_idx on public.funnel_command_batches(target_gateway_id);
+create index if not exists funnel_command_targets_connection_fk_idx on public.funnel_command_targets(connection_id);
+create index if not exists funnel_command_targets_funnel_fk_idx on public.funnel_command_targets(funnel_id);
+create index if not exists funnel_command_targets_target_gateway_fk_idx on public.funnel_command_targets(target_gateway_id);
+create index if not exists funnel_connection_gateway_mappings_funnel_fk_idx on public.funnel_connection_gateway_mappings(funnel_id);
+create index if not exists funnel_connection_gateway_mappings_gateway_fk_idx on public.funnel_connection_gateway_mappings(gateway_id);
+create index if not exists funnel_control_drift_events_expected_gateway_fk_idx on public.funnel_control_drift_events(expected_gateway_id);
+create index if not exists funnel_control_drift_events_funnel_fk_idx on public.funnel_control_drift_events(funnel_id);
+create index if not exists funnel_control_drift_events_observed_gateway_fk_idx on public.funnel_control_drift_events(observed_gateway_id);
+create index if not exists idempotency_keys_user_fk_idx on public.idempotency_keys(user_id);

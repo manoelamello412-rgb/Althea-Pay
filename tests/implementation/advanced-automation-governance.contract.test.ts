@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(process.cwd());
-const governance = readFileSync(resolve(root, "supabase/migrations/20260910023000_crm_advanced_automation_governance_v3_fix_execution_columns.sql"), "utf8");
-const alignment = readFileSync(resolve(root, "supabase/migrations/20260910023100_crm_automation_execution_updated_at_alignment_v1.sql"), "utf8");
+const governance = readFileSync(resolve(root, "supabase/migrations/20260910145814_crm_advanced_automation_governance_v3_fix_execution_columns.sql"), "utf8");
+const alignment = readFileSync(resolve(root, "supabase/migrations/20260910150138_crm_automation_execution_updated_at_alignment_v1.sql"), "utf8");
 const replay = readFileSync(resolve(root, "supabase/migrations/20260910163304_crm_advanced_automation_replay_idempotency_v1.sql"), "utf8");
 const cancel = readFileSync(resolve(root, "supabase/migrations/20260910163654_crm_advanced_automation_cancel_ownership_v1.sql"), "utf8");
 

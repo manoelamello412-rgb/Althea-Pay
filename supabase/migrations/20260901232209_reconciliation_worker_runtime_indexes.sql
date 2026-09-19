@@ -1,0 +1,1 @@
+create index if not exists gateway_transactions_external_user_idx on public.gateway_transactions(user_id, external_id) where external_id is not null; create index if not exists reconciliation_items_user_run_idx on public.reconciliation_items(user_id, run_id, status);

@@ -1,0 +1,1 @@
+alter table public.funnels add column if not exists deleted_at timestamptz; alter table public.funnels add column if not exists deleted_by uuid; create index if not exists funnels_user_deleted_at_idx on public.funnels(user_id, deleted_at, created_at desc);

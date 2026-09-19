@@ -1,0 +1,1 @@
+create policy api_request_logs_select_own on public.api_request_logs for select to authenticated using (user_id = auth.uid());

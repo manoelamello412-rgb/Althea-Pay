@@ -1,0 +1,1 @@
+create index if not exists api_rate_limit_buckets_updated_idx on private.api_rate_limit_buckets(updated_at); revoke all on table private.api_request_logs from anon, authenticated; revoke all on table private.api_rate_limit_buckets from anon, authenticated;

@@ -1,0 +1,1 @@
+create index if not exists gateway_transactions_refund_lookup_idx on public.gateway_transactions (user_id, external_id) where external_id is not null;

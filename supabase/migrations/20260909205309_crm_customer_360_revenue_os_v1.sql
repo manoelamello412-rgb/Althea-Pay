@@ -1,0 +1,109 @@
+create index if not exists crm_conversations_user_customer_idx on public.crm_conversations(user_id, customer_id);
+create index if not exists crm_conversations_user_email_idx on public.crm_conversations(user_id, lower(buyer_email));
+create index if not exists sales_user_transaction_idx on public.sales(user_id, transaction_id);
+create index if not exists checkout_sessions_user_customer_email_idx on public.checkout_sessions(user_id, ((customer->>'email')));
+create index if not exists gateway_attempts_user_sale_idx on public.gateway_payment_attempts(user_id, sale_id, created_at desc);
+
+create or replace function public.crm_customer_360(p_conversation_id uuid)
+returns jsonb
+language plpgsql
+stable
+set search_path = public
+as $$
+declare
+  v_user uuid := auth.uid();
+  v jsonb;
+begin
+  if v_user is null then raise exception 'UNAUTHORIZED' using errcode='42501'; end if;
+  if not exists(select 1 from public.crm_conversations c where c.id=p_conversation_id and c.user_id=v_user) then
+    raise exception 'CONVERSATION_NOT_FOUND' using errcode='P0002';
+  end if;
+
+  with base as (
+    select c.*, lower(nullif(trim(c.buyer_email),'')) as email_key
+    from public.crm_conversations c
+    where c.id=p_conversation_id and c.user_id=v_user
+  ), related_conversations as (
+    select c.* from public.crm_conversations c, base b
+    where c.user_id=v_user
+      and ((b.email_key is not null and lower(c.buyer_email)=b.email_key)
+        or (b.customer_id is not null and c.customer_id=b.customer_id)
+        or (b.transaction_id is not null and c.transaction_id=b.transaction_id))
+  ), related_sales as (
+    select distinct s.* from public.sales s, base b
+    where s.user_id=v_user
+      and ((b.email_key is not null and lower(coalesce(s.data->>'email',s.data->>'buyer_email',s.data->>'customer_email',''))=b.email_key)
+        or (b.transaction_id is not null and s.transaction_id::text=b.transaction_id))
+  ), related_checkouts as (
+    select cs.* from public.checkout_sessions cs, base b
+    where cs.user_id=v_user
+      and (b.email_key is not null and lower(coalesce(cs.customer->>'email',cs.customer->>'buyer_email',''))=b.email_key)
+  ), related_attempts as (
+    select a.* from public.gateway_payment_attempts a join related_sales s on s.id=a.sale_id and a.user_id=v_user
+  ), related_events as (
+    select e.* from public.crm_webhook_events e, base b
+    where e.user_id=v_user
+      and ((b.email_key is not null and lower(e.buyer_email)=b.email_key)
+        or (b.transaction_id is not null and e.transaction_id=b.transaction_id))
+  ), approved_sales as (
+    select * from related_sales where lower(coalesce(status,'')) in ('approved','paid','completed','success','succeeded')
+  ), aggregates as (
+    select
+      (select count(*)::int from related_conversations) conversations,
+      (select count(*)::int from related_conversations where unread_count>0) unread,
+      (select count(*)::int from related_sales) sales_count,
+      (select count(*)::int from approved_sales) approved_sales_count,
+      (select coalesce(sum(amount),0)::numeric from approved_sales) approved_revenue,
+      (select coalesce(sum(amount),0)::numeric from related_sales) gross_tracked_value,
+      (select count(*)::int from related_checkouts) checkout_count,
+      (select count(*)::int from related_checkouts where status='completed') completed_checkouts,
+      (select count(*)::int from related_checkouts where status in ('abandoned','expired')) abandoned_checkouts,
+      (select count(*)::int from related_attempts) payment_attempts,
+      (select count(*)::int from related_attempts where status='approved') approved_attempts,
+      (select count(*)::int from related_events) event_count,
+      (select count(*)::int from related_events where lower(coalesce(status,'')) in ('failed','declined','rejected','refused','error','canceled','cancelled','expired')) failed_events,
+      (select count(*)::int from related_events where lower(coalesce(status,'')) in ('pending','waiting','processing','awaiting_payment')) pending_events,
+      (select count(*)::int from public.crm_messages m join related_conversations c on c.id=m.conversation_id where m.user_id=v_user and m.direction='inbound') inbound_messages,
+      (select count(*)::int from public.crm_messages m join related_conversations c on c.id=m.conversation_id where m.user_id=v_user and m.direction='outbound') outbound_messages,
+      (select count(*)::int from public.crm_conversation_notes n join related_conversations c on c.id=n.conversation_id where n.user_id=v_user) notes_count,
+      (select count(*)::int from public.crm_conversation_tags t join related_conversations c on c.id=t.conversation_id where t.user_id=v_user) tag_count
+  ), scores as (
+    select
+      least(100, greatest(0,
+        case when a.approved_sales_count>0 then 45 else 0 end +
+        least(25, a.inbound_messages*2) +
+        least(20, a.completed_checkouts*8) +
+        case when a.unread>0 then 10 else 0 end
+      ))::int engagement_score,
+      least(100, greatest(0,
+        case when a.approved_sales_count>0 then 55 else 0 end +
+        least(25, a.completed_checkouts*8) +
+        least(20, a.approved_attempts*5)
+      ))::int conversion_score,
+      least(100, greatest(0,
+        case when a.abandoned_checkouts>0 then 35 else 0 end +
+        least(25, a.pending_events*5) +
+        least(25, a.failed_events*4) +
+        case when a.unread>0 then 15 else 0 end
+      ))::int recovery_score
+    from aggregates a
+  )
+  select jsonb_build_object(
+    'profile', (select to_jsonb(b) - 'email_key' from base b),
+    'conversations', coalesce((select jsonb_agg(to_jsonb(c) order by c.updated_at desc) from related_conversations c),'[]'::jsonb),
+    'messages', coalesce((select jsonb_agg(to_jsonb(m) order by m.created_at desc) from public.crm_messages m join related_conversations c on c.id=m.conversation_id where m.user_id=v_user limit 500),'[]'::jsonb),
+    'notes', coalesce((select jsonb_agg(to_jsonb(n) order by n.created_at desc) from public.crm_conversation_notes n join related_conversations c on c.id=n.conversation_id where n.user_id=v_user),'[]'::jsonb),
+    'tags', coalesce((select jsonb_agg(to_jsonb(t) order by t.tag asc) from public.crm_conversation_tags t join related_conversations c on c.id=t.conversation_id where t.user_id=v_user),'[]'::jsonb),
+    'sales', coalesce((select jsonb_agg(to_jsonb(s) order by coalesce(s.occurred_at,s.created_at) desc) from related_sales s),'[]'::jsonb),
+    'checkouts', coalesce((select jsonb_agg(to_jsonb(cs) order by cs.created_at desc) from related_checkouts cs),'[]'::jsonb),
+    'payment_attempts', coalesce((select jsonb_agg(to_jsonb(a) order by a.created_at desc) from related_attempts a),'[]'::jsonb),
+    'events', coalesce((select jsonb_agg(to_jsonb(e) order by e.received_at desc) from related_events e),'[]'::jsonb),
+    'aggregates', (select to_jsonb(a) from aggregates a),
+    'scores', (select to_jsonb(s) from scores s),
+    'generated_at', timezone('utc',now())
+  ) into v;
+  return v;
+end;
+$$;
+revoke all on function public.crm_customer_360(uuid) from anon;
+grant execute on function public.crm_customer_360(uuid) to authenticated;

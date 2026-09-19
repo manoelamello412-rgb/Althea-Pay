@@ -1,0 +1,1 @@
+do $$ begin if exists (select 1 from cron.job where jobname='althea-reconciliation-worker') then perform cron.unschedule((select jobid from cron.job where jobname='althea-reconciliation-worker')); end if; end $$;

@@ -11,4 +11,5 @@ grant execute on function public.record_platform_health_check(text,text,jsonb) t
 revoke all on function public.transition_gateway_transaction(uuid,text,text) from public;
 revoke all on function public.transition_gateway_transaction(uuid,text,text) from anon;
 revoke all on function public.transition_gateway_transaction(uuid,text,text) from authenticated;
+-- The repository's canonical transition function is service-role-only and includes explicit tenant ownership.
 grant execute on function public.transition_gateway_transaction(uuid,text,text) to service_role;

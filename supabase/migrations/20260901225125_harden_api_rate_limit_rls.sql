@@ -1,0 +1,1 @@
+create policy "service_role_only_api_rate_limit_buckets" on public.api_rate_limit_buckets for all to service_role using (true) with check (true);
