@@ -12,11 +12,11 @@ export async function GET(request: NextRequest) {
   if (!UUID.test(conversation)) return NextResponse.json({ error: 'conversation_uuid_required' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
 
   const { data, error } = await supabase.rpc('crm_predictive_scores', { p_conversation_id: conversation });
-  if (error) return NextResponse.json({ error: 'predictive_score_failed', detail: error.message }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
+  if (error) return NextResponse.json({ error: 'predictive_score_failed', detail: error.message }, { status: error.code === '42501' ? 403 : error.code === 'P0002' ? 404 : 500, headers: { 'Cache-Control': 'no-store' } });
   if (!data) return NextResponse.json({ error: 'conversation_not_found' }, { status: 404, headers: { 'Cache-Control': 'no-store' } });
 
   const { data: snapshotId, error: snapshotError } = await supabase.rpc('crm_predictive_snapshot', { p_conversation_id: conversation });
-  if (snapshotError) return NextResponse.json({ error: 'predictive_snapshot_failed', detail: snapshotError.message }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
+  if (snapshotError) return NextResponse.json({ error: 'predictive_snapshot_failed', detail: snapshotError.message }, { status: snapshotError.code === '42501' ? 403 : snapshotError.code === 'P0002' ? 404 : 500, headers: { 'Cache-Control': 'no-store' } });
 
   return NextResponse.json({ ...data, snapshot_id: snapshotId, evaluation_status: 'pending_real_outcome' }, { headers: { 'Cache-Control': 'no-store' } });
 }
