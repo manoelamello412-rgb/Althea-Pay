@@ -356,8 +356,6 @@ a { -webkit-user-select: none; user-select: none; }
           .althea-mobile-sales .ams-sale-client { grid-row: 1 / span 2 !important; }
         }
 
-/* Authentication brand image retained from the legacy official-brand layer. */
-.brand-lockup img { width: min(100%, 340px) !important; height: auto !important; object-fit: contain !important; }
 
 
 /* Authentication — canonicalized from the former visual/brand-manual layers.
