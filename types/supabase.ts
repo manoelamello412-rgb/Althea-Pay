@@ -1134,6 +1134,7 @@ export type Database = {
         }
         Update: {
           action_type?: string
+          actor_id?: string | null
           conversation_id?: string | null
           created_at?: string
           executed_at?: string | null
@@ -1151,6 +1152,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_ai_actions_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_ai_actions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "crm_ai_actions_conversation_id_fkey"
             columns: ["conversation_id"]
@@ -1994,6 +2009,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_predictive_evaluations_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_predictive_evaluations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "crm_predictive_evaluations_conversation_id_fkey"
             columns: ["conversation_id"]
@@ -9811,21 +9840,21 @@ export type Database = {
       crm_recovery_opportunities: {
         Args: { p_days?: number }
         Returns: {
-          amount: number
-          buyer_email: string
-          buyer_name: string
+          amount: number | null
+          buyer_email: string | null
+          buyer_name: string | null
           conversation_id: string | null
           context_status: 'resolved' | 'unlinked' | 'ambiguous'
           currency: string
           event_id: string
-          funnel_id: string
+          funnel_id: string | null
           next_action: string
           opportunity_type: string
           priority: number
-          product_id: string
+          product_id: string | null
           received_at: string
           status: string
-          transaction_id: string
+          transaction_id: string | null
         }[]
       }
       crm_replay_automation_execution: {
