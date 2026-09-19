@@ -19,7 +19,7 @@ const requiredFiles=["supabase/functions/gateway-orchestrator/index.ts","supabas
 for(const file of requiredFiles)if(!source.has(join(root,file)))failures.push(`Required release component missing: ${file}`)
 const functionInventory=(await readdir(join(root,"supabase","functions"),{withFileTypes:true})).filter(entry=>entry.isDirectory()&&!["_shared","adapters"].includes(entry.name)).map(entry=>entry.name).sort()
 const supabaseConfig=await readFile(join(root,"supabase","config.toml"),"utf8")
-const configuredFunctions=[...supabaseConfig.matchAll(/^\\[functions\\.([^\\]]+)\\]/gm)].map(match=>match[1]).sort()
+const configuredFunctions=[...supabaseConfig.matchAll(/^\[functions\.([^\]]+)\]/gm)].map(match=>match[1]).sort()
 for(const name of functionInventory)if(!configuredFunctions.includes(name))failures.push(`Edge Function missing from config.toml: ${name}`)
 for(const name of configuredFunctions)if(!functionInventory.includes(name))failures.push(`config.toml references missing Edge Function: ${name}`)
 const retiredFunctions=["api","integration-webhook","checkout-engine","automation-engine","althea-gateway-orchestrator","gateway-refund","gateway-refund-v2","gateway-payment-link","gateway-provider-adapter-v2","funnel-events-secure"]
