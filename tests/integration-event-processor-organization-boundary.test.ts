@@ -18,7 +18,7 @@ describe('integration-event-processor organization boundary', () => {
       'db.from("gateway_transactions").select("*").eq("id", transactionId).eq("user_id", userId).eq("organization_id", organizationId).maybeSingle()',
     )
     expect(source).toMatch(
-      /db\.from\("sales"\)\.insert\(\{[^}]*user_id: userId, organization_id: organizationId,/,
+      /db\.from\("sales"\)\.insert\(\{[\s\S]*?user_id: userId, organization_id: organizationId,/,
     )
   })
 
@@ -48,7 +48,7 @@ describe('integration-event-processor organization boundary', () => {
 
   it('writes the canonical organization_id explicitly on every materialized sale', () => {
     expect(source).toMatch(
-      /db\.from\("sales"\)\.insert\(\{[^}]*organization_id: organizationId,/,
+      /db\.from\("sales"\)\.insert\(\{[\s\S]*?organization_id: organizationId,/,
     )
   })
 
