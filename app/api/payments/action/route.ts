@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
+import { consumePublicRateLimit, retryAfterSeconds } from '@/lib/security/public-rate-limit'
 
 type JsonObject = Record<string, unknown>
 const text = (v: unknown) => typeof v === 'string' ? v.trim() : ''
@@ -27,6 +28,10 @@ export async function POST(request: Request) {
     const idempotencyKey = text(body.idempotency_key)
     if (!/^[0-9a-f-]{36}$/i.test(transactionId) || !/^[0-9a-f-]{36}$/i.test(checkoutSessionId) || idempotencyKey.length < 16 || idempotencyKey.length > 128) return NextResponse.json({ ok:false, code:'INVALID_PAYMENT_ACTION_REQUEST' }, { status:400 })
     const admin = createSupabaseAdminClient()
+    const rate = await consumePublicRateLimit(admin, request, 'payment-action', transactionId, 60, 60)
+    if (!rate.allowed) return rate.unavailable
+      ? NextResponse.json({ ok:false, code:'PUBLIC_RATE_LIMIT_UNAVAILABLE' }, { status:503 })
+      : NextResponse.json({ ok:false, code:'RATE_LIMITED' }, { status:429, headers:{ 'Retry-After':retryAfterSeconds(rate.resetAt) } })
     const { data: session } = await admin.from('checkout_sessions').select('id,organization_id,idempotency_key').eq('id', checkoutSessionId).maybeSingle()
     if (!session) return NextResponse.json({ ok:false, code:'CHECKOUT_SESSION_NOT_FOUND' }, { status:404 })
     if (text(session.idempotency_key) !== idempotencyKey) return NextResponse.json({ ok:false, code:'CHECKOUT_SESSION_TOKEN_MISMATCH' }, { status:403 })
