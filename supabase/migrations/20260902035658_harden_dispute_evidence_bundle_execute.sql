@@ -1,0 +1,1 @@
+revoke execute on function public.build_dispute_evidence_bundle(uuid) from public; revoke execute on function public.build_dispute_evidence_bundle(uuid) from anon; revoke execute on function public.build_dispute_evidence_bundle(uuid) from authenticated; grant execute on function public.build_dispute_evidence_bundle(uuid) to service_role;

@@ -1,0 +1,14 @@
+REVOKE EXECUTE ON FUNCTION public.reserve_transaction_audit_event(uuid,text,text,uuid,text,jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.reserve_transaction_audit_event(uuid,text,text,uuid,text,jsonb) TO service_role;
+ALTER FUNCTION public.reserve_transaction_audit_event(uuid,text,text,uuid,text,jsonb) SET search_path = pg_catalog, public, private;
+ALTER FUNCTION public.ingest_gateway_webhook(text,text,timestamp with time zone,jsonb) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.platform_release_ready() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.handle_new_user() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.mark_integration_event_processed(uuid,text,text) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.get_funnel_connection_health(uuid) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.register_integration_event(text,text,text,jsonb,timestamp with time zone) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.ensure_funnel_connection() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.sync_profile_display_name() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.transition_gateway_transaction(uuid,text,text) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.transition_gateway_transaction_status(uuid,uuid,text,text,text) SET search_path = pg_catalog, public;
+ALTER FUNCTION public.record_platform_health_check(text,text,jsonb) SET search_path = pg_catalog, public;

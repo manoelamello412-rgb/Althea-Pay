@@ -1,0 +1,1 @@
+revoke execute on function public.register_integration_event(text,text,text,jsonb,timestamptz) from authenticated;

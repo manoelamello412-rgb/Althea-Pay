@@ -1,0 +1,1 @@
+alter publication supabase_realtime add table public.sales, public.funnels, public.funnel_connections, public.integration_events;

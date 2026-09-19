@@ -1,0 +1,1 @@
+drop index if exists public.gateway_transactions_refund_lookup_idx;

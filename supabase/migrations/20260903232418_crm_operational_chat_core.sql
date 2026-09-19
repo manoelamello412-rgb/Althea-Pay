@@ -1,0 +1,15 @@
+create table if not exists public.crm_conversations (id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade, funnel_id text, product_id text, transaction_id text, buyer_name text, buyer_email text, status text not null default 'open', assigned_to uuid, metadata jsonb not null default '{}'::jsonb, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table if not exists public.crm_messages (id uuid primary key default gen_random_uuid(), conversation_id uuid not null references public.crm_conversations(id) on delete cascade, user_id uuid not null references auth.users(id) on delete cascade, direction text not null check(direction in ('inbound','outbound')), channel text not null default 'funnel_chat', body text not null, created_at timestamptz not null default now());
+create index if not exists crm_conversations_user_updated_idx on public.crm_conversations(user_id,updated_at desc);
+create index if not exists crm_messages_conversation_created_idx on public.crm_messages(conversation_id,created_at);
+alter table public.crm_conversations enable row level security;
+alter table public.crm_messages enable row level security;
+drop policy if exists crm_conversations_owner on public.crm_conversations;
+create policy crm_conversations_owner on public.crm_conversations for all using (user_id=auth.uid()) with check (user_id=auth.uid());
+drop policy if exists crm_messages_owner on public.crm_messages;
+create policy crm_messages_owner on public.crm_messages for all using (user_id=auth.uid()) with check (user_id=auth.uid());
+create or replace function public.crm_touch_conversation() returns trigger language plpgsql as $$ begin update public.crm_conversations set updated_at=now() where id=new.conversation_id; return new; end; $$;
+drop trigger if exists crm_messages_touch_conversation on public.crm_messages;
+create trigger crm_messages_touch_conversation after insert on public.crm_messages for each row execute function public.crm_touch_conversation();
+alter publication supabase_realtime add table public.crm_conversations;
+alter publication supabase_realtime add table public.crm_messages;
