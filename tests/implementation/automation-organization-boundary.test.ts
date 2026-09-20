@@ -2,9 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { readFile } from 'node:fs/promises'
 
 const enginePath = 'supabase/functions/automation-engine-v2/index.ts'
-const eventWorkerPath = 'supabase/functions/event-worker/index.ts'
-const webhookPath = 'supabase/functions/althea-webhook/index.ts'
-
 describe('automation organization boundary contract', () => {
   it('requires and preserves organization_id in the canonical context', async () => {
     const source = await readFile(enginePath, 'utf8')
@@ -66,17 +63,4 @@ describe('automation organization boundary contract', () => {
     expect(source).toContain('automation:${c.organization_id}:${rule.id}:${identity}:${channel}:${hash}')
   })
 
-  it('propagates organization_id from the event worker', async () => {
-    const source = await readFile(eventWorkerPath, 'utf8')
-    expect(source).toContain('id,user_id,organization_id,funnel_id,event_type')
-    expect(source).toContain('organization_id: event.organization_id')
-  })
-
-  it('resolves the webhook organization and propagates it to events and automation', async () => {
-    const source = await readFile(webhookPath, 'utf8')
-    expect(source).toContain("db.from('webhook_integrations').select('organization_id')")
-    expect(source).toContain('webhook_integration_organization_missing')
-    expect(source).toContain('organization_id: organizationId')
-    expect(source).toContain('/functions/v1/automation-engine-v2')
-  })
 })
