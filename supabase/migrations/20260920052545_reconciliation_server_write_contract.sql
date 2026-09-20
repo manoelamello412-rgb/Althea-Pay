@@ -124,6 +124,7 @@ begin
   end if;
 
   if p_user_id is null or p_organization_id is null or p_run_id is null
+     or p_status is null
      or p_status not in ('matched','amount_mismatch','missing_internal','missing_gateway','duplicate','unmatched') then
     raise exception 'invalid_reconciliation_item_context' using errcode='22023';
   end if;
@@ -216,13 +217,16 @@ begin
   end if;
 
   if p_user_id is null or p_organization_id is null or p_run_id is null
+     or p_status is null
      or p_status not in ('completed','failed') then
     raise exception 'invalid_reconciliation_finalize_context' using errcode='22023';
   end if;
 
   if p_matched_count < 0 or p_mismatch_count < 0
      or p_gross_expected < 0 or p_gross_reported < 0
-     or p_fees_expected < 0 or p_fees_reported < 0 then
+     or p_fees_expected < 0 or p_fees_reported < 0
+     or p_fees_expected > p_gross_expected
+     or p_fees_reported > p_gross_reported then
     raise exception 'invalid_reconciliation_totals' using errcode='22023';
   end if;
 
