@@ -19,8 +19,8 @@ describe('release prerequisite server write DB contract', () => {
     expect(migration).toContain('server_insert_integration_event_v1')
     expect(migration).toContain('server_upsert_transaction_sale_v1')
     expect(migration).toContain('server_update_sale_status_v1')
-    expect(migration.match(/security definer/gi)?.length).toBeGreaterThanOrEqual(3)
-    expect(migration.match(/auth\.role\(\) <> 'service_role'/g)?.length).toBeGreaterThanOrEqual(3)
+    expect(migration.match(/security definer/gi)?.length).toBeGreaterThanOrEqual(6)
+    expect(migration.match(/auth\.role\(\) <> 'service_role'/g)?.length).toBeGreaterThanOrEqual(6)
     expect(migration).toContain('funnel_tenant_mismatch')
     expect(migration).toContain('integration_tenant_mismatch')
     expect(migration).toContain('transaction_tenant_mismatch')
@@ -40,6 +40,25 @@ describe('release prerequisite server write DB contract', () => {
       'grant execute on function public.server_update_sale_status_v1(',
     )
     expect(migration.match(/from public, anon, authenticated;/g)?.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('adds narrow tenant-aware integration-event lifecycle RPCs', () => {
+    expect(migration).toContain('server_claim_integration_event_v1')
+    expect(migration).toContain('server_complete_integration_event_v1')
+    expect(migration).toContain('server_fail_integration_event_v1')
+    expect(migration).toContain("organization_id=p_organization_id")
+    expect(migration).toContain("p_next_status not in ('retry','failed','dead_letter')")
+    expect(migration).toContain("v_status not in ('pending','processing','retry','received','failed')")
+    expect(migration).toContain('claim_attempt=coalesce(v_claim_attempt,0)+1')
+    expect(migration).toContain('p_increment_retry_count')
+    expect(migration).toContain('next_retry_at=p_next_retry_at')
+    expect(migration).toContain('processed_at=now()')
+  })
+
+  it('keeps integration_events UPDATE as an explicit transitional privilege', () => {
+    expect(migration).toContain('broad UPDATE on integration_events is intentionally NOT revoked')
+    expect(migration).toContain('later privilege-tightening migration')
+    expect(migration).not.toMatch(/revoke\s+update\s+on\s+(?:table\s+)?public\.integration_events/i)
   })
 
   it('retires service-role execution of unsafe legacy projectors without deleting them', () => {
