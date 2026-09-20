@@ -50,7 +50,7 @@ describe('release prerequisite server write contract', () => {
     expect(gatewayProcessor).toContain('"x-internal-secret": internalSecret')
     expect(gatewayProcessor).toContain('organization_id: tx.organization_id')
     expect(gatewayProcessor).toContain('external_id: `gateway_webhook_event:${webhookId}`')
-    expect(gatewayProcessor).not.toContain('event_id: webhookId')
+    expect(gatewayProcessor).not.toContain('user_id: event.user_id ?? null, event_id: webhookId')
   })
 
   it('avoids duplicate direct automation when checkout-engine already projects a canonical integration event', () => {
