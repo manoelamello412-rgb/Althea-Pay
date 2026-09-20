@@ -7,7 +7,7 @@ const migration = readFileSync(
 )
 
 describe('release prerequisite server write DB contract', () => {
-  it('keeps broad service-role table DML disabled', () => {
+  it('keeps direct event INSERT and sale INSERT/UPDATE disabled', () => {
     expect(migration).toContain('unexpected broad service_role DML grant already exists')
     expect(migration).toContain('broad service_role table DML must remain disabled')
     expect(migration).not.toMatch(
