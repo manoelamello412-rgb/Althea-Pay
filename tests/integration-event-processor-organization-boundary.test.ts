@@ -43,10 +43,16 @@ describe('integration-event-processor organization boundary', () => {
     expect(source).toContain('sale_id: saleId')
   })
 
-  it('preserves event claim/retry and already-processed idempotency behavior', () => {
-    expect(source).toContain('db.rpc("claim_integration_event", { p_event_id: eventId })')
+  it('preserves event claim/retry and already-processed idempotency through the canonical lifecycle RPCs', () => {
+    expect(source).toContain('db.rpc("server_claim_integration_event_v1"')
+    expect(source).toContain('p_increment_retry_count: false')
+    expect(source).toContain('db.rpc("server_complete_integration_event_v1"')
+    expect(source).toContain('db.rpc("server_fail_integration_event_v1"')
+    expect(source).toContain('p_expected_status: "processing"')
+    expect(source).toContain('p_next_status: "retry"')
     expect(source).toContain('already_processed: true')
-    expect(source).toContain('p_status: "processed"')
-    expect(source).toContain('p_status: "retry"')
+    expect(source).toContain('.eq("organization_id", organizationId).maybeSingle()')
+    expect(source).not.toContain('db.rpc("claim_integration_event"')
+    expect(source).not.toContain('db.rpc("mark_integration_event_processed"')
   })
 })
