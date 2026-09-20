@@ -31,6 +31,8 @@ describe('reconciliation server write DB contract', () => {
   it('protects run lifecycle and final totals', () => {
     expect(migration).toContain("p_status not in ('completed','failed')")
     expect(migration).toContain("v_current_status not in ('pending','running')")
+    expect(migration).toContain('p_fees_expected > p_gross_expected')
+    expect(migration).toContain('p_fees_reported > p_gross_reported')
     expect(migration).toContain('net_expected=v_net_expected')
     expect(migration).toContain('net_reported=v_net_reported')
   })
