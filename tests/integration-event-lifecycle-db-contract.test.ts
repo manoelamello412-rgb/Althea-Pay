@@ -48,7 +48,8 @@ describe('integration event lifecycle DB contract', () => {
   })
 
   it('does not revoke transitional direct integration_events update yet', () => {
-    expect(migration).not.toMatch(
+    const executableSql = migration.replace(/--[^\n]*/g, '')
+    expect(executableSql).not.toMatch(
       /revoke\s+update\s+on\s+(?:table\s+)?public\.integration_events\s+from\s+service_role/i,
     )
     expect(migration).toContain('privilege-tightening migration')
