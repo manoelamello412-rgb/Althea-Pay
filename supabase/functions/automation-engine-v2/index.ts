@@ -246,37 +246,26 @@ async function runSingleAction(cfg: any, rule: any, c: any, actionIndex = 0) {
   }
 
   if (type === "update_sale") {
-    if (!c.sale_id && !c.external_id) throw Error("sale_identifier_required");
+    if (!c.sale_id && !c.external_id && !c.transaction_id) throw Error("sale_identifier_required");
 
-    let sale: any = null;
-    if (c.sale_id) {
-      const { data, error } = await db.from("sales")
-        .select("id,user_id,organization_id,status,external_id")
-        .eq("id", c.sale_id)
-        .eq("organization_id", c.organization_id)
-        .eq("user_id", c.user_id)
-        .maybeSingle();
-      if (error) throw error;
-      sale = data;
-    } else {
-      const { data, error } = await db.from("sales")
-        .select("id,user_id,organization_id,status,external_id")
-        .eq("external_id", c.external_id)
-        .eq("organization_id", c.organization_id)
-        .eq("user_id", c.user_id)
-        .limit(2);
-      if (error) throw error;
-      if ((data ?? []).length > 1) throw Error("SALE_EXTERNAL_ID_AMBIGUOUS_IN_ORGANIZATION");
-      sale = data?.[0] ?? null;
-    }
-    if (!sale) throw Error("SALE_NOT_FOUND_IN_ORGANIZATION");
+    const updated = await db.rpc("server_update_sale_status_v1", {
+      p_user_id: c.user_id,
+      p_organization_id: c.organization_id,
+      p_status: String(cfg.status || "updated"),
+      p_sale_id: c.sale_id ?? null,
+      p_transaction_id: c.transaction_id ?? null,
+      p_external_id: c.external_id ?? null,
+      p_data: null,
+      p_occurred_at: new Date().toISOString(),
+    });
+    if (updated.error) throw updated.error;
+    if (!updated.data) throw Error("SALE_NOT_FOUND_IN_ORGANIZATION");
 
     const { data, error } = await db.from("sales")
-      .update({ status: cfg.status || "updated", occurred_at: new Date().toISOString() })
-      .eq("id", sale.id)
+      .select("id,organization_id,status")
+      .eq("id", updated.data)
       .eq("organization_id", c.organization_id)
       .eq("user_id", c.user_id)
-      .select("id,organization_id,status")
       .single();
     if (error) throw error;
     return { type, sale: data };
