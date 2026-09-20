@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
   const end = body.period_end ? new Date(body.period_end).toISOString() : new Date().toISOString();
   if (new Date(end) < new Date(start)) return json({ error: "invalid_period" }, 400);
 
-  const { data: gateways, error: gatewayError } = await db.from("gateways").select("id,user_id,data");
+  const { data: gateways, error: gatewayError } = await db.from("gateways").select("id,user_id,organization_id,data");
   if (gatewayError) return json({ error: "gateway_lookup_failed" }, 500);
   let processed = 0, updated = 0, failed = 0, missingGateway = 0, duplicateRemote = 0;
   const runs: string[] = [];
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
           continue;
         }
         seen.add(external);
-        const { data: tx, error: txError } = await db.from("gateway_transactions").select("id,amount,external_id,status,created_at").eq("user_id", gateway.user_id).eq("gateway_id", gateway.id).eq("external_id", external).maybeSingle();
+        const { data: tx, error: txError } = await db.from("gateway_transactions").select("id,amount,external_id,status,created_at,organization_id").eq("user_id", gateway.user_id).eq("organization_id", gateway.organization_id).eq("gateway_id", gateway.id).eq("external_id", external).maybeSingle();
         if (txError) throw txError;
         if (!tx) {
           mismatch++;
@@ -75,11 +75,11 @@ Deno.serve(async (req) => {
         if (!target || (target === "approved" && tx.status === "approved")) continue;
         const { error: transitionError } = await db.rpc("transition_gateway_transaction_status", { p_transaction_id: tx.id, p_user_id: gateway.user_id, p_next_status: target, p_failure_code: null, p_external_id: external });
         if (transitionError) throw transitionError;
-        if (target === "refunded" || target === "chargeback") await db.from("sales").update({ status: target, data: row }).eq("user_id", gateway.user_id).eq("transaction_id", tx.id);
+        if (target === "refunded" || target === "chargeback") { const saleUpdate = await db.rpc("server_update_sale_status_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_status: target, p_transaction_id: tx.id, p_external_id: external, p_data: row }); if (saleUpdate.error) throw saleUpdate.error; }
         updated++;
       }
 
-      const { data: internalRows, error: internalError } = await db.from("gateway_transactions").select("id,amount,external_id,status").eq("user_id", gateway.user_id).eq("gateway_id", gateway.id).gte("created_at", start).lte("created_at", end);
+      const { data: internalRows, error: internalError } = await db.from("gateway_transactions").select("id,amount,external_id,status").eq("user_id", gateway.user_id).eq("organization_id", gateway.organization_id).eq("gateway_id", gateway.id).gte("created_at", start).lte("created_at", end);
       if (internalError) throw internalError;
       for (const tx of internalRows ?? []) {
         const external = String(tx.external_id ?? "").trim();
