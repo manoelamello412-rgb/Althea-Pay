@@ -45,6 +45,7 @@ Deno.serve(
     let deliveryId: string | null = null
     let eventIdDb: string | null = null
     let tenantUserId: string | null = null
+    let tenantOrganizationId: string | null = null
 
     try {
       if (!eventId) return Response.json({ ok: false, error: 'event_id_required' }, { status: 400, headers: corsHeaders })
@@ -58,6 +59,7 @@ Deno.serve(
       const integrationTenant = await db.from('webhook_integrations').select('organization_id').eq('id', integration.id).eq('user_id', integration.user_id).maybeSingle()
       if (integrationTenant.error) throw integrationTenant.error
       const organizationId = integrationTenant.data?.organization_id ? String(integrationTenant.data.organization_id) : ''
+      tenantOrganizationId = organizationId || null
       if (!organizationId) return Response.json({ ok: false, error: 'webhook_integration_organization_missing' }, { status: 500, headers: corsHeaders })
 
       const secret = String(integration.secret ?? '')
@@ -210,21 +212,26 @@ Deno.serve(
         }
       }
 
-      const eventProcessed = await db.rpc('mark_integration_event_processed', { p_event_id: eventIdDb, p_status: 'processed', p_error: null })
-      if (eventProcessed.error) throw eventProcessed.error
+      const eventProcessed = await db.rpc('server_complete_integration_event_v1', { p_event_id: eventIdDb, p_user_id: userId, p_organization_id: organizationId, p_expected_status: 'processing' })
+      if (eventProcessed.error || eventProcessed.data !== true) throw eventProcessed.error ?? new Error('integration_event_complete_rejected')
       await db.from('webhook_deliveries').update({ status: 'delivered', response_code: 200, response_time_ms: Date.now() - started, delivered_at: new Date().toISOString() }).eq('id', deliveryId).eq('user_id', userId)
       return Response.json({ ok: true, duplicate: false, event_id: eventIdDb, processed: true, sale_id: saleId, sale_synced: purchase || reversal, automation_triggered: automationTriggered, universal_webhook_triggered: universalWebhookTriggered }, { headers: corsHeaders })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'webhook_processing_failed'
       console.error('althea-webhook', error)
-      if (eventIdDb && tenantUserId) {
-        const eventRetry = await db.rpc('server_retry_integration_event_v1', {
+      if (eventIdDb && tenantUserId && tenantOrganizationId) {
+        const existingEvent = await db.from('integration_events').select('retry_count').eq('id', eventIdDb).eq('user_id', tenantUserId).eq('organization_id', tenantOrganizationId).maybeSingle()
+        const eventRetry = await db.rpc('server_fail_integration_event_v1', {
           p_event_id: eventIdDb,
+          p_user_id: tenantUserId,
+          p_organization_id: tenantOrganizationId,
+          p_next_status: 'retry',
+          p_expected_status: 'processing',
+          p_retry_count: Number(existingEvent.data?.retry_count ?? 0) + 1,
           p_error: message,
-          p_delay_seconds: null,
-          p_increment_retry_count: true,
+          p_next_retry_at: null,
         })
-        if (eventRetry.error) console.error('althea-webhook-retry-transition', eventRetry.error)
+        if (eventRetry.error || eventRetry.data !== true) console.error('althea-webhook-retry-transition', eventRetry.error ?? 'transition_rejected')
       }
       if (deliveryId && tenantUserId) await db.from('webhook_deliveries').update({ status: 'failed', response_code: 500, response_time_ms: Date.now() - started, error_message: message }).eq('id', deliveryId).eq('user_id', tenantUserId)
       return Response.json({ ok: false, error: message, event_id: eventIdDb, retryable: Boolean(eventIdDb) }, { status: 500, headers: corsHeaders })
