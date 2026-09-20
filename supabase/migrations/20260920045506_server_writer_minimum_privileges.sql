@@ -113,7 +113,7 @@ begin
     'original_event_type','protocol_version','session_id','visitor_id','customer_id',
     'external_id','event_key','status','payload','occurred_at','claim_attempt'
   ] loop
-    if not has_column_privilege('service_role',format('public.integration_events.%I',v_col),'INSERT') then
+    if not has_column_privilege('service_role','public.integration_events',v_col,'INSERT') then
       raise exception 'writer_privilege_post_guard: missing integration_events INSERT privilege on %', v_col;
     end if;
   end loop;
@@ -123,7 +123,7 @@ begin
     'amount','currency','status','attribution','source','medium','campaign','content','term',
     'click_id','external_id','gateway_id','occurred_at','data'
   ] loop
-    if not has_column_privilege('service_role',format('public.sales.%I',v_col),'INSERT') then
+    if not has_column_privilege('service_role','public.sales',v_col,'INSERT') then
       raise exception 'writer_privilege_post_guard: missing sales INSERT privilege on %', v_col;
     end if;
   end loop;
@@ -133,13 +133,13 @@ begin
     'amount','currency','status','attribution','source','medium','campaign','content','term',
     'click_id','external_id','gateway_id','occurred_at','data'
   ] loop
-    if not has_column_privilege('service_role',format('public.sales.%I',v_col),'UPDATE') then
+    if not has_column_privilege('service_role','public.sales',v_col,'UPDATE') then
       raise exception 'writer_privilege_post_guard: missing sales UPDATE privilege on %', v_col;
     end if;
   end loop;
 
-  if has_column_privilege('service_role','public.sales.id','UPDATE')
-     or has_column_privilege('service_role','public.sales.created_at','UPDATE') then
+  if has_column_privilege('service_role','public.sales','id','UPDATE')
+     or has_column_privilege('service_role','public.sales','created_at','UPDATE') then
     raise exception 'writer_privilege_post_guard: immutable sales columns unexpectedly writable';
   end if;
 
