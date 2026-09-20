@@ -55,6 +55,10 @@ Deno.serve(
       const integration = Array.isArray(result.data) ? (result.data[0] ?? null) : result.data
       if (!integration) return Response.json({ ok: false, error: 'webhook_integration_not_found' }, { status: 404, headers: corsHeaders })
       tenantUserId = integration.user_id
+      const integrationTenant = await db.from('webhook_integrations').select('organization_id').eq('id', integration.id).eq('user_id', integration.user_id).maybeSingle()
+      if (integrationTenant.error) throw integrationTenant.error
+      const organizationId = integrationTenant.data?.organization_id ? String(integrationTenant.data.organization_id) : ''
+      if (!organizationId) return Response.json({ ok: false, error: 'webhook_integration_organization_missing' }, { status: 500, headers: corsHeaders })
 
       const secret = String(integration.secret ?? '')
       if (!secret) return Response.json({ ok: false, error: 'webhook_secret_not_configured' }, { status: 503, headers: corsHeaders })
@@ -98,7 +102,7 @@ Deno.serve(
         return Response.json({ ok: true, duplicate: true, event_id: existing.data.id, status: existing.data.status }, { headers: corsHeaders })
       }
 
-      const event = await db.from('integration_events').insert({ user_id: userId, funnel_id: funnelId, integration_id: integration.id, event_type: eventType, external_id: eventId, event_key: eventKey, status: 'processing', payload, occurred_at: new Date(Number(timestamp.length <= 10 ? Number(timestamp) * 1000 : timestamp)).toISOString(), claim_attempt: 0 }).select('id').single()
+      const event = await db.from('integration_events').insert({ user_id: userId, organization_id: organizationId, funnel_id: funnelId, integration_id: integration.id, event_type: eventType, external_id: eventId, event_key: eventKey, status: 'processing', payload, occurred_at: new Date(Number(timestamp.length <= 10 ? Number(timestamp) * 1000 : timestamp)).toISOString(), claim_attempt: 0 }).select('id').single()
       if (event.error) {
         if (event.error.code === '23505') {
           const duplicate = await db.from('integration_events').select('id,status').eq('event_key', eventKey).maybeSingle()
@@ -170,7 +174,7 @@ Deno.serve(
       let automationTriggered = false
       let universalWebhookTriggered = false
       if (internalSecret) {
-        const automationResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/automation-engine-v2`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': internalSecret }, body: JSON.stringify({ user_id: userId, funnel_id: funnelId, event_id: event.data.id, event_type: eventType, transaction_id: transactionId, checkout_id: checkoutId, sale_id: saleId, external_id: externalId, payload }) })
+        const automationResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/automation-engine-v2`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-secret': internalSecret }, body: JSON.stringify({ user_id: userId, organization_id: organizationId, funnel_id: funnelId, event_id: event.data.id, event_type: eventType, transaction_id: transactionId, checkout_id: checkoutId, sale_id: saleId, external_id: externalId, payload }) })
         automationTriggered = automationResponse.ok
         if (!automationResponse.ok) throw new Error(`automation_engine_http_${automationResponse.status}`)
         if (purchase) {
