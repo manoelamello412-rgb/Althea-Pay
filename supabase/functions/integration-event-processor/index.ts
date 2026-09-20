@@ -71,47 +71,37 @@ Deno.serve(async (req) => {
     let saleId: string | null = null;
     if (status === "approved" && tx) {
       const externalId = String(payload.external_id ?? tx.external_id ?? event.external_id ?? event.id);
-      const existing = await db.from("sales").select("id").eq("organization_id", organizationId).eq("user_id", userId).eq("transaction_id", tx.id).maybeSingle();
-      if (existing.error) throw existing.error;
-      if (existing.data) {
-        saleId = String(existing.data.id);
-      } else {
-        const sale = await db.from("sales").insert({ id: `gateway_tx_${String(tx.id)}`, user_id: userId, organization_id: organizationId, funnel_id: event.funnel_id, checkout_id: checkoutId || null, transaction_id: tx.id, product_id: tx.product_id ?? null, amount: tx.amount ?? payload.amount ?? 0, currency: tx.currency ?? payload.currency ?? "BRL", status: "approved", external_id: externalId, gateway_id: tx.gateway_id ?? null, data: payload, occurred_at: event.occurred_at ?? new Date().toISOString() }).select("id").single();
-        if (sale.error) {
-          if (sale.error.code === "23505") {
-            const concurrent = await db.from("sales").select("id").eq("organization_id", organizationId).eq("user_id", userId).eq("transaction_id", tx.id).maybeSingle();
-            if (concurrent.error) throw concurrent.error;
-            if (!concurrent.data) throw sale.error;
-            saleId = String(concurrent.data.id);
-          } else {
-            throw sale.error;
-          }
-        } else {
-          saleId = String(sale.data.id);
-        }
-      }
+      const sale = await db.rpc("server_upsert_transaction_sale_v1", {
+        p_user_id: userId,
+        p_organization_id: organizationId,
+        p_transaction_id: tx.id,
+        p_funnel_id: event.funnel_id,
+        p_product_id: tx.product_id ?? null,
+        p_checkout_id: checkoutId || null,
+        p_amount: tx.amount ?? payload.amount ?? 0,
+        p_currency: tx.currency ?? payload.currency ?? "BRL",
+        p_attribution: {},
+        p_external_id: externalId,
+        p_occurred_at: event.occurred_at ?? new Date().toISOString(),
+        p_data: payload,
+      });
+      if (sale.error) throw sale.error;
+      saleId = sale.data ? String(sale.data) : null;
     }
     if (["refunded", "chargeback"].includes(status)) {
       const externalId = String(payload.external_id ?? tx?.external_id ?? event.external_id ?? event.id);
-      let targetSale: { id: string; transaction_id?: string | null } | null = null;
-      if (tx?.id) {
-        const byTransaction = await db.from("sales").select("id,transaction_id").eq("organization_id", organizationId).eq("user_id", userId).eq("transaction_id", tx.id).maybeSingle();
-        if (byTransaction.error) throw byTransaction.error;
-        targetSale = byTransaction.data;
-      }
-      if (!targetSale && externalId) {
-        const fallback = await db.from("sales").select("id,transaction_id").eq("organization_id", organizationId).eq("user_id", userId).eq("external_id", externalId).limit(2);
-        if (fallback.error) throw fallback.error;
-        if ((fallback.data ?? []).length > 1) throw new Error("sale_external_id_ambiguous");
-        const candidate = fallback.data?.[0] ?? null;
-        if (candidate && tx?.id && candidate.transaction_id && candidate.transaction_id !== tx.id) throw new Error("sale_external_id_conflict");
-        targetSale = candidate;
-      }
-      if (targetSale) {
-        const result = await db.from("sales").update({ status, data: payload }).eq("id", targetSale.id).eq("organization_id", organizationId).eq("user_id", userId);
-        if (result.error) throw result.error;
-        saleId = saleId ?? String(targetSale.id);
-      }
+      const updated = await db.rpc("server_update_sale_status_v1", {
+        p_user_id: userId,
+        p_organization_id: organizationId,
+        p_status: status,
+        p_sale_id: saleId,
+        p_transaction_id: tx?.id ?? null,
+        p_external_id: externalId,
+        p_data: payload,
+        p_occurred_at: null,
+      });
+      if (updated.error) throw updated.error;
+      if (updated.data) saleId = String(updated.data);
     }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3500);
