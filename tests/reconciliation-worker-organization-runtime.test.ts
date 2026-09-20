@@ -18,6 +18,7 @@ describe('reconciliation worker organization-aware runtime', () => {
     expect(worker).not.toContain('db.from("reconciliation_runs").insert')
     expect(worker).not.toContain('db.from("reconciliation_runs").update')
     expect(worker).not.toContain('db.from("reconciliation_items").insert')
+    expect(worker).not.toContain('db.from("reconciliation_items").update')
   })
 
   it('persists organization context through every reconciliation writer', () => {
