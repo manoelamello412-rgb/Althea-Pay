@@ -9,6 +9,7 @@ describe('automation transaction RPC contract', () => {
     expect(source).toMatch(/p_next_status\s*:\s*String\(cfg\.status\)/)
     expect(source).toMatch(/p_failure_code\s*:\s*cfg\.error_message\s*\?\s*String\(cfg\.error_message\)\s*:\s*null/)
     expect(source).toMatch(/p_external_id\s*:\s*null/)
+    expect(source).toMatch(/p_expected_version\s*:\s*Number\(current\.version\)/)
     expect(source).not.toContain('p_new_status')
     expect(source).not.toContain('p_error_message')
     expect(source).not.toContain('p_external_status')
