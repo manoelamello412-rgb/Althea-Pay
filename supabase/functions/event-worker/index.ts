@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
   try {
     const now = new Date().toISOString();
     const retryableStatuses = ["pending", "failed", "retry", "received"];
-    const { data: events, error } = await db.from("integration_events").select("id,user_id,organization_id,funnel_id,event_type,external_id,status,payload,event_key,processed_at,error_message,retry_count,next_retry_at,claimed_at,claim_attempt").in("status", retryableStatuses).or(`next_retry_at.is.null,next_retry_at.lte.${now}`).order("created_at", { ascending: true }).limit(limit);
+    const { data: events, error } = await db.from("integration_events").select("id,user_id,funnel_id,event_type,external_id,status,payload,event_key,processed_at,error_message,retry_count,next_retry_at,claimed_at,claim_attempt").in("status", retryableStatuses).or(`next_retry_at.is.null,next_retry_at.lte.${now}`).order("created_at", { ascending: true }).limit(limit);
     if (error) throw error;
     let processed = 0, failed = 0;
     for (const event of events ?? []) {
@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
         const { data: claimedEvent, error: claimError } = await db.from("integration_events").update({ status: "processing", retry_count: retryCount, claimed_at: new Date().toISOString(), claim_attempt: Number(event.claim_attempt ?? 0) + 1, error_message: null }).eq("id", event.id).in("status", retryableStatuses).select("id").maybeSingle();
         if (claimError) throw claimError;
         if (!claimedEvent) continue;
-        const response = await fetch(`${supabaseUrl}/functions/v1/automation-engine-v2`, { method: "POST", headers: { "content-type": "application/json", "x-internal-secret": internalSecret }, body: JSON.stringify({ event_id: event.id, event_type: event.event_type, user_id: event.user_id, organization_id: event.organization_id, funnel_id: event.funnel_id, external_id: event.external_id, payload: event.payload ?? {} }) });
+        const response = await fetch(`${supabaseUrl}/functions/v1/automation-engine-v2`, { method: "POST", headers: { "content-type": "application/json", "x-internal-secret": internalSecret }, body: JSON.stringify({ event_id: event.id, event_type: event.event_type, user_id: event.user_id, funnel_id: event.funnel_id, external_id: event.external_id, payload: event.payload ?? {} }) });
         if (!response.ok) { const detail = await response.text().catch(() => ""); throw new Error(`automation_engine_${response.status}${detail ? `:${detail.slice(0, 300)}` : ""}`); }
         const { error: processedError } = await db.from("integration_events").update({ status: "processed", processed_at: new Date().toISOString(), next_retry_at: null, claimed_at: null, error_message: null }).eq("id", event.id).eq("status", "processing");
         if (processedError) throw processedError;
