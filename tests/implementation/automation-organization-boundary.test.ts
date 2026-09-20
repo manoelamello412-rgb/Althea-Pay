@@ -34,13 +34,14 @@ describe('automation organization boundary contract', () => {
     expect(source).toContain('RETRY_USER_MISMATCH')
   })
 
-  it('keeps sale lookup and mutation organization-aware and rejects ambiguous external identifiers', async () => {
+  it('routes sale mutation through the guarded tenant-aware server RPC', async () => {
     const source = await readFile(enginePath, 'utf8')
-    expect(source).toContain('SALE_EXTERNAL_ID_AMBIGUOUS_IN_ORGANIZATION')
+    expect(source).toContain('db.rpc("server_update_sale_status_v1"')
+    expect(source).toContain('p_organization_id: c.organization_id')
+    expect(source).toContain('p_transaction_id: c.transaction_id ?? null')
+    expect(source).toContain('p_external_id: c.external_id ?? null')
     expect(source).toContain('SALE_NOT_FOUND_IN_ORGANIZATION')
-    expect(source).toContain('.eq("external_id", c.external_id)')
-    expect(source).toContain('.limit(2)')
-    expect(source).toContain('.eq("id", sale.id)')
+    expect(source).not.toContain('db.from("sales")\n      .update(')
   })
 
   it('scopes checkout, conversations and agents by organization', async () => {
