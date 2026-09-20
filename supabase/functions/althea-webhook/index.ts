@@ -150,24 +150,54 @@ Deno.serve(
       if (purchase && transaction) {
         const saleExternalId = externalId || transaction.external_id || eventId
         const attribution = checkout?.attribution && typeof checkout.attribution === 'object' ? checkout.attribution : {}
-        const sale: any = { funnel_id: funnelId, product_id: checkout?.product_id ?? transaction.product_id ?? null, checkout_id: checkoutId, transaction_id: transaction.id, amount: transaction.amount ?? checkout?.amount ?? payload.amount ?? 0, currency: transaction.currency ?? checkout?.currency ?? payload.currency ?? 'BRL', status: 'approved', attribution, source: attribution.source ?? null, medium: attribution.medium ?? null, campaign: attribution.campaign ?? null, content: attribution.content ?? null, term: attribution.term ?? null, click_id: attribution.click_id ?? null, external_id: saleExternalId, gateway_id: transaction.gateway_id ?? null, occurred_at: new Date(Number(timestamp.length <= 10 ? Number(timestamp) * 1000 : timestamp)).toISOString(), data: payload, user_id: userId }
-        const existingSale = await db.from('sales').select('id').eq('user_id', userId).eq('transaction_id', transaction.id).maybeSingle()
+        const sale: any = { organization_id: organizationId, funnel_id: funnelId, product_id: checkout?.product_id ?? transaction.product_id ?? null, checkout_id: checkoutId, transaction_id: transaction.id, amount: transaction.amount ?? checkout?.amount ?? payload.amount ?? 0, currency: transaction.currency ?? checkout?.currency ?? payload.currency ?? 'BRL', status: 'approved', attribution, source: attribution.source ?? null, medium: attribution.medium ?? null, campaign: attribution.campaign ?? null, content: attribution.content ?? null, term: attribution.term ?? null, click_id: attribution.click_id ?? null, external_id: saleExternalId, gateway_id: transaction.gateway_id ?? null, occurred_at: new Date(Number(timestamp.length <= 10 ? Number(timestamp) * 1000 : timestamp)).toISOString(), data: payload, user_id: userId }
+        const existingSale = await db.from('sales').select('id').eq('organization_id', organizationId).eq('user_id', userId).eq('transaction_id', transaction.id).maybeSingle()
         if (existingSale.error) throw existingSale.error
         if (existingSale.data) {
           saleId = existingSale.data.id
-          const updated = await db.from('sales').update(sale).eq('id', saleId).eq('user_id', userId)
+          const updated = await db.from('sales').update(sale).eq('id', saleId).eq('organization_id', organizationId).eq('user_id', userId)
           if (updated.error) throw updated.error
         } else {
-          const inserted = await db.from('sales').insert({ ...sale, id: `sale_${eventId}` }).select('id').single()
-          if (inserted.error) throw inserted.error
-          saleId = inserted.data.id
+          const inserted = await db.from('sales').insert({ ...sale, id: `gateway_tx_${transaction.id}` }).select('id').single()
+          if (inserted.error) {
+            if (inserted.error.code === '23505') {
+              const concurrent = await db.from('sales').select('id').eq('organization_id', organizationId).eq('user_id', userId).eq('transaction_id', transaction.id).maybeSingle()
+              if (concurrent.error) throw concurrent.error
+              if (concurrent.data) saleId = concurrent.data.id
+              else throw inserted.error
+            } else {
+              throw inserted.error
+            }
+          } else {
+            saleId = inserted.data.id
+          }
         }
       }
 
       if (reversal) {
         const saleExternalId = externalId || transaction?.external_id || eventId
-        const updated = await db.from('sales').update({ status: status === 'chargeback' || norm(eventType) === 'chargeback' ? 'chargeback' : 'refunded', data: payload }).eq('user_id', userId).eq('external_id', saleExternalId)
-        if (updated.error) throw updated.error
+        let targetSale: { id: string; transaction_id?: string | null } | null = null
+
+        if (transaction?.id) {
+          const byTransaction = await db.from('sales').select('id,transaction_id').eq('organization_id', organizationId).eq('user_id', userId).eq('transaction_id', transaction.id).maybeSingle()
+          if (byTransaction.error) throw byTransaction.error
+          targetSale = byTransaction.data
+        }
+
+        if (!targetSale && saleExternalId) {
+          const fallback = await db.from('sales').select('id,transaction_id').eq('organization_id', organizationId).eq('user_id', userId).eq('external_id', saleExternalId).limit(2)
+          if (fallback.error) throw fallback.error
+          if ((fallback.data ?? []).length > 1) throw new Error('sale_external_id_ambiguous')
+          const candidate = fallback.data?.[0] ?? null
+          if (candidate && transaction?.id && candidate.transaction_id && candidate.transaction_id !== transaction.id) throw new Error('sale_external_id_conflict')
+          targetSale = candidate
+        }
+
+        if (targetSale) {
+          const updated = await db.from('sales').update({ status: status === 'chargeback' || norm(eventType) === 'chargeback' ? 'chargeback' : 'refunded', data: payload }).eq('id', targetSale.id).eq('organization_id', organizationId).eq('user_id', userId)
+          if (updated.error) throw updated.error
+          saleId = saleId ?? targetSale.id
+        }
       }
 
       const internalSecret = Deno.env.get('ALTHEA_INTERNAL_SECRET') || ''
