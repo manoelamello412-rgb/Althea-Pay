@@ -30,6 +30,11 @@ describe('organization-aware reconciliation runtime', () => {
     expect(worker).not.toContain('db.from("sales").update')
   })
 
+  it('preserves the cron-compatible internal-secret entry contract', () => {
+    expect(worker).toContain('req.headers.get("x-internal-secret") !== internal')
+    expect(worker).toContain('Deno.env.get("ALTHEA_INTERNAL_SECRET")')
+  })
+
   it('preserves operational completion and failure outcomes', () => {
     expect(worker).toContain('p_status: "completed"')
     expect(worker).toContain('p_status: "failed"')
