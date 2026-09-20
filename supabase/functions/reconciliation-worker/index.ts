@@ -62,12 +62,12 @@ Deno.serve(async (req) => {
         if (external) remoteIds.add(external);
         if (!external) {
           mismatch++;
-          await db.rpc("server_insert_reconciliation_item_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_run_id: run.id, p_transaction_id: null, p_external_transaction_id: null, p_status: "missing_internal", p_expected_amount: null, p_reported_amount: reported, p_discrepancy_amount: reported, p_mismatch_reason: "missing_external_transaction_id", p_gateway_payload: row });
+          { const itemWrite1 = await db.rpc("server_insert_reconciliation_item_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_run_id: run.id, p_transaction_id: null, p_external_transaction_id: null, p_status: "missing_internal", p_expected_amount: null, p_reported_amount: reported, p_discrepancy_amount: reported, p_mismatch_reason: "missing_external_transaction_id", p_gateway_payload: row }); if (itemWrite1.error) throw itemWrite1.error; }
           continue;
         }
         if (seen.has(external)) {
           duplicateRemote++;
-          await db.rpc("server_insert_reconciliation_item_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_run_id: run.id, p_transaction_id: null, p_external_transaction_id: external, p_status: "duplicate", p_expected_amount: null, p_reported_amount: reported, p_discrepancy_amount: 0, p_mismatch_reason: "duplicate_gateway_record", p_gateway_payload: row });
+          { const itemWrite2 = await db.rpc("server_insert_reconciliation_item_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_run_id: run.id, p_transaction_id: null, p_external_transaction_id: external, p_status: "duplicate", p_expected_amount: null, p_reported_amount: reported, p_discrepancy_amount: 0, p_mismatch_reason: "duplicate_gateway_record", p_gateway_payload: row }); if (itemWrite2.error) throw itemWrite2.error; }
           continue;
         }
         seen.add(external);
@@ -75,13 +75,13 @@ Deno.serve(async (req) => {
         if (txError) throw txError;
         if (!tx) {
           mismatch++;
-          await db.rpc("server_insert_reconciliation_item_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_run_id: run.id, p_transaction_id: null, p_external_transaction_id: external, p_status: "missing_internal", p_expected_amount: null, p_reported_amount: reported, p_discrepancy_amount: reported, p_mismatch_reason: "transaction_not_found", p_gateway_payload: row });
+          { const itemWrite3 = await db.rpc("server_insert_reconciliation_item_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_run_id: run.id, p_transaction_id: null, p_external_transaction_id: external, p_status: "missing_internal", p_expected_amount: null, p_reported_amount: reported, p_discrepancy_amount: reported, p_mismatch_reason: "transaction_not_found", p_gateway_payload: row }); if (itemWrite3.error) throw itemWrite3.error; }
           continue;
         }
         const expected = Number(tx.amount), gross = Number.isFinite(reported) ? reported : 0, discrepancy = Math.round((expected - gross) * 100) / 100, itemStatus = Math.abs(discrepancy) < 0.01 ? "matched" : "amount_mismatch";
         grossExpected += expected; grossReported += gross;
         if (itemStatus === "matched") matched++; else mismatch++;
-        await db.rpc("server_insert_reconciliation_item_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_run_id: run.id, p_transaction_id: tx.id, p_external_transaction_id: external, p_status: itemStatus, p_expected_amount: expected, p_reported_amount: gross, p_discrepancy_amount: discrepancy, p_mismatch_reason: itemStatus === "matched" ? null : "amount_difference", p_gateway_payload: row });
+        { const itemWrite4 = await db.rpc("server_insert_reconciliation_item_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_run_id: run.id, p_transaction_id: tx.id, p_external_transaction_id: external, p_status: itemStatus, p_expected_amount: expected, p_reported_amount: gross, p_discrepancy_amount: discrepancy, p_mismatch_reason: itemStatus === "matched" ? null : "amount_difference", p_gateway_payload: row }); if (itemWrite4.error) throw itemWrite4.error; }
         const target = statusTarget(remoteStatus);
         if (!target || (target === "approved" && tx.status === "approved")) continue;
         const { error: transitionError } = await db.rpc("transition_gateway_transaction_status", { p_transaction_id: tx.id, p_user_id: gateway.user_id, p_next_status: target, p_failure_code: null, p_external_id: external });
@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
         if (!external || remoteIds.has(external)) continue;
         missingGateway++;
         mismatch++;
-        await db.rpc("server_insert_reconciliation_item_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_run_id: run.id, p_transaction_id: tx.id, p_external_transaction_id: external || null, p_status: "missing_gateway", p_expected_amount: Number(tx.amount), p_reported_amount: 0, p_discrepancy_amount: Number(tx.amount), p_mismatch_reason: "internal_transaction_absent_from_gateway_report", p_gateway_payload: { status: tx.status } });
+        { const itemWrite5 = await db.rpc("server_insert_reconciliation_item_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_run_id: run.id, p_transaction_id: tx.id, p_external_transaction_id: external || null, p_status: "missing_gateway", p_expected_amount: Number(tx.amount), p_reported_amount: 0, p_discrepancy_amount: Number(tx.amount), p_mismatch_reason: "internal_transaction_absent_from_gateway_report", p_gateway_payload: { status: tx.status } }); if (itemWrite5.error) throw itemWrite5.error; }
       }
 
       const completed = await db.rpc("server_finish_reconciliation_run_v1", { p_user_id: gateway.user_id, p_organization_id: gateway.organization_id, p_run_id: run.id, p_status: "completed", p_matched_count: matched, p_mismatch_count: mismatch, p_gross_expected: grossExpected, p_gross_reported: grossReported, p_discrepancy_amount: Math.round((grossExpected - grossReported) * 100) / 100, p_error_message: null, p_completed_at: new Date().toISOString() });
