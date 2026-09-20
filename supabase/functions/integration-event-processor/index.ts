@@ -20,24 +20,36 @@ Deno.serve(async (req) => {
   if (canonical.error || typeof canonical.data !== "string" || !canonical.data) return json({ ok: false, error: "internal_auth_unavailable" }, 500);
   const internalSecret = canonical.data;
   let eventId = "";
+  let tenantUserId = "";
+  let tenantOrganizationId = "";
+  let eventClaimed = false;
   try {
     const body = await req.json() as { event_id?: string };
     eventId = String(body.event_id ?? "");
     if (!eventId) return json({ ok: false, error: "event_id_required" }, 400);
-    const claim = await db.rpc("claim_integration_event", { p_event_id: eventId });
-    if (claim.error) throw claim.error;
-    if (!claim.data) {
-      const existing = await db.from("integration_events").select("status").eq("id", eventId).maybeSingle();
-      if (existing.data?.status === "processed") return json({ ok: true, already_processed: true, event_id: eventId });
-      return json({ ok: false, error: "event_already_processing_or_unavailable", event_id: eventId }, 409);
-    }
     const { data: event, error: eventError } = await db.from("integration_events").select("*").eq("id", eventId).maybeSingle();
     if (eventError) throw eventError;
     if (!event) return json({ ok: false, error: "event_not_found" }, 404);
-    const payload = (event.payload ?? {}) as Record<string, unknown>;
     const userId = String(event.user_id);
     const organizationId = String(event.organization_id ?? "").trim();
     if (!uuid(organizationId)) throw new Error("integration_event_organization_invalid");
+    tenantUserId = userId;
+    tenantOrganizationId = organizationId;
+    const claim = await db.rpc("server_claim_integration_event_v1", {
+      p_event_id: eventId,
+      p_user_id: userId,
+      p_organization_id: organizationId,
+      p_increment_retry_count: false,
+    });
+    if (claim.error) throw claim.error;
+    if (claim.data !== true) {
+      const existing = await db.from("integration_events").select("status").eq("id", eventId).eq("user_id", userId).eq("organization_id", organizationId).maybeSingle();
+      if (existing.error) throw existing.error;
+      if (existing.data?.status === "processed") return json({ ok: true, already_processed: true, event_id: eventId });
+      return json({ ok: false, error: "event_already_processing_or_unavailable", event_id: eventId }, 409);
+    }
+    eventClaimed = true;
+    const payload = (event.payload ?? {}) as Record<string, unknown>;
     const organization = await db.from("organizations").select("id").eq("id", organizationId).maybeSingle();
     if (organization.error) throw organization.error;
     if (!organization.data) throw new Error("integration_event_organization_not_found");
@@ -111,12 +123,29 @@ Deno.serve(async (req) => {
     } finally {
       clearTimeout(timer);
     }
-    const done = await db.rpc("mark_integration_event_processed", { p_event_id: eventId, p_status: "processed", p_error: null });
-    if (done.error) throw done.error;
+    const done = await db.rpc("server_complete_integration_event_v1", {
+      p_event_id: eventId,
+      p_user_id: userId,
+      p_organization_id: organizationId,
+      p_expected_status: "processing",
+    });
+    if (done.error || done.data !== true) throw done.error ?? new Error("integration_event_complete_rejected");
     return json({ ok: true, processed: true, event_id: eventId });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (eventId) await db.rpc("mark_integration_event_processed", { p_event_id: eventId, p_status: "retry", p_error: message }).catch(() => undefined);
+    if (eventClaimed && eventId && tenantUserId && tenantOrganizationId) {
+      const failed = await db.rpc("server_fail_integration_event_v1", {
+        p_event_id: eventId,
+        p_user_id: tenantUserId,
+        p_organization_id: tenantOrganizationId,
+        p_next_status: "retry",
+        p_expected_status: "processing",
+        p_retry_count: null,
+        p_error: message,
+        p_next_retry_at: null,
+      });
+      if (failed.error || failed.data !== true) console.error("integration_event_retry_transition_failed", failed.error ?? "transition_rejected");
+    }
     return json({ ok: false, error: "integration_event_processing_failed" }, 500);
   }
 });
