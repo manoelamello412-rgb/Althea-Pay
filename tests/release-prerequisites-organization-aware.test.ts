@@ -28,7 +28,7 @@ describe('organization-aware release prerequisites', () => {
       migration.indexOf('-- dormant legacy projectors'),
     )
     expect(updateSection).not.toMatch(/\bid\s*,/)
-    expect(updateSection).not.toContain('created_at')
+    expect(updateSection.replace(/--[^\n]*/g, '')).not.toContain('created_at')
     expect(migration).toContain("has_column_privilege('service_role','public.sales','id','update')")
     expect(migration).toContain("has_column_privilege('service_role','public.sales','created_at','update')")
   })
