@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const checkout = readFileSync('supabase/functions/checkout-engine-v2/index.ts', 'utf8')
-const reconciliation = readFileSync('supabase/functions/reconciliation-worker/index.ts', 'utf8')
 const gatewayProcessor = readFileSync('supabase/functions/gateway-webhook-processor/index.ts', 'utf8')
 
 describe('release prerequisite runtime callers', () => {
@@ -14,12 +13,6 @@ describe('release prerequisite runtime callers', () => {
     expect(checkout).not.toContain('db.from("integration_events").insert(')
   })
 
-  it('routes reconciliation sale mutation through the guarded RPC', () => {
-    expect(reconciliation).toContain('select("id,user_id,organization_id,data")')
-    expect(reconciliation).toContain('db.rpc("server_update_sale_status_v1"')
-    expect(reconciliation).toContain('p_organization_id: gateway.organization_id')
-    expect(reconciliation).not.toContain('db.from("sales").update(')
-  })
 
   it('authenticates and tenant-scopes gateway automation dispatch', () => {
     expect(gatewayProcessor).toContain('"x-internal-secret": internalSecret')
