@@ -338,6 +338,222 @@ grant execute on function public.server_update_sale_status_v1(
   uuid,uuid,text,text,uuid,text,jsonb,timestamptz
 ) to service_role;
 
+
+-- Canonical integration-event lifecycle contract.
+-- IMPORTANT: broad UPDATE on integration_events is intentionally NOT revoked in this migration.
+-- A later privilege-tightening migration must revoke it only after Gate A proves all live callers
+-- use these lifecycle RPCs exclusively.
+
+create or replace function public.server_claim_integration_event_v1(
+  p_event_id uuid,
+  p_user_id uuid,
+  p_organization_id uuid,
+  p_increment_retry_count boolean default false
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $function$
+declare
+  v_status text;
+  v_claimed_at timestamptz;
+  v_retry_count integer;
+  v_claim_attempt integer;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'forbidden' using errcode='42501';
+  end if;
+
+  if p_event_id is null or p_user_id is null or p_organization_id is null then
+    raise exception 'event_tenant_context_required' using errcode='22023';
+  end if;
+
+  select status, claimed_at, retry_count, claim_attempt
+    into v_status, v_claimed_at, v_retry_count, v_claim_attempt
+    from public.integration_events
+   where id=p_event_id
+     and user_id=p_user_id
+     and organization_id=p_organization_id
+   for update;
+
+  if not found then
+    return false;
+  end if;
+
+  if v_status='processing'
+     and v_claimed_at is not null
+     and v_claimed_at > now()-interval '10 minutes' then
+    return false;
+  end if;
+
+  if v_status not in ('pending','retry','received','failed','processing') then
+    return false;
+  end if;
+
+  update public.integration_events
+     set status='processing',
+         claimed_at=now(),
+         claim_attempt=coalesce(v_claim_attempt,0)+1,
+         retry_count=case
+           when coalesce(p_increment_retry_count,false) then coalesce(v_retry_count,0)+1
+           else coalesce(v_retry_count,0)
+         end,
+         error_message=null,
+         processed_at=null
+   where id=p_event_id
+     and user_id=p_user_id
+     and organization_id=p_organization_id;
+
+  return true;
+end
+$function$;
+
+revoke all on function public.server_claim_integration_event_v1(
+  uuid,uuid,uuid,boolean
+) from public, anon, authenticated;
+grant execute on function public.server_claim_integration_event_v1(
+  uuid,uuid,uuid,boolean
+) to service_role;
+
+create or replace function public.server_complete_integration_event_v1(
+  p_event_id uuid,
+  p_user_id uuid,
+  p_organization_id uuid,
+  p_expected_status text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $function$
+declare
+  v_status text;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'forbidden' using errcode='42501';
+  end if;
+
+  if p_event_id is null or p_user_id is null or p_organization_id is null then
+    raise exception 'event_tenant_context_required' using errcode='22023';
+  end if;
+
+  select status into v_status
+    from public.integration_events
+   where id=p_event_id
+     and user_id=p_user_id
+     and organization_id=p_organization_id
+   for update;
+
+  if not found then
+    return false;
+  end if;
+
+  if p_expected_status is not null and v_status is distinct from p_expected_status then
+    return false;
+  end if;
+
+  if v_status not in ('pending','processing','retry','received','failed') then
+    return false;
+  end if;
+
+  update public.integration_events
+     set status='processed',
+         processed_at=now(),
+         next_retry_at=null,
+         claimed_at=null,
+         error_message=null
+   where id=p_event_id
+     and user_id=p_user_id
+     and organization_id=p_organization_id;
+
+  return true;
+end
+$function$;
+
+revoke all on function public.server_complete_integration_event_v1(
+  uuid,uuid,uuid,text
+) from public, anon, authenticated;
+grant execute on function public.server_complete_integration_event_v1(
+  uuid,uuid,uuid,text
+) to service_role;
+
+create or replace function public.server_fail_integration_event_v1(
+  p_event_id uuid,
+  p_user_id uuid,
+  p_organization_id uuid,
+  p_next_status text,
+  p_expected_status text default null,
+  p_retry_count integer default null,
+  p_error text default null,
+  p_next_retry_at timestamptz default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $function$
+declare
+  v_status text;
+  v_retry_count integer;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'forbidden' using errcode='42501';
+  end if;
+
+  if p_event_id is null or p_user_id is null or p_organization_id is null then
+    raise exception 'event_tenant_context_required' using errcode='22023';
+  end if;
+
+  if p_next_status not in ('retry','failed','dead_letter') then
+    raise exception 'invalid_event_failure_status' using errcode='22023';
+  end if;
+
+  if p_retry_count is not null and p_retry_count < 0 then
+    raise exception 'invalid_event_retry_count' using errcode='22023';
+  end if;
+
+  select status, retry_count into v_status, v_retry_count
+    from public.integration_events
+   where id=p_event_id
+     and user_id=p_user_id
+     and organization_id=p_organization_id
+   for update;
+
+  if not found then
+    return false;
+  end if;
+
+  if p_expected_status is not null and v_status is distinct from p_expected_status then
+    return false;
+  end if;
+
+  if v_status not in ('pending','processing','retry','received','failed') then
+    return false;
+  end if;
+
+  update public.integration_events
+     set status=p_next_status,
+         retry_count=coalesce(p_retry_count,v_retry_count,0),
+         error_message=left(p_error,2000),
+         next_retry_at=p_next_retry_at,
+         claimed_at=null,
+         processed_at=null
+   where id=p_event_id
+     and user_id=p_user_id
+     and organization_id=p_organization_id;
+
+  return true;
+end
+$function$;
+
+revoke all on function public.server_fail_integration_event_v1(
+  uuid,uuid,uuid,text,text,integer,text,timestamptz
+) from public, anon, authenticated;
+grant execute on function public.server_fail_integration_event_v1(
+  uuid,uuid,uuid,text,text,integer,text,timestamptz
+) to service_role;
+
 -- These projectors have no runtime caller in the canonical repository and retain legacy
 -- external-global identity behavior. Keep the functions for forensic/backward compatibility,
 -- but remove the server runtime execution surface until they are explicitly modernized.
@@ -369,6 +585,27 @@ begin
        'EXECUTE') then
     raise exception 'server_write_contract_post_guard: sale update RPC not executable by service_role';
   end if;
+
+  if not has_function_privilege('service_role',
+       'public.server_claim_integration_event_v1(uuid,uuid,uuid,boolean)',
+       'EXECUTE') then
+    raise exception 'server_write_contract_post_guard: event claim RPC not executable by service_role';
+  end if;
+
+  if not has_function_privilege('service_role',
+       'public.server_complete_integration_event_v1(uuid,uuid,uuid,text)',
+       'EXECUTE') then
+    raise exception 'server_write_contract_post_guard: event complete RPC not executable by service_role';
+  end if;
+
+  if not has_function_privilege('service_role',
+       'public.server_fail_integration_event_v1(uuid,uuid,uuid,text,text,integer,text,timestamptz)',
+       'EXECUTE') then
+    raise exception 'server_write_contract_post_guard: event failure RPC not executable by service_role';
+  end if;
+
+  -- Transitional privilege: do not assert/revoke integration_events UPDATE here.
+  -- Gate A must migrate every live caller first; a later dedicated migration will revoke it.
 
   if has_function_privilege('service_role','public.project_funnel_event(uuid)','EXECUTE')
      or has_function_privilege('service_role','public.project_checkout_purchase(uuid)','EXECUTE') then
