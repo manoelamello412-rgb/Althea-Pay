@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
     }
 
     const transactionId = isRecord(gateway) ? String(gateway.transaction_id || (isRecord(gateway.transaction) ? gateway.transaction.id : "")) : "";
-    const { data: transaction } = transactionId ? await db.from("gateway_transactions").select("*").eq("id", transactionId).eq("user_id", user.id).eq("funnel_id", funnelId).maybeSingle() : { data: null };
+    const { data: transaction } = transactionId ? await db.from("gateway_transactions").select("*").eq("id", transactionId).eq("user_id", user.id).eq("organization_id", organizationId).eq("funnel_id", funnelId).maybeSingle() : { data: null };
     if (!transaction || !["approved", "pending"].includes(String(transaction.status))) {
       await db.from("checkout_sessions").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", checkout.id).eq("user_id", user.id).in("status", ["processing", "started"]);
       const p = { error: "payment_failed", checkout: { ...checkout, status: "failed" }, gateway }; await complete("failed", 402, p, String(checkout.id)); return json(p, 402);
@@ -130,11 +130,24 @@ Deno.serve(async (req) => {
 
     await db.from("checkout_sessions").update({ status: "completed", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", checkout.id).eq("user_id", user.id).in("status", ["processing", "started"]);
     const externalId = transaction.external_id || (isRecord(gateway) ? gateway.external_id : null) || null;
-    let sale = (await db.from("sales").select("*").eq("user_id", user.id).eq("transaction_id", transactionId).maybeSingle()).data;
+    let sale = (await db.from("sales").select("*").eq("user_id", user.id).eq("organization_id", organizationId).eq("transaction_id", transactionId).maybeSingle()).data;
     if (!sale) {
-      const insertedSale = await db.from("sales").insert({ id: `gateway_tx_${transactionId}`, user_id: user.id, organization_id: organizationId, funnel_id: funnelId, product_id: productId, checkout_id: checkout.id, transaction_id: transactionId, amount, currency, status: "approved", attribution, external_id: externalId, gateway_id: transaction.gateway_id || (isRecord(gateway) ? gateway.gateway_id : null) || null, occurred_at: new Date().toISOString() }).select().single();
-      if (insertedSale.error && insertedSale.error.code !== "23505") { const p = { error: "sale_projection_failed" }; await complete("failed", 500, p, String(checkout.id)); return json(p, 500); }
-      sale = insertedSale.data ?? (await db.from("sales").select("*").eq("user_id", user.id).eq("transaction_id", transactionId).maybeSingle()).data;
+      const upsertedSale = await db.rpc("server_upsert_transaction_sale_v1", {
+        p_user_id: user.id,
+        p_organization_id: organizationId,
+        p_transaction_id: transactionId,
+        p_funnel_id: funnelId,
+        p_product_id: productId,
+        p_checkout_id: checkout.id,
+        p_amount: amount,
+        p_currency: currency,
+        p_attribution: attribution,
+        p_external_id: externalId,
+        p_occurred_at: new Date().toISOString(),
+        p_data: { source: "checkout-engine-v2", checkout_id: checkout.id, transaction_id: transactionId, customer },
+      });
+      if (upsertedSale.error) { const p = { error: "sale_projection_failed" }; await complete("failed", 500, p, String(checkout.id)); return json(p, 500); }
+      sale = (await db.from("sales").select("*").eq("user_id", user.id).eq("organization_id", organizationId).eq("transaction_id", transactionId).maybeSingle()).data;
     }
     if (!sale) { const p = { error: "sale_projection_failed" }; await complete("failed", 500, p, String(checkout.id)); return json(p, 500); }
 
@@ -145,9 +158,19 @@ Deno.serve(async (req) => {
     if (approvedEvent.error && approvedEvent.error.code !== "23505") { const p = { error: "checkout_event_failed" }; await complete("failed", 500, p, String(checkout.id)); return json(p, 500); }
 
     const eventKey = `checkout:${checkout.id}:purchase`;
-    const { data: existingEvent } = await db.from("integration_events").select("id").eq("user_id", user.id).eq("event_key", eventKey).maybeSingle();
+    const { data: existingEvent } = await db.from("integration_events").select("id").eq("organization_id", organizationId).eq("user_id", user.id).eq("event_key", eventKey).maybeSingle();
     if (!existingEvent) {
-      const insertedEvent = await db.from("integration_events").insert({ user_id: user.id, organization_id: organizationId, funnel_id: funnelId, event_type: "purchase", event_key: eventKey, external_id: externalId || idempotencyKey, payload: { checkout_id: checkout.id, transaction_id: transactionId, sale_id: sale.id, amount, currency, product_id: productId, attribution, customer }, status: "pending" });
+      const insertedEvent = await db.rpc("server_insert_integration_event_v1", {
+        p_user_id: user.id,
+        p_organization_id: organizationId,
+        p_funnel_id: funnelId,
+        p_event_type: "purchase",
+        p_event_key: eventKey,
+        p_external_id: externalId || idempotencyKey,
+        p_status: "pending",
+        p_payload: { checkout_id: checkout.id, transaction_id: transactionId, sale_id: sale.id, amount, currency, product_id: productId, attribution, customer },
+        p_occurred_at: new Date().toISOString(),
+      });
       if (insertedEvent.error && insertedEvent.error.code !== "23505") { const p = { error: "integration_event_failed" }; await complete("failed", 500, p, String(checkout.id)); return json(p, 500); }
     }
 
