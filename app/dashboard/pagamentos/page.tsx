@@ -55,7 +55,7 @@ export default function PagamentosPage() {
   useEffect(() => { void load() }, [load])
   useEffect(() => {
     let channel: ReturnType<typeof db.channel> | null = null; let cancelled = false
-    const subscribe = async () => { const { data: auth } = await db.auth.getUser(); if (cancelled || !auth.user) return; channel = db.channel(`payments-${auth.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_transactions', filter: `user_id=eq.${auth.user.id}` }, () => void load()).subscribe() }
+    const subscribe = async () => { const { data: auth } = await db.auth.getUser(); if (cancelled || !auth.user) return; channel = db.channel(`payments-${auth.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_transactions' }, () => void load()).subscribe() }
     void subscribe(); return () => { cancelled = true; if (channel) void db.removeChannel(channel) }
   }, [db, load])
 

@@ -56,7 +56,6 @@ export default function SalesMobile() {
       const queryResult = await db
         .from('sales')
         .select('id,amount,status,currency,data,gateway_id,external_id,transaction_id,occurred_at,created_at')
-        .eq('user_id', auth.user.id)
         .order('occurred_at', { ascending: false })
         .limit(5000)
       if (queryResult.error) throw queryResult.error
@@ -74,7 +73,7 @@ export default function SalesMobile() {
     const subscribe = async () => {
       const { data: auth } = await db.auth.getUser()
       if (cancelled || !auth.user) return
-      channel = db.channel(`sales-mobile-${auth.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'sales', filter: `user_id=eq.${auth.user.id}` }, () => void load()).subscribe()
+      channel = db.channel(`sales-mobile-${auth.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, () => void load()).subscribe()
     }
     void subscribe()
     return () => { cancelled = true; if (channel) void db.removeChannel(channel) }
