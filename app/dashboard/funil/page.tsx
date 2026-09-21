@@ -135,7 +135,7 @@ export default function FunilDominioPage() {
     const { data: auth, error: authError } = await supabase.auth.getUser()
     if (authError || !auth.user) throw new Error('Sessão expirada. Faça login novamente.')
 
-    const { data: funnelRows, error: funnelError } = await supabase.from('funnels').select('id,nome,url,endpoint,status,created_at,last_communication').eq('user_id', auth.user.id).is('deleted_at', null).order('created_at', { ascending: false }).limit(100)
+    const { data: funnelRows, error: funnelError } = await supabase.from('funnels').select('id,nome,url,endpoint,status,created_at,last_communication').is('deleted_at', null).order('created_at', { ascending: false }).limit(100)
     if (funnelError) throw funnelError
 
     const list = (funnelRows ?? []) as Funnel[]
@@ -151,9 +151,9 @@ export default function FunilDominioPage() {
     }
 
     const [{ data: connectionData, error: connectionError }, { data: eventData, error: eventError }, { data: webhookData, error: webhookError }] = await Promise.all([
-      supabase.from('funnel_connections').select('id,funnel_id,connection_type,status,config,last_event_at,health_status,last_error,event_count,error_count,connected_at,updated_at').eq('funnel_id', selected.id).eq('user_id', auth.user.id).order('created_at', { ascending: true }).limit(1).maybeSingle(),
-      supabase.from('integration_events').select('id,funnel_id,event_type,external_id,status,payload,occurred_at,created_at,error_message').eq('funnel_id', selected.id).eq('user_id', auth.user.id).order('created_at', { ascending: false }).limit(10),
-      supabase.from('webhook_integrations').select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status,event_count,last_event_at').eq('funnel_id', selected.id).eq('user_id', auth.user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('funnel_connections').select('id,funnel_id,connection_type,status,config,last_event_at,health_status,last_error,event_count,error_count,connected_at,updated_at').eq('funnel_id', selected.id).order('created_at', { ascending: true }).limit(1).maybeSingle(),
+      supabase.from('integration_events').select('id,funnel_id,event_type,external_id,status,payload,occurred_at,created_at,error_message').eq('funnel_id', selected.id).order('created_at', { ascending: false }).limit(10),
+      supabase.from('webhook_integrations').select('id,funnel_id,name,provider,endpoint_key,secret_prefix,status,event_count,last_event_at').eq('funnel_id', selected.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ])
     if (connectionError) throw connectionError
     if (eventError) throw eventError
@@ -309,7 +309,7 @@ export default function FunilDominioPage() {
       if (saveError) throw saveError
 
       const existingConfig = asRecord(connection?.config)
-      const { error: metadataError } = await supabase.from('funnel_connections').update({ connection_type: method, config: { ...existingConfig, connection_method: method, external_funnel_id: externalFunnelId || null, pixel_id: pixelId.trim() || null, chat_enabled: chatEnabled, updated_from: 'funnel_workspace' }, updated_at: new Date().toISOString() }).eq('funnel_id', funnelId).eq('user_id', auth.user.id)
+      const { error: metadataError } = await supabase.from('funnel_connections').update({ connection_type: method, config: { ...existingConfig, connection_method: method, external_funnel_id: externalFunnelId || null, pixel_id: pixelId.trim() || null, chat_enabled: chatEnabled, updated_from: 'funnel_workspace' }, updated_at: new Date().toISOString() }).eq('funnel_id', funnelId)
       if (metadataError) throw metadataError
 
       setSuccess('Funil criado e ativado. A integração está persistida no backend.')
