@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const parsed = Number(searchParams.get('days') ?? '7')
   const days = Number.isFinite(parsed) ? Math.max(1, Math.min(30, Math.floor(parsed))) : 7
   const { data, error } = await supabase.rpc('crm_recovery_opportunities', { p_days: days })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: error.message }, { status: error.code === '42501' ? 403 : 500 })
   return NextResponse.json({ days, opportunities: data ?? [] })
 }
 
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase.rpc('crm_recovery_execute', { p_event_id: eventId })
   if (error) {
-    const status = error.message === 'event_not_found' ? 404 : error.message === 'unauthorized' ? 401 : 500
+    const status = error.code === '42501' ? 403 : error.code === 'P0002' || error.message === 'event_not_found' ? 404 : error.message === 'unauthorized' ? 401 : 500
     return NextResponse.json({ error: error.message }, { status })
   }
   return NextResponse.json(data)

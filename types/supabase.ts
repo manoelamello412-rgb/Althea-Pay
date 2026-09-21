@@ -477,7 +477,8 @@ export type Database = {
           user_id: string
         }
         Update: {
-          action_type?: string | null
+          action_type?: string
+          actor_id?: string | null | null
           attempt_count?: number
           cancellation_reason?: string | null
           cancelled_at?: string | null
@@ -1095,6 +1096,7 @@ export type Database = {
       crm_ai_actions: {
         Row: {
           action_type: string
+          actor_id: string | null
           conversation_id: string | null
           created_at: string
           executed_at: string | null
@@ -1104,6 +1106,7 @@ export type Database = {
           execution_provenance: Json
           id: string
           idempotency_key: string | null
+          organization_id: string
           payload: Json
           rationale: string
           score: number
@@ -1112,6 +1115,7 @@ export type Database = {
         }
         Insert: {
           action_type: string
+          actor_id?: string | null
           conversation_id?: string | null
           created_at?: string
           executed_at?: string | null
@@ -1121,6 +1125,7 @@ export type Database = {
           execution_provenance?: Json
           id?: string
           idempotency_key?: string | null
+          organization_id: string
           payload?: Json
           rationale?: string
           score?: number
@@ -1129,6 +1134,7 @@ export type Database = {
         }
         Update: {
           action_type?: string
+          actor_id?: string | null
           conversation_id?: string | null
           created_at?: string
           executed_at?: string | null
@@ -1138,6 +1144,7 @@ export type Database = {
           execution_provenance?: Json
           id?: string
           idempotency_key?: string | null
+          organization_id?: string
           payload?: Json
           rationale?: string
           score?: number
@@ -1145,6 +1152,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_ai_actions_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_ai_actions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "crm_ai_actions_conversation_id_fkey"
             columns: ["conversation_id"]
@@ -1941,6 +1962,7 @@ export type Database = {
       crm_predictive_evaluations: {
         Row: {
           actual_conversion: boolean | null
+          actor_id: string | null
           actual_ltv: number | null
           actual_recovery: boolean | null
           conversation_id: string
@@ -1948,6 +1970,7 @@ export type Database = {
           evaluated_at: string | null
           id: string
           model_version: string
+          organization_id: string
           predicted_conversion: number
           predicted_ltv: number
           predicted_recovery: number
@@ -1955,6 +1978,7 @@ export type Database = {
         }
         Insert: {
           actual_conversion?: boolean | null
+          actor_id?: string | null
           actual_ltv?: number | null
           actual_recovery?: boolean | null
           conversation_id: string
@@ -1962,6 +1986,7 @@ export type Database = {
           evaluated_at?: string | null
           id?: string
           model_version: string
+          organization_id: string
           predicted_conversion: number
           predicted_ltv: number
           predicted_recovery: number
@@ -1969,6 +1994,7 @@ export type Database = {
         }
         Update: {
           actual_conversion?: boolean | null
+          actor_id?: string | null
           actual_ltv?: number | null
           actual_recovery?: boolean | null
           conversation_id?: string
@@ -1976,12 +2002,27 @@ export type Database = {
           evaluated_at?: string | null
           id?: string
           model_version?: string
+          organization_id?: string
           predicted_conversion?: number
           predicted_ltv?: number
           predicted_recovery?: number
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_predictive_evaluations_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_predictive_evaluations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "crm_predictive_evaluations_conversation_id_fkey"
             columns: ["conversation_id"]
@@ -9312,10 +9353,28 @@ export type Database = {
         }
         Returns: boolean
       }
+      crm_ai_action_create: {
+        Args: {
+          p_action_type: string
+          p_conversation_id: string
+          p_idempotency_key?: string | null
+          p_payload?: Json
+          p_rationale: string
+          p_score: number
+          p_status?: string
+        }
+        Returns: Json
+      }
+      crm_ai_action_get: { Args: { p_action_id: string }; Returns: Json }
+      crm_ai_actions_list: {
+        Args: { p_conversation_id: string }
+        Returns: Json
+      }
       crm_claim_ai_action: {
         Args: { p_action_id: string }
         Returns: {
           action_type: string
+          actor_id: string | null
           conversation_id: string | null
           created_at: string
           executed_at: string | null
@@ -9325,6 +9384,7 @@ export type Database = {
           execution_provenance: Json
           id: string
           idempotency_key: string | null
+          organization_id: string
           payload: Json
           rationale: string
           score: number
@@ -9780,21 +9840,21 @@ export type Database = {
       crm_recovery_opportunities: {
         Args: { p_days?: number }
         Returns: {
-          amount: number
-          buyer_email: string
-          buyer_name: string
+          amount: number | null
+          buyer_email: string | null
+          buyer_name: string | null
           conversation_id: string | null
           context_status: 'resolved' | 'unlinked' | 'ambiguous'
           currency: string
           event_id: string
-          funnel_id: string
+          funnel_id: string | null
           next_action: string
           opportunity_type: string
           priority: number
-          product_id: string
+          product_id: string | null
           received_at: string
           status: string
-          transaction_id: string
+          transaction_id: string | null
         }[]
       }
       crm_replay_automation_execution: {

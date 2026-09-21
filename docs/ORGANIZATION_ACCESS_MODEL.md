@@ -108,3 +108,19 @@ The RPC layer:
 - hides gateway error details unless `can_manage_gateways=true`.
 
 This prevents a hidden UI field from becoming a backend data leak. Owner-attributed direct reads remain temporarily available for the existing owner frontend while Codex migrates the browser queries to the organization-aware contracts.
+
+
+## Advanced CRM organization authorization
+
+Customer 360, predictive scoring, next-best-action, recovery and AI action execution now resolve the active organization through the authenticated member rather than treating `auth.uid()` as the operation owner.
+
+Rules:
+- Customer 360 requires `can_view_chats` + `can_view_customers`; financial arrays and financial scoring are returned only when `can_view_values=true`.
+- Predictive scoring and conversation-specific next-best-action require chat, customer and value visibility because their evidence includes customer and financial signals.
+- Recovery opportunities require chat + value visibility; customer identity is redacted when `can_view_customers=false`.
+- Recovery execution requires `can_reply_chats` in addition to recovery read access.
+- AI recommendations/action ledger require chat + customer + value visibility. Creating, approving or executing an AI action also requires `can_reply_chats`.
+- AI execution remains human-approved. The operation owner remains in legacy `user_id`; the actual internal operator is recorded separately through `actor_id`/message `sender_id`.
+- The AI tool registry tenant boundary is now `organization_id`, not the logged-in operator's user id.
+
+All advanced operational reads remain constrained by the same 48h/90d visibility window. This changes authorization only; it does not delete retained data.

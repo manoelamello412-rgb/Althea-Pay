@@ -9,10 +9,10 @@ export interface IaraToolDefinition {
   readonly name: IaraActionType
   readonly inputSchema: Readonly<Record<string, unknown>>
   readonly outputSchema: Readonly<Record<string, unknown>>
-  readonly authorization: 'authenticated_owner'
+  readonly authorization: 'organization_operator'
   readonly confirmation: 'human_approval'
   readonly risk: 'operational'
-  readonly tenantScope: 'user_id'
+  readonly tenantScope: 'organization_id'
   readonly executor: 'crm_execute_ai_action'
 }
 
@@ -38,11 +38,11 @@ const executionResultSchema = {
 } as const
 
 const definitions: Readonly<Record<IaraActionType, IaraToolDefinition>> = {
-  payment_follow_up: { name: 'payment_follow_up', inputSchema: textDraftSchema, outputSchema: executionResultSchema, authorization: 'authenticated_owner', confirmation: 'human_approval', risk: 'operational', tenantScope: 'user_id', executor: 'crm_execute_ai_action' },
-  sales_follow_up: { name: 'sales_follow_up', inputSchema: textDraftSchema, outputSchema: executionResultSchema, authorization: 'authenticated_owner', confirmation: 'human_approval', risk: 'operational', tenantScope: 'user_id', executor: 'crm_execute_ai_action' },
-  recovery_follow_up: { name: 'recovery_follow_up', inputSchema: textDraftSchema, outputSchema: executionResultSchema, authorization: 'authenticated_owner', confirmation: 'human_approval', risk: 'operational', tenantScope: 'user_id', executor: 'crm_execute_ai_action' },
-  qualification: { name: 'qualification', inputSchema: textDraftSchema, outputSchema: executionResultSchema, authorization: 'authenticated_owner', confirmation: 'human_approval', risk: 'operational', tenantScope: 'user_id', executor: 'crm_execute_ai_action' },
-  upsell_or_post_sale: { name: 'upsell_or_post_sale', inputSchema: textDraftSchema, outputSchema: executionResultSchema, authorization: 'authenticated_owner', confirmation: 'human_approval', risk: 'operational', tenantScope: 'user_id', executor: 'crm_execute_ai_action' },
+  payment_follow_up: { name: 'payment_follow_up', inputSchema: textDraftSchema, outputSchema: executionResultSchema, authorization: 'organization_operator', confirmation: 'human_approval', risk: 'operational', tenantScope: 'organization_id', executor: 'crm_execute_ai_action' },
+  sales_follow_up: { name: 'sales_follow_up', inputSchema: textDraftSchema, outputSchema: executionResultSchema, authorization: 'organization_operator', confirmation: 'human_approval', risk: 'operational', tenantScope: 'organization_id', executor: 'crm_execute_ai_action' },
+  recovery_follow_up: { name: 'recovery_follow_up', inputSchema: textDraftSchema, outputSchema: executionResultSchema, authorization: 'organization_operator', confirmation: 'human_approval', risk: 'operational', tenantScope: 'organization_id', executor: 'crm_execute_ai_action' },
+  qualification: { name: 'qualification', inputSchema: textDraftSchema, outputSchema: executionResultSchema, authorization: 'organization_operator', confirmation: 'human_approval', risk: 'operational', tenantScope: 'organization_id', executor: 'crm_execute_ai_action' },
+  upsell_or_post_sale: { name: 'upsell_or_post_sale', inputSchema: textDraftSchema, outputSchema: executionResultSchema, authorization: 'organization_operator', confirmation: 'human_approval', risk: 'operational', tenantScope: 'organization_id', executor: 'crm_execute_ai_action' },
 }
 
 export function getIaraToolDefinition(actionType: string): IaraToolDefinition | null {
