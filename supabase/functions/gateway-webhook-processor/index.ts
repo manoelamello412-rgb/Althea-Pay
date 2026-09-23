@@ -1,16 +1,301 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  extractGatewayWebhookFinancialFields,
+  isGatewayWebhookRecord,
+  normalizeGatewayWebhookStatus,
+  type GatewayTransactionStatus,
+  type JsonRecord,
+} from "../_shared/gateway-webhook-normalization.ts";
 
-type JsonObject = Record<string, unknown>;
+type JsonObject = JsonRecord;
+
 const url = Deno.env.get("SUPABASE_URL") ?? "";
 const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const internalSecret = Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? "";
 const db = createClient(url, key, { auth: { persistSession: false } });
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
-const object = (value: unknown): value is JsonObject => typeof value === "object" && value !== null && !Array.isArray(value);
-const aliases: Record<string, string> = { paid: "approved", success: "approved", completed: "approved", captured: "approved", authorized: "approved", processing: "pending", pending: "pending", failed: "failed", declined: "failed", refunded: "refunded", refund: "refunded", chargeback: "chargeback", charged_back: "chargeback", disputed: "chargeback", created: "created" };
-const normalize = (value: unknown): string => aliases[String(value ?? "").trim().toLowerCase()] ?? String(value ?? "").trim().toLowerCase();
-function eventKind(event: JsonObject, payload: JsonObject, normalizedStatus: string): "payment" | "refund" | "chargeback" { const explicit = String(payload.event_kind ?? payload.event_type ?? event.event_kind ?? event.event_type ?? "").toLowerCase(); if (explicit.includes("chargeback") || explicit.includes("dispute")) return "chargeback"; if (explicit.includes("refund") || normalizedStatus === "refunded") return "refund"; if (normalizedStatus === "chargeback") return "chargeback"; return "payment"; }
-async function callAutomation(payload: JsonObject): Promise<void> { if (!internalSecret) { console.error("automation_dispatch_skipped:internal_secret_missing"); return; } const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 3500); try { const response = await fetch(`${url}/functions/v1/automation-engine-v2`, { method: "POST", signal: controller.signal, headers: { "content-type": "application/json", "x-internal-secret": internalSecret }, body: JSON.stringify(payload) }); if (!response.ok) console.error(`automation_http_${response.status}`); } catch (error) { console.error("automation_dispatch_failed", error instanceof Error ? error.message : String(error)); } finally { clearTimeout(timer); } }
-async function processOne(event: JsonObject): Promise<JsonObject> { const webhookId = String(event.id ?? ""); const payload = object(event.payload) ? event.payload : {}; const rawStatus = String(payload.status ?? payload.payment_status ?? payload.transaction_status ?? payload.state ?? event.event_type ?? "").trim().toLowerCase(); const status = normalize(rawStatus); const externalId = String(payload.external_id ?? payload.transaction_id ?? payload.payment_id ?? payload.id ?? event.external_id ?? "").trim(); if (!webhookId || !externalId) return { ok: false, retry: false, reason: "external_transaction_id_missing" }; if (!Object.prototype.hasOwnProperty.call(aliases, rawStatus)) return { ok: false, retry: false, reason: "unsupported_provider_status", status }; const kind = eventKind(event, payload, status); const amountValue = payload.amount ?? payload.value ?? payload.total_amount; const amount = typeof amountValue === "number" ? amountValue : Number(amountValue); const currencyValue = String(payload.currency ?? payload.currency_code ?? "").trim().toUpperCase(); const { data, error } = await db.rpc("process_gateway_webhook_v11", { p_webhook_id: webhookId, p_next_status: status, p_external_transaction_id: externalId, p_failure_code: payload.failure_code ? String(payload.failure_code) : null, p_event_kind: kind, p_amount: Number.isFinite(amount) && amount > 0 ? amount : null, p_currency: currencyValue || null, p_external_event_id: event.provider_event_id ? String(event.provider_event_id) : null }); if (error) throw error; if (object(data) && data.transaction_id) { const txResult = await db.from("gateway_transactions").select("id,user_id,organization_id,funnel_id,metadata,external_id").eq("id", String(data.transaction_id)).maybeSingle(); if (txResult.error) throw txResult.error; const tx = txResult.data; if (tx?.organization_id) { const txMetadata = object(tx.metadata) ? tx.metadata : {}; const canonicalEventProjected = String(txMetadata.source ?? "") === "checkout-engine-v2"; if (!canonicalEventProjected) await callAutomation({ user_id: tx.user_id, organization_id: tx.organization_id, funnel_id: tx.funnel_id ?? null, event_type: `gateway.${kind}.${status}`, transaction_id: tx.id, external_id: `gateway_webhook_event:${webhookId}`, payload: { ...payload, provider_external_id: externalId, gateway_webhook_event_id: webhookId, gateway_status: status, gateway_event_kind: kind } }); } else { console.error("automation_dispatch_skipped:transaction_organization_missing"); } } return object(data) ? { ok: true, ...data } : { ok: true, data }; }
-Deno.serve(async (request) => { if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405); const suppliedSecret = request.headers.get("x-internal-secret"); if (!suppliedSecret) return json({ error: "unauthorized" }, 401); const auth = await db.rpc("verify_althea_internal_secret", { p_secret: suppliedSecret }); if (auth.error || auth.data !== true) return json({ error: "unauthorized" }, 401); try { const body = await request.json().catch(() => ({})); const requested = object(body) && body.webhook_id ? String(body.webhook_id) : ""; const now = new Date().toISOString(); let events: JsonObject[] = []; if (requested) { const result = await db.from("gateway_webhook_events").select("*").eq("id", requested).maybeSingle(); if (result.error) throw result.error; if (result.data) events = [result.data as JsonObject]; } else { const result = await db.from("gateway_webhook_events").select("*").in("status", ["accepted", "failed"]).or(`next_attempt_at.is.null,next_attempt_at.lte.${now}`).order("received_at", { ascending: true }).limit(50); if (result.error) throw result.error; events = (result.data ?? []) as JsonObject[]; } let processed = 0; let failed = 0; let dead = 0; for (const event of events) { const id = String(event.id ?? ""); const attempts = Number(event.attempts ?? 0) + 1; const claim = await db.from("gateway_webhook_events").update({ status: "processing", attempts, updated_at: new Date().toISOString() }).eq("id", id).in("status", ["accepted", "failed"]).select("id").maybeSingle(); if (claim.error || !claim.data) continue; try { const result = await processOne(event); if (!result.ok && result.retry === false) { await db.from("gateway_webhook_events").update({ status: "dead_letter", last_error: String(result.reason ?? "processing_rejected"), next_attempt_at: null, updated_at: new Date().toISOString() }).eq("id", id).eq("status", "processing"); dead++; continue; } processed++; } catch (error) { failed++; const message = error instanceof Error ? error.message : String(error); const isDead = attempts >= 8; const delay = Math.min(3600, 30 * 2 ** Math.max(0, attempts - 1)); const nextAttempt = new Date(Date.now() + delay * 1000).toISOString(); await db.from("gateway_webhook_events").update({ status: isDead ? "dead_letter" : "failed", last_error: message, next_attempt_at: isDead ? null : nextAttempt, updated_at: new Date().toISOString() }).eq("id", id).eq("status", "processing"); if (isDead) dead++; } } return json({ ok: true, scanned: events.length, processed, failed, dead_lettered: dead }); } catch (error) { return json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500); } });
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+
+const legacyAsyncStatusAliases: Record<string, GatewayTransactionStatus> = {
+  charged_back: "chargeback",
+};
+
+const normalizeProcessorStatus = (
+  value: unknown,
+): GatewayTransactionStatus | null => {
+  const canonical = normalizeGatewayWebhookStatus(value);
+  if (canonical) return canonical;
+  return legacyAsyncStatusAliases[String(value ?? "").trim().toLowerCase()] ?? null;
+};
+
+const rpcRows = (data: unknown): JsonObject[] => {
+  if (Array.isArray(data)) return data.filter(isGatewayWebhookRecord);
+  return isGatewayWebhookRecord(data) ? [data] : [];
+};
+
+const errorMessage = (error: unknown): string => {
+  if (isGatewayWebhookRecord(error) && typeof error.message === "string") {
+    return error.message;
+  }
+  return error instanceof Error ? error.message : String(error);
+};
+
+const isFencingLost = (error: unknown): boolean =>
+  errorMessage(error).includes("gateway_webhook_fencing_lost");
+
+async function callAutomation(payload: JsonObject): Promise<void> {
+  if (!internalSecret) {
+    console.error("automation_dispatch_skipped:internal_secret_missing");
+    return;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+  try {
+    const response = await fetch(`${url}/functions/v1/automation-engine-v2`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        "x-internal-secret": internalSecret,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) console.error(`automation_http_${response.status}`);
+  } catch (error) {
+    console.error("automation_dispatch_failed", errorMessage(error));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function dispatchAutomationBestEffort(
+  processingResult: unknown,
+  webhookId: string,
+  payload: JsonObject,
+  externalId: string,
+  status: GatewayTransactionStatus,
+  eventKind: "payment" | "refund" | "chargeback",
+): Promise<void> {
+  try {
+    if (!isGatewayWebhookRecord(processingResult) || !processingResult.transaction_id) {
+      return;
+    }
+
+    const txResult = await db
+      .from("gateway_transactions")
+      .select("id,user_id,organization_id,funnel_id,metadata,external_id")
+      .eq("id", String(processingResult.transaction_id))
+      .maybeSingle();
+
+    if (txResult.error) throw txResult.error;
+    const tx = txResult.data;
+    if (!tx?.organization_id) {
+      console.error("automation_dispatch_skipped:transaction_organization_missing");
+      return;
+    }
+
+    const txMetadata = isGatewayWebhookRecord(tx.metadata) ? tx.metadata : {};
+    const canonicalEventProjected =
+      String(txMetadata.source ?? "") === "checkout-engine-v2";
+    if (canonicalEventProjected) return;
+
+    await callAutomation({
+      user_id: tx.user_id,
+      organization_id: tx.organization_id,
+      funnel_id: tx.funnel_id ?? null,
+      event_type: `gateway.${eventKind}.${status}`,
+      transaction_id: tx.id,
+      external_id: `gateway_webhook_event:${webhookId}`,
+      payload: {
+        ...payload,
+        provider_external_id: externalId,
+        gateway_webhook_event_id: webhookId,
+        gateway_status: status,
+        gateway_event_kind: eventKind,
+      },
+    });
+  } catch (error) {
+    console.error("automation_post_processing_failed", errorMessage(error));
+  }
+}
+
+async function deadLetterClaim(
+  webhookId: string,
+  claimAttempt: number,
+  reason: string,
+): Promise<"dead_lettered" | "fencing_lost"> {
+  const transition = await db.rpc("server_dead_letter_gateway_webhook_event_v1", {
+    p_webhook_id: webhookId,
+    p_expected_attempt: claimAttempt,
+    p_error: reason,
+  });
+  if (transition.error) {
+    if (isFencingLost(transition.error)) return "fencing_lost";
+    throw transition.error;
+  }
+  return transition.data === true ? "dead_lettered" : "fencing_lost";
+}
+
+async function failClaim(
+  webhookId: string,
+  claimAttempt: number,
+  reason: string,
+): Promise<"failed" | "fencing_lost"> {
+  const transition = await db.rpc("server_fail_gateway_webhook_event_v1", {
+    p_webhook_id: webhookId,
+    p_expected_attempt: claimAttempt,
+    p_error: reason,
+  });
+  if (transition.error) {
+    if (isFencingLost(transition.error)) return "fencing_lost";
+    throw transition.error;
+  }
+  return transition.data === true ? "failed" : "fencing_lost";
+}
+
+async function processClaim(
+  event: JsonObject,
+): Promise<"processed" | "dead_lettered" | "fencing_lost"> {
+  const webhookId = String(event.webhook_id ?? "").trim();
+  const claimAttempt = Number(event.claim_attempt ?? 0);
+  if (!webhookId || !Number.isInteger(claimAttempt) || claimAttempt < 1) {
+    throw new Error("gateway_webhook_claim_identity_missing");
+  }
+
+  const payload = isGatewayWebhookRecord(event.payload) ? event.payload : {};
+  const fields = extractGatewayWebhookFinancialFields(payload, {
+    normalizeStatus: normalizeProcessorStatus,
+    fallbackStatus: event.event_type,
+    fallbackExternalTransactionId: event.external_id,
+    fallbackEventKind: event.event_type,
+    extraExternalTransactionIdKeys: ["id"],
+  });
+
+  if (!fields.externalTransactionId) {
+    return deadLetterClaim(
+      webhookId,
+      claimAttempt,
+      "external_transaction_id_missing",
+    );
+  }
+  if (!fields.status) {
+    return deadLetterClaim(
+      webhookId,
+      claimAttempt,
+      "unsupported_provider_status",
+    );
+  }
+
+  const processing = await db.rpc("server_process_claimed_gateway_webhook_v1", {
+    p_webhook_id: webhookId,
+    p_expected_attempt: claimAttempt,
+    p_next_status: fields.status,
+    p_external_transaction_id: fields.externalTransactionId,
+    p_failure_code: fields.failureCode,
+    p_event_kind: fields.eventKind,
+    p_amount:
+      fields.amount !== null && fields.amount > 0 ? fields.amount : null,
+    p_currency: fields.currency?.toUpperCase() ?? null,
+    p_external_event_id: event.provider_event_id
+      ? String(event.provider_event_id)
+      : null,
+  });
+
+  if (processing.error) {
+    if (isFencingLost(processing.error)) {
+      console.warn("gateway_webhook_fencing_lost", webhookId, claimAttempt);
+      return "fencing_lost";
+    }
+    throw processing.error;
+  }
+
+  await dispatchAutomationBestEffort(
+    processing.data,
+    webhookId,
+    payload,
+    fields.externalTransactionId,
+    fields.status,
+    fields.eventKind,
+  );
+
+  return "processed";
+}
+
+Deno.serve(async (request) => {
+  if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+
+  const suppliedSecret = request.headers.get("x-internal-secret");
+  if (!suppliedSecret) return json({ error: "unauthorized" }, 401);
+
+  const auth = await db.rpc("verify_althea_internal_secret", {
+    p_secret: suppliedSecret,
+  });
+  if (auth.error || auth.data !== true) return json({ error: "unauthorized" }, 401);
+
+  try {
+    const body = await request.json().catch(() => ({}));
+    const requested =
+      isGatewayWebhookRecord(body) && body.webhook_id
+        ? String(body.webhook_id)
+        : "";
+
+    const claim = await db.rpc("server_claim_gateway_webhook_events_v1", {
+      p_limit: requested ? 1 : 50,
+      p_webhook_id: requested || null,
+    });
+    if (claim.error) throw claim.error;
+
+    const events = rpcRows(claim.data);
+    let processed = 0;
+    let failed = 0;
+    let deadLettered = 0;
+
+    for (const event of events) {
+      const webhookId = String(event.webhook_id ?? "").trim();
+      const claimAttempt = Number(event.claim_attempt ?? 0);
+
+      try {
+        const outcome = await processClaim(event);
+        if (outcome === "processed") processed++;
+        if (outcome === "dead_lettered") deadLettered++;
+      } catch (error) {
+        const message = errorMessage(error);
+        if (isFencingLost(error)) {
+          console.warn("gateway_webhook_fencing_lost", webhookId, claimAttempt);
+          continue;
+        }
+
+        if (!webhookId || !Number.isInteger(claimAttempt) || claimAttempt < 1) {
+          console.error("gateway_webhook_claim_error", message);
+          failed++;
+          continue;
+        }
+
+        if (claimAttempt >= 8) {
+          const outcome = await deadLetterClaim(webhookId, claimAttempt, message);
+          if (outcome === "dead_lettered") deadLettered++;
+        } else {
+          const outcome = await failClaim(webhookId, claimAttempt, message);
+          if (outcome === "failed") failed++;
+        }
+      }
+    }
+
+    return json({
+      ok: true,
+      scanned: events.length,
+      claimed: events.length,
+      processed,
+      failed,
+      dead_lettered: deadLettered,
+    });
+  } catch (error) {
+    return json({ ok: false, error: errorMessage(error) }, 500);
+  }
+});
