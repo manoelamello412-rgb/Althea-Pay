@@ -1,8 +1,20 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const checkout = readFileSync('supabase/functions/checkout-engine-v2/index.ts', 'utf8')
+const gateway = readFileSync('supabase/functions/gateway-webhook/index.ts', 'utf8')
 const gatewayProcessor = readFileSync('supabase/functions/gateway-webhook-processor/index.ts', 'utf8')
+
+function listTsFiles(dir: string): string[] {
+  const files: string[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) files.push(...listTsFiles(full))
+    else if (entry.isFile() && entry.name.endsWith('.ts')) files.push(full)
+  }
+  return files
+}
 
 describe('release prerequisite runtime callers', () => {
   it('routes checkout sale and integration-event writes through guarded RPCs', () => {
@@ -12,7 +24,6 @@ describe('release prerequisite runtime callers', () => {
     expect(checkout).not.toContain('db.from("sales").insert(')
     expect(checkout).not.toContain('db.from("integration_events").insert(')
   })
-
 
   it('authenticates and tenant-scopes gateway automation dispatch', () => {
     expect(gatewayProcessor).toContain('"x-internal-secret": internalSecret')
@@ -34,5 +45,20 @@ describe('release prerequisite runtime callers', () => {
       'String(txMetadata.source ?? "") === "checkout-engine-v2"',
     )
     expect(gatewayProcessor).toContain('if (!canonicalEventProjected) await callAutomation')
+  })
+
+  it('freezes the existing direct v11 runtime callers until G1-B', () => {
+    expect(gateway).toContain('process_gateway_webhook_v11')
+    expect(gatewayProcessor).toContain('process_gateway_webhook_v11')
+
+    const callers = listTsFiles('supabase/functions')
+      .filter((path) => readFileSync(path, 'utf8').includes('process_gateway_webhook_v11'))
+      .map((path) => relative('.', path).replaceAll('\\', '/'))
+      .sort()
+
+    expect(callers).toEqual([
+      'supabase/functions/gateway-webhook-processor/index.ts',
+      'supabase/functions/gateway-webhook/index.ts',
+    ])
   })
 })
