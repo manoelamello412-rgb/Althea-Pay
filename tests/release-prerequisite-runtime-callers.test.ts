@@ -44,21 +44,32 @@ describe('release prerequisite runtime callers', () => {
     expect(gatewayProcessor).toContain(
       'String(txMetadata.source ?? "") === "checkout-engine-v2"',
     )
-    expect(gatewayProcessor).toContain('if (!canonicalEventProjected) await callAutomation')
+    expect(gatewayProcessor).toContain('if (canonicalEventProjected) return')
   })
 
-  it('freezes the existing direct v11 runtime callers until G1-B', () => {
-    expect(gateway).toContain('process_gateway_webhook_v11')
-    expect(gatewayProcessor).toContain('process_gateway_webhook_v11')
+  it('fences all gateway webhook runtimes behind G1-A RPCs', () => {
+    expect(gateway).toContain('server_claim_gateway_webhook_events_v1')
+    expect(gateway).toContain('server_process_claimed_gateway_webhook_v1')
+    expect(gatewayProcessor).toContain('server_claim_gateway_webhook_events_v1')
+    expect(gatewayProcessor).toContain('server_process_claimed_gateway_webhook_v1')
 
-    const callers = listTsFiles('supabase/functions')
+    const functionFiles = listTsFiles('supabase/functions')
+
+    const directV11Callers = functionFiles
       .filter((path) => readFileSync(path, 'utf8').includes('process_gateway_webhook_v11'))
       .map((path) => relative('.', path).replaceAll('\\', '/'))
       .sort()
 
-    expect(callers).toEqual([
-      'supabase/functions/gateway-webhook-processor/index.ts',
-      'supabase/functions/gateway-webhook/index.ts',
-    ])
+    const directQueueTableAccess = functionFiles
+      .filter((path) =>
+        /\.from\(\s*["']gateway_webhook_events["']\s*\)/.test(
+          readFileSync(path, 'utf8'),
+        ),
+      )
+      .map((path) => relative('.', path).replaceAll('\\', '/'))
+      .sort()
+
+    expect(directV11Callers).toEqual([])
+    expect(directQueueTableAccess).toEqual([])
   })
 })
