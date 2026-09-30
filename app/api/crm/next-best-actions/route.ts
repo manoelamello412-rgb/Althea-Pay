@@ -14,6 +14,6 @@ export async function GET(request: Request) {
   }
 
   const { data, error } = await supabase.rpc('crm_next_best_actions', { p_conversation_id: id })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: error.message }, { status: error.code === '42501' ? 403 : error.code === 'P0002' ? 404 : 500 })
   return NextResponse.json({ actions: data ?? [] }, { headers: { 'Cache-Control': 'no-store' } })
 }

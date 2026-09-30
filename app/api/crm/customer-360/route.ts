@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase.rpc('crm_customer_360', { p_conversation_id: id })
   if (error) {
-    const status = error.message.includes('CONVERSATION_NOT_FOUND') ? 404 : 500
+    const status = error.code === '42501' ? 403 : error.code === 'P0002' || error.message.includes('CONVERSATION_NOT_FOUND') ? 404 : 500
     return NextResponse.json({ error: error.message }, { status })
   }
 

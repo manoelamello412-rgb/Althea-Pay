@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
   try {
     const kernel = new IaraExecutionKernel(supabase)
-    const result = await kernel.execute(actionId, user.id)
+    const result = await kernel.execute(actionId)
     return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     if (error instanceof IaraKernelError) {
