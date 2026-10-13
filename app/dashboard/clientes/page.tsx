@@ -40,10 +40,10 @@ export default function ClientesPage() {
   useEffect(() => {
     let channel: ReturnType<typeof db.channel> | null = null
     let cancelled = false
-    void db.auth.getUser().then(({ data }) => {
-      if (cancelled || !data.user) return
-      channel = db.channel(`clients-${data.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'clients', filter: `user_id=eq.${data.user.id}` }, () => void load()).subscribe()
-    })
+    void loadOrganizationAccess(db).then(({ organization_id: org }) => {
+      if (cancelled) return
+      channel = db.channel(`clients-${org}`).on('postgres_changes', { event: '*', schema: 'public', table: 'clients', filter: `organization_id=eq.${org}` }, () => void load()).subscribe()
+    }).catch(() => undefined)
     return () => { cancelled = true; if (channel) void db.removeChannel(channel) }
   }, [db, load])
 

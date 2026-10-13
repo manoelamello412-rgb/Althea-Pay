@@ -74,11 +74,11 @@ export default function SalesMobile() {
     let channel: ReturnType<typeof db.channel> | null = null
     let cancelled = false
     const subscribe = async () => {
-      const { data: auth } = await db.auth.getUser()
-      if (cancelled || !auth.user) return
-      channel = db.channel(`sales-mobile-${auth.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'sales', filter: `user_id=eq.${auth.user.id}` }, () => void load()).subscribe()
+      const { organization_id: org } = await loadOrganizationAccess(db)
+      if (cancelled) return
+      channel = db.channel(`sales-mobile-${org}`).on('postgres_changes', { event: '*', schema: 'public', table: 'sales', filter: `organization_id=eq.${org}` }, () => void load()).subscribe()
     }
-    void subscribe()
+    void subscribe().catch(() => undefined)
     return () => { cancelled = true; if (channel) void db.removeChannel(channel) }
   }, [db, load])
 

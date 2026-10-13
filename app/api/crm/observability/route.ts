@@ -7,7 +7,7 @@ export async function GET(){
  if(error||!user)return NextResponse.json({error:'UNAUTHORIZED'},{status:401})
  const {organization_id:organizationId}=await loadOrganizationAccess(supabase)
  const [delivery,automation,predictive]=await Promise.all([
-  supabase.from('crm_channel_delivery_events').select('status,occurred_at,channel_account_id,conversation_id,external_message_id').eq('user_id',user.id).order('occurred_at',{ascending:false}).limit(100),
+  supabase.from('crm_channel_delivery_events').select('status,occurred_at,channel_account_id,conversation_id,external_message_id').eq('organization_id',organizationId).order('occurred_at',{ascending:false}).limit(100),
   supabase.from('automation_executions').select('id,rule_id,status,attempt_count,max_attempts,next_retry_at,dead_lettered_at,error_message,created_at,completed_at').eq('organization_id',organizationId).order('created_at',{ascending:false}).limit(100),
   supabase.rpc('crm_predictive_evaluation_summary',{p_model_version:'deterministic_behavioral_v1'})
  ])

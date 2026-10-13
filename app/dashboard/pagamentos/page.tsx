@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCircle2, Clock3, CreditCard, RefreshCw, Search, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 
 type PaymentStatus = 'created' | 'pending' | 'approved' | 'failed' | 'refunded' | 'chargeback'
 
@@ -44,7 +45,8 @@ export default function PagamentosPage() {
     try {
       const { data: auth } = await db.auth.getUser()
       if (!auth.user) { setPayments([]); return }
-      const result = await db.from('gateway_transactions').select('id,user_id,funnel_id,product_id,gateway_id,external_id,amount,currency,status,customer,error_message,created_at,updated_at,completed_at').order('created_at', { ascending: false }).limit(5000)
+      const { organization_id: organizationId } = await loadOrganizationAccess(db)
+      const result = await db.from('gateway_transactions').select('id,user_id,funnel_id,product_id,gateway_id,external_id,amount,currency,status,customer,error_message,created_at,updated_at,completed_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(5000)
       if (result.error) throw result.error
       setPayments((result.data || []) as Payment[])
     } catch (cause) {
@@ -55,8 +57,8 @@ export default function PagamentosPage() {
   useEffect(() => { void load() }, [load])
   useEffect(() => {
     let channel: ReturnType<typeof db.channel> | null = null; let cancelled = false
-    const subscribe = async () => { const { data: auth } = await db.auth.getUser(); if (cancelled || !auth.user) return; channel = db.channel(`payments-${auth.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_transactions', filter: `user_id=eq.${auth.user.id}` }, () => void load()).subscribe() }
-    void subscribe(); return () => { cancelled = true; if (channel) void db.removeChannel(channel) }
+    const subscribe = async () => { const { organization_id: org } = await loadOrganizationAccess(db); if (cancelled) return; channel = db.channel(`payments-${org}`).on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_transactions', filter: `organization_id=eq.${org}` }, () => void load()).subscribe() }
+    void subscribe().catch(() => undefined); return () => { cancelled = true; if (channel) void db.removeChannel(channel) }
   }, [db, load])
 
   const filtered = useMemo(() => {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, CheckCircle2, Clock3, Loader2, Radio, RefreshCw, ServerCog, TriangleAlert, XCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 
 type HealthState = 'collecting' | 'operational' | 'degraded' | 'unstable'
 type RoutingLog = { id: string; status: string | null; created_at: string; completed_at: string | null; gateways_attempted: unknown; final_gateway: string | null }
@@ -60,7 +61,8 @@ export default function PerformanceSettingsPage() {
   const loadRoutingTelemetry = useCallback(async () => {
     const { data: auth, error: authError } = await supabase.auth.getUser()
     if (authError || !auth.user) { router.replace('/login'); return }
-    const { data, error: queryError } = await supabase.from('transaction_routing_logs').select('id,status,created_at,completed_at,gateways_attempted,final_gateway').eq('user_id', auth.user.id).order('created_at', { ascending: false }).limit(50)
+    const { organization_id: organizationId } = await loadOrganizationAccess(supabase)
+    const { data, error: queryError } = await supabase.from('transaction_routing_logs').select('id,status,created_at,completed_at,gateways_attempted,final_gateway').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(50)
     if (queryError) throw queryError
     const nextLogs = (data ?? []) as RoutingLog[]
     setLogs(nextLogs)
