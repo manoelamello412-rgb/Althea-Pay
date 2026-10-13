@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { can, organizationAuthority } from "../_shared/organization-authority.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -49,6 +50,8 @@ Deno.serve(async (req) => {
     const action = String(body.action ?? "");
 
     if (action === "create") {
+      const authority = await organizationAuthority(admin, user.id, ["can_manage_integrations"]);
+      if (!can(authority, "can_manage_integrations")) return json({ ok: false, error: "forbidden" }, 403);
       const endpoint_url = normalizeEndpoint(String(body.endpoint_url ?? ""));
       const name = String(body.name ?? "Webhook").trim().slice(0, 120) || "Webhook";
       const events = Array.isArray(body.events) && body.events.length
@@ -58,7 +61,9 @@ Deno.serve(async (req) => {
       const stored = await admin.rpc("store_webhook_secret", { p_secret: secret, p_name: `ALTHEA outbound webhook ${user.id}` });
       if (stored.error) throw stored.error;
       const { data, error } = await admin.from("outbound_webhooks").insert({
-        user_id: user.id,
+        // The dispatcher fans out by the event owner's user_id, so the webhook belongs to the org owner.
+        user_id: authority!.owner_user_id ?? user.id,
+        organization_id: authority!.organization_id,
         name,
         endpoint_url,
         secret_ref: String(stored.data),
@@ -73,28 +78,32 @@ Deno.serve(async (req) => {
 
     const id = String(body.id ?? "");
     if (!id) return json({ ok: false, error: "id_required" }, 400);
-    const owned = await admin.from("outbound_webhooks").select("id").eq("id", id).eq("user_id", user.id).maybeSingle();
+    const owned = await admin.from("outbound_webhooks").select("id,organization_id").eq("id", id).maybeSingle();
     if (owned.error) throw owned.error;
     if (!owned.data) return json({ ok: false, error: "not_found" }, 404);
+    const organizationId = String(owned.data.organization_id ?? "");
+    const authority = await organizationAuthority(admin, user.id, ["can_manage_integrations"], organizationId);
+    if (!authority) return json({ ok: false, error: "not_found" }, 404);
+    if (!can(authority, "can_manage_integrations")) return json({ ok: false, error: "forbidden" }, 403);
 
     if (action === "rotate") {
       const secret = makeSecret();
       const stored = await admin.rpc("store_webhook_secret", { p_secret: secret, p_name: `ALTHEA outbound webhook ${id}` });
       if (stored.error) throw stored.error;
-      const { data, error } = await admin.from("outbound_webhooks").update({ secret_ref: String(stored.data), secret_hash: await sha256(secret), updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", user.id).select("id,name,endpoint_url,events,status,max_attempts,updated_at").single();
+      const { data, error } = await admin.from("outbound_webhooks").update({ secret_ref: String(stored.data), secret_hash: await sha256(secret), updated_at: new Date().toISOString() }).eq("id", id).eq("organization_id", organizationId).select("id,name,endpoint_url,events,status,max_attempts,updated_at").single();
       if (error) throw error;
       return json({ ok: true, webhook: data, secret, secret_once: true });
     }
 
     if (action === "toggle") {
       const status = String(body.status) === "disabled" ? "disabled" : "active";
-      const { data, error } = await admin.from("outbound_webhooks").update({ status, updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", user.id).select("id,name,endpoint_url,events,status,max_attempts,updated_at").single();
+      const { data, error } = await admin.from("outbound_webhooks").update({ status, updated_at: new Date().toISOString() }).eq("id", id).eq("organization_id", organizationId).select("id,name,endpoint_url,events,status,max_attempts,updated_at").single();
       if (error) throw error;
       return json({ ok: true, webhook: data });
     }
 
     if (action === "delete") {
-      const { error } = await admin.from("outbound_webhooks").delete().eq("id", id).eq("user_id", user.id);
+      const { error } = await admin.from("outbound_webhooks").delete().eq("id", id).eq("organization_id", organizationId);
       if (error) throw error;
       return json({ ok: true });
     }
