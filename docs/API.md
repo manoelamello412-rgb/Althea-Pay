@@ -11,8 +11,21 @@ This file lists the current public-facing Edge Functions (`supabase/functions/**
 
 - `POST /checkout-engine-v2` — creates/advances a checkout session and triggers the charge. Requires a user session (`Authorization: Bearer <supabase-jwt>`).
 - `POST /gateway-orchestrator` — routes an authorized charge to the configured gateway. Requires a user session.
-- `POST /gateway-refund` — issues a refund for a transaction. Requires a user session.
-- `POST /funnel-events` — ingests funnel/quiz/checkout lifecycle events. Accepts either an `x-funnel-event-token` (per-funnel ingestion token) or an ALTHEA API key.
+- `POST /funnel-client-token` — issues a 10-minute `events:write` browser token. Server side with the secret `x-funnel-event-token`, or from a page with only `funnel_id` when the browser `Origin` matches the funnel's page URL.
+- `POST /funnel-events` — ingests funnel/quiz/checkout lifecycle events. Accepts a client token (`x-funnel-client-token`), the per-funnel `x-funnel-event-token`, or an ALTHEA API key.
+
+## Page snippet (`althea.js`)
+
+Paste in every page of the funnel, before `</head>`. The dashboard (Funil → Estado da Integração) shows it ready to copy:
+
+```html
+<script async src="https://<app>/althea.js" data-funnel-id="<funnel_id>" data-api="https://<project>.supabase.co"></script>
+```
+
+- Requires the funnel's "Link da Página" to be saved: tokens are only issued to that host (`www.` ignored). The ingestion token is never placed in the page.
+- Sends `page_view` on load with a persistent `visitor_id`, a `session_id` (30 min idle), `page_url`, `referrer` and the session's UTMs / `gclid` / `fbclid`.
+- `althea.identify({ name, email, phone, customer_id })` attaches the buyer to the following events (feeds canonical customer resolution).
+- `althea.track('checkout_started', { product_id, checkout_id })` sends any catalog event; each call gets a unique `event_id`, or pass your own to make retries idempotent.
 
 ## For third-party integrators (customer-configured webhooks)
 
