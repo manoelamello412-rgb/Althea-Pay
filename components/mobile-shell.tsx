@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { CircleDollarSign, GitBranch, LayoutDashboard, LogOut, MessageCircle, Network, Package, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
+import { CircleDollarSign, GitBranch, LayoutDashboard, ListTodo, LogOut, MessageCircle, Network, Package, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -29,6 +29,8 @@ const menuSections: MenuSection[] = [
   { title: 'CLIENTES E RELACIONAMENTO', items: [
     { label: 'Clientes', href: '/dashboard/clientes', icon: MessageCircle },
     { label: 'Chat / CRM', href: '/dashboard/crm', icon: MessageCircle },
+    { label: 'Tarefas', href: '/dashboard/tarefas', icon: ListTodo },
+    { label: 'Configurações do CRM', href: '/dashboard/crm/configuracoes', icon: Settings2 },
   ] },
   { title: 'DADOS E INTELIGÊNCIA', items: [
     { label: 'Vendas', href: '/dashboard/vendas', icon: CircleDollarSign },
@@ -62,6 +64,7 @@ function normalizeSearch(value: string): string {
 function sectionLabel(pathname: string): string {
   if (pathname.startsWith('/dashboard/funil')) return 'FUNIS'
   if (pathname.startsWith('/dashboard/vendas')) return 'VENDAS'
+  if (pathname.startsWith('/dashboard/tarefas')) return 'TAREFAS'
   if (pathname.startsWith('/dashboard/crm')) return 'CRM'
   if (pathname.startsWith('/dashboard/ia')) return 'IA'
   if (pathname.startsWith('/dashboard/gateways')) return 'GATEWAYS'
