@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, BarChart3, RefreshCw, TrendingUp, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 
 type Transaction = { id: string; amount: number | null; currency: string | null; status: string; funnel_id: string | null; gateway_id: string | null; created_at: string; completed_at: string | null }
 type Checkout = { id: string; status: string; amount: number | null; created_at: string; completed_at: string | null }
@@ -23,10 +24,11 @@ export default function AnalyticsPage() {
     try {
       const { data: auth } = await db.auth.getUser()
       if (!auth.user) { setTransactions([]); setCheckouts([]); return }
+      const { organization_id: organizationId } = await loadOrganizationAccess(db)
       const since = new Date(Date.now() - period * 86400000).toISOString()
       const [tx, co] = await Promise.all([
-        db.from('gateway_transactions').select('id,amount,currency,status,funnel_id,gateway_id,created_at,completed_at').eq('user_id', auth.user.id).gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
-        db.from('checkout_sessions').select('id,status,amount,created_at,completed_at').eq('user_id', auth.user.id).gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
+        db.from('gateway_transactions').select('id,amount,currency,status,funnel_id,gateway_id,created_at,completed_at').eq('organization_id', organizationId).gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
+        db.from('checkout_sessions').select('id,status,amount,created_at,completed_at').eq('organization_id', organizationId).gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
       ])
       if (tx.error) throw tx.error
       if (co.error) throw co.error

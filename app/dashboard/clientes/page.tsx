@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Search, Users, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 
 type Json = Record<string, unknown>
 type Client = { id: string; data: Json | null; created_at: string; user_id: string }
@@ -25,7 +26,8 @@ export default function ClientesPage() {
     try {
       const { data: auth } = await db.auth.getUser()
       if (!auth.user) { setClients([]); return }
-      const result = await db.from('clients').select('id,data,created_at,user_id').eq('user_id', auth.user.id).order('created_at', { ascending: false }).limit(5000)
+      const { organization_id: organizationId } = await loadOrganizationAccess(db)
+      const result = await db.from('clients').select('id,data,created_at,user_id').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(5000)
       if (result.error) throw result.error
       setClients((result.data ?? []) as Client[])
     } catch (cause) {

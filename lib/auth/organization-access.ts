@@ -60,3 +60,13 @@ export function hasOrganizationCapability(
 ) {
   return access?.capabilities[capability] === true
 }
+
+type RpcClient = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }> }
+
+export async function loadOrganizationAccess(supabase: RpcClient) {
+  const { data, error } = await supabase.rpc('organization_my_access_v1', { p_organization_id: null })
+  if (error) throw error
+  const access = parseOrganizationAccess(data)
+  if (!access) throw new Error('Não foi possível carregar suas permissões.')
+  return access
+}

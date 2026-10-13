@@ -3,6 +3,7 @@
 import { CalendarDays, CheckCircle2, CreditCard, Filter, Search, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 import { amountOf, customerNameOf, dateOf, normalizeStatus, todayInSaoPaulo, type AnalyticsSale } from '@/lib/analytics/sales'
 
 type Sale = AnalyticsSale & { currency?: string | null }
@@ -53,10 +54,11 @@ export default function SalesMobile() {
     try {
       const { data: auth } = await db.auth.getUser()
       if (!auth.user) { setSales([]); return }
+      const { organization_id: organizationId } = await loadOrganizationAccess(db)
       const queryResult = await db
         .from('sales')
         .select('id,amount,status,currency,data,gateway_id,external_id,transaction_id,occurred_at,created_at')
-        .eq('user_id', auth.user.id)
+        .eq('organization_id', organizationId)
         .order('occurred_at', { ascending: false })
         .limit(5000)
       if (queryResult.error) throw queryResult.error

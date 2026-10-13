@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, KeyRound, RefreshCw, ShieldCheck, XCircle } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 
 type ApiKey = { id: string; name: string; key_prefix: string; scopes: unknown; expires_at: string | null; last_used_at: string | null; revoked_at: string | null; created_at: string }
 type RequestLog = { id: string; api_key_id: string | null; request_id: string; method: string; path: string; status_code: number | null; latency_ms: number | null; scope: string | null; created_at: string }
@@ -24,8 +25,9 @@ export default function ApiPage() {
       const { data: auth } = await db.auth.getUser()
       if (!auth.user) { setKeys([]); setLogs([]); return }
       const uid = auth.user.id
+      const { organization_id: organizationId } = await loadOrganizationAccess(db)
       const [keyResult, logResult] = await Promise.all([
-        db.from('api_keys').select('id,name,key_prefix,scopes,expires_at,last_used_at,revoked_at,created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(200),
+        db.from('api_keys').select('id,name,key_prefix,scopes,expires_at,last_used_at,revoked_at,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(200),
         db.from('api_request_logs').select('id,api_key_id,request_id,method,path,status_code,latency_ms,scope,created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(100),
       ])
       if (keyResult.error) throw keyResult.error; if (logResult.error) throw logResult.error
