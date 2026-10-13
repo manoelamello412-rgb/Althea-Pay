@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { infobipMessageId, infobipRequest, parseTemplate } from "../_shared/infobip.ts";
+import { signUnsubscribe } from "../_shared/remarketing.ts";
 
 type Json = Record<string, unknown>;
 type Outbox = {
@@ -144,16 +145,29 @@ async function sendMeta(account: Account, identity: Identity, body: string): Pro
   return { externalId: text(payload.message_id ?? payload.id), provider: account.provider };
 }
 
-async function sendResend(account: Account, identity: Identity, body: string): Promise<DeliveryResult> {
+// Campaign e-mails carry one-click unsubscribe (RFC 8058), required by Gmail/Yahoo for bulk senders.
+async function unsubscribeExtras(row: Outbox, address: string) {
+  if (row.metadata?.source !== "campaign") return { headers: undefined, footer: "" };
+  const token = await signUnsubscribe(Deno.env.get("CRM_UNSUBSCRIBE_SECRET") ?? "", { o: row.organization_id, c: "email", a: address });
+  const url = supabaseUrl.replace(/\/$/, "") + "/functions/v1/crm-channel-unsubscribe?t=" + token;
+  return {
+    headers: { "List-Unsubscribe": "<" + url + ">", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+    footer: "\n\n--\nPara não receber mais estes e-mails: " + url,
+  };
+}
+
+async function sendResend(account: Account, identity: Identity, row: Outbox): Promise<DeliveryResult> {
   const credential = credentials(account);
   const token = text(credential.api_key ?? credential.access_token ?? credential.token);
   const from = String(meta(account, "from_email", credential.from ?? ""));
   const to = identity.email;
   if (!token || !from || !to) throw new Error("email_configuration_missing");
+  const subject = text(row.metadata?.email_subject) || String(meta(account, "subject", "Mensagem da Althea Pay"));
+  const extras = await unsubscribeExtras(row, to);
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-    body: JSON.stringify({ from, to: [to], subject: String(meta(account, "subject", "Mensagem da Althea Pay")), text: body }),
+    headers: { authorization: "Bearer " + token, "content-type": "application/json", "idempotency-key": row.id },
+    body: JSON.stringify({ from, to: [to], subject, text: row.body + extras.footer, headers: extras.headers }),
   });
   const payload = await responseJson(response);
   return { externalId: text(payload.id), provider: account.provider };
@@ -261,7 +275,7 @@ async function deliver(row: Outbox, account: Account | null, identity: Identity 
   if (["meta_instagram", "instagram", "meta_messenger", "messenger"].includes(provider)) {
     return sendMeta(account, identity, row.body);
   }
-  if (["resend", "email_resend"].includes(provider)) return sendResend(account, identity, row.body);
+  if (["resend", "email_resend"].includes(provider)) return sendResend(account, identity, row);
   if (["twilio", "sms_twilio"].includes(provider)) return sendTwilio(account, identity, row.body);
   throw new Error("unsupported_channel_provider:" + account.provider);
 }
@@ -453,6 +467,7 @@ Deno.serve(async (request) => {
           "infobip_base_url_invalid",
           "whatsapp_template_invalid",
           "recipient_opted_out",
+          "unsubscribe_secret_missing",
           "whatsapp_destination_missing",
           "instagram_destination_missing",
           "messenger_destination_missing",

@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { templateMessage, type TemplateRow } from "../_shared/remarketing.ts";
 
 type Json = Record<string, unknown>;
 type RecoveryJob = {
@@ -328,10 +329,37 @@ async function ensureIdentity(job: RecoveryJob, conversationId: string, selectio
   if (result.error) throw result.error;
 }
 
+// The organization's active checkout_abandoned template wins over the built-in text; on WhatsApp
+// it is the only way to reach the buyer outside the 24h window.
+async function recoveryMessage(job: RecoveryJob, selection: Selection): Promise<{ body: string; metadata: Json }> {
+  const customer = objectOf(job.customer);
+  const found = await db
+    .from("crm_message_templates")
+    .select("body,subject,variables,whatsapp_template_name,language")
+    .eq("organization_id", job.organization_id)
+    .eq("channel", selection.channel)
+    .eq("trigger_event", "checkout_abandoned")
+    .eq("active", true)
+    .maybeSingle();
+  if (found.error) throw found.error;
+  if (!found.data) return { body: messageBody(job, customer), metadata: {} };
+  const name = nameOf(customer);
+  return templateMessage(found.data as TemplateRow, {
+    nome: name,
+    primeiro_nome: name.split(" ")[0] ?? "",
+    email: emailOf(customer),
+    telefone: phoneOf(customer),
+    link: recoveryUrl(job),
+    valor: new Intl.NumberFormat("pt-BR", { style: "currency", currency: text(job.currency) || "BRL" }).format(Number(job.amount) || 0),
+    produto: text(objectOf(job.checkout_metadata).product_name),
+  });
+}
+
 async function enqueueOutbox(job: RecoveryJob, conversationId: string, selection: Selection): Promise<string> {
   const attempt = Number(job.recovery_count ?? 0) + 1;
   const idempotencyKey = `checkout-recovery:${job.checkout_id}:${attempt}:${selection.channel}`;
-  const body = messageBody(job, objectOf(job.customer));
+  const message = await recoveryMessage(job, selection);
+  const body = message.body;
 
   const inserted = await db
     .from("crm_channel_message_outbox")
@@ -344,6 +372,7 @@ async function enqueueOutbox(job: RecoveryJob, conversationId: string, selection
       body,
       status: "queued",
       metadata: {
+        ...message.metadata,
         source: "checkout_recovery",
         recovery_event_id: job.event_id,
         recovery_checkout_id: job.checkout_id,

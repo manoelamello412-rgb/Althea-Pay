@@ -40,6 +40,9 @@ verify_jwt = false
 [functions.crm-channel-twilio-inbound]
 verify_jwt = false
 
+[functions.crm-channel-unsubscribe]
+verify_jwt = false
+
 [functions.crm-predictive-outcome-worker]
 verify_jwt = false
 

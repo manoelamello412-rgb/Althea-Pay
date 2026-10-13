@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { CircleDollarSign, GitBranch, LayoutDashboard, ListTodo, LogOut, MessageCircle, Network, Package, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
+import { CircleDollarSign, GitBranch, LayoutDashboard, ListTodo, LogOut, Megaphone, MessageCircle, Network, Package, Search, Settings2, Sparkles, Webhook, X } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -30,6 +30,7 @@ const menuSections: MenuSection[] = [
     { label: 'Clientes', href: '/dashboard/clientes', icon: MessageCircle },
     { label: 'Chat / CRM', href: '/dashboard/crm', icon: MessageCircle },
     { label: 'Tarefas', href: '/dashboard/tarefas', icon: ListTodo },
+    { label: 'Campanhas', href: '/dashboard/crm/campanhas', icon: Megaphone },
     { label: 'Configurações do CRM', href: '/dashboard/crm/configuracoes', icon: Settings2 },
   ] },
   { title: 'DADOS E INTELIGÊNCIA', items: [
