@@ -1,10 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { infobipMessageId, infobipRequest, parseTemplate } from "../_shared/infobip.ts";
 
 type Json = Record<string, unknown>;
 type Outbox = {
   id: string;
   user_id: string;
+  organization_id: string;
   conversation_id: string | null;
   channel_account_id: string | null;
   channel: string;
@@ -100,32 +102,35 @@ async function responseJson(response: Response): Promise<Json> {
   return isObject(payload) ? payload : {};
 }
 
+// WhatsApp goes through Infobip only; Meta stays for Instagram and Messenger.
+async function sendInfobip(account: Account, identity: Identity, row: Outbox): Promise<DeliveryResult> {
+  const credential = credentials(account);
+  const apiKey = text(credential.api_key ?? credential.access_token);
+  const baseUrl = text(credential.base_url ?? meta(account, "base_url"));
+  if (!apiKey || !baseUrl) throw new Error("infobip_configuration_missing");
+  const webhookToken = text(credential.webhook_token);
+  const notifyUrl = webhookToken
+    ? supabaseUrl.replace(/\/$/, "") + "/functions/v1/crm-channel-infobip-webhook?account=" + account.id + "&token=" + encodeURIComponent(webhookToken)
+    : null;
+  const { url, init } = infobipRequest({
+    baseUrl,
+    apiKey,
+    from: String(meta(account, "from_number", account.external_account_id || "")),
+    to: identity.phone_e164 || identity.external_user_id || "",
+    messageId: row.id,
+    body: row.body,
+    template: parseTemplate(row.metadata),
+    notifyUrl,
+  });
+  const payload = await responseJson(await fetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(30_000) }));
+  return { externalId: infobipMessageId(payload), provider: account.provider };
+}
+
 async function sendMeta(account: Account, identity: Identity, body: string): Promise<DeliveryResult> {
   const credential = credentials(account);
   const token = text(credential.access_token ?? credential.token);
   if (!token) throw new Error("meta_access_token_missing");
   const base = "https://graph.facebook.com/" + String(meta(account, "graph_version", "v23.0"));
-
-  if (account.channel === "whatsapp") {
-    const id = String(meta(account, "phone_number_id", account.external_account_id || ""));
-    const to = identity.phone_e164 || identity.external_user_id;
-    if (!id || !to) throw new Error("whatsapp_destination_missing");
-    const response = await fetch(base + "/" + id + "/messages", {
-      method: "POST",
-      headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to,
-        type: "text",
-        text: { preview_url: false, body },
-      }),
-    });
-    const payload = await responseJson(response);
-    const messages = Array.isArray(payload.messages) ? payload.messages : [];
-    const firstMessage = isObject(messages[0]) ? messages[0] : {};
-    return { externalId: text(firstMessage.id ?? payload.message_id), provider: account.provider };
-  }
 
   const page = String(meta(account, "page_id", account.external_account_id || ""));
   const to = identity.external_user_id;
@@ -252,7 +257,8 @@ async function deliver(row: Outbox, account: Account | null, identity: Identity 
   if (!identity) throw new Error("channel_identity_not_found");
 
   const provider = account.provider.toLowerCase();
-  if (["meta_whatsapp", "whatsapp_cloud", "meta_instagram", "instagram", "meta_messenger", "messenger"].includes(provider)) {
+  if (provider === "infobip" && account.channel === "whatsapp") return sendInfobip(account, identity, row);
+  if (["meta_instagram", "instagram", "meta_messenger", "messenger"].includes(provider)) {
     return sendMeta(account, identity, row.body);
   }
   if (["resend", "email_resend"].includes(provider)) return sendResend(account, identity, row.body);
@@ -402,6 +408,16 @@ Deno.serve(async (request) => {
           identity = identityResult.data as Identity | null;
         }
 
+        if (identity && row.channel !== "funnel_chat") {
+          const optedOut = await db.rpc("crm_channel_recipient_opted_out", {
+            p_organization_id: row.organization_id,
+            p_channel: row.channel,
+            p_address: row.channel === "email" ? identity.email : identity.phone_e164 || identity.external_user_id,
+          });
+          if (optedOut.error) throw optedOut.error;
+          if (optedOut.data === true) throw new Error("recipient_opted_out");
+        }
+
         const delivery = await deliver(row, account, identity);
         if (!isValidExternalId(delivery.externalId)) throw new Error("missing_provider_external_id");
 
@@ -433,6 +449,10 @@ Deno.serve(async (request) => {
           "channel_identity_not_found",
           "missing_provider_external_id",
           "meta_access_token_missing",
+          "infobip_configuration_missing",
+          "infobip_base_url_invalid",
+          "whatsapp_template_invalid",
+          "recipient_opted_out",
           "whatsapp_destination_missing",
           "instagram_destination_missing",
           "messenger_destination_missing",
