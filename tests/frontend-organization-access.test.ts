@@ -68,7 +68,6 @@ describe('frontend organization access contract', () => {
       'app/dashboard/api/page.tsx',
       'app/dashboard/clientes/page.tsx',
       'app/dashboard/webhooks/page.tsx',
-      'app/dashboard/analytics/page.tsx',
       'components/sales-mobile.tsx',
       'app/api/crm/observability/route.ts',
       'app/dashboard/pagamentos/page.tsx',
