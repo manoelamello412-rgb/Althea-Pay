@@ -7,6 +7,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
 type FilterKey = 'product' | 'funnel' | 'gateway' | 'status' | 'source' | 'campaign' | 'currency' | 'payment_method'
 type Json = Record<string, any>
+type ActivityItem = { kind: 'payment' | 'customer' | 'call' | 'conversation'; at: string; id: string; status?: string; amount?: number | null; currency?: string; payment_method?: string | null; outcome?: string; channel?: string; name?: string | null }
 
 const FILTERS: Array<[FilterKey, string]> = [
   ['product', 'Produto'], ['funnel', 'Funil'], ['gateway', 'Gateway'], ['status', 'Status'],
@@ -16,6 +17,17 @@ const money = (v: any, currency = 'BRL') => v == null ? 'N/D' : new Intl.NumberF
 const number = (v: any) => new Intl.NumberFormat('pt-BR').format(Number(v ?? 0))
 const percent = (v: any) => v == null ? 'N/D' : `${Number(v).toFixed(1).replace('.', ',')}%`
 const localDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d)
+const PAYMENT_STATUS: Record<string, string> = { created: 'criado', pending: 'pendente', approved: 'aprovado', failed: 'falhou', declined: 'recusado', expired: 'expirado', refunded: 'reembolsado', chargeback: 'chargeback' }
+const CALL_OUTCOME: Record<string, string> = { answered: 'atendeu', no_answer: 'não atendeu', busy: 'ocupado', voicemail: 'caixa postal', wrong_number: 'número errado', callback: 'pediu retorno', converted: 'fechou', not_interested: 'sem interesse' }
+const ERRORS: Record<string, string> = { AUTH_REQUIRED: 'Sua sessão não tem uma organização ativa. Entre novamente.', INVALID_PERIOD: 'O período informado é inválido.' }
+const activityText = (item: ActivityItem) => {
+  const who = item.name || 'Cliente'
+  if (item.kind === 'payment') return [`Pagamento ${PAYMENT_STATUS[item.status ?? ''] ?? item.status ?? ''}`, [who, item.amount != null ? money(item.amount, item.currency || 'BRL') : null, item.payment_method].filter(Boolean).join(' · '), `/dashboard/pagamentos?transaction=${item.id}`]
+  if (item.kind === 'customer') return ['Novo cliente', who, '/dashboard/clientes']
+  if (item.kind === 'call') return [`Ligação: ${CALL_OUTCOME[item.outcome ?? ''] ?? item.outcome}`, who, '/dashboard/atendimento']
+  return ['Nova conversa', [who, item.channel].filter(Boolean).join(' · '), `/dashboard/crm?conversation=${item.id}`]
+}
+const timeAgo = (value: string) => { const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000)); return minutes < 60 ? `${minutes} min` : minutes < 1440 ? `${Math.floor(minutes / 60)} h` : `${Math.floor(minutes / 1440)} d` }
 const delta = (a: any, b: any) => { const x = Number(a), y = Number(b); return Number.isFinite(x) && Number.isFinite(y) && y !== 0 ? ((x - y) / Math.abs(y)) * 100 : null }
 
 export default function DashboardProduction() {
@@ -25,6 +37,7 @@ export default function DashboardProduction() {
   const [start, setStart] = useState(today)
   const [end, setEnd] = useState(today)
   const [data, setData] = useState<Json | null>(null)
+  const [activity, setActivity] = useState<ActivityItem[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,8 +51,12 @@ export default function DashboardProduction() {
     initial ? setLoading(true) : setRefreshing(true)
     setError(null)
     const params = Object.fromEntries(Object.entries(selected).map(([key, value]) => [`p_${key}`, value || null]))
-    const { data: result, error: rpcError } = await supabase.rpc('dashboard_production_data_for_user_secure', { p_start_date: start, p_end_date: end, ...params })
-    if (rpcError) { setError(rpcError.message); setData(null) } else setData((result ?? {}) as Json)
+    const [{ data: result, error: rpcError }, recent] = await Promise.all([
+      supabase.rpc('dashboard_production_data_for_user_secure', { p_start_date: start, p_end_date: end, ...params }),
+      supabase.rpc('dashboard_recent_activity_v1', { p_limit: 12 }),
+    ])
+    if (rpcError) { setError(ERRORS[rpcError.message] ?? 'Não foi possível carregar o dashboard.'); setData(null) } else setData((result ?? {}) as Json)
+    setActivity(recent.error ? null : ((recent.data as { items?: ActivityItem[] } | null)?.items ?? []))
     initial ? setLoading(false) : setRefreshing(false)
   }, [end, selected, start, supabase])
 
@@ -82,7 +99,7 @@ export default function DashboardProduction() {
     ['Marketing / Atribuição', [['Leads', number(d.marketing?.leads)], ['Vendas', number(d.marketing?.sales)], ['Receita', moneyMetric(d.marketing?.revenue)], ['Fonte', monetaryCurrency ? `Dados reais · ${currency}` : 'Selecione uma moeda']], '/dashboard/analytics'],
     ['CRM', [['Conversas', number(d.crm?.conversations)], ['Abertas', number(d.crm?.open)], ['Não lidas', number(d.crm?.unread)], ['SLA', 'Operacional']], '/dashboard/crm'],
     ['Operações', [['Eventos', number(d.operations?.events)], ['Falhas', number(d.operations?.failed)], ['Pendentes', number(d.operations?.pending)], ['Integrações', 'Monitoradas']], '/dashboard/webhooks'],
-    ['Segurança', [['Auditoria', number(d.security?.events)], ['Autenticação', number(d.security?.authEvents)], ['RLS', 'Ativo'], ['Escopo', 'Usuário']], '/dashboard/security'],
+    ['Segurança', [['Auditoria', number(d.security?.events)], ['Autenticação', number(d.security?.authEvents)], ['RLS', 'Ativo'], ['Escopo', 'Organização']], '/dashboard/security'],
     ['Inteligência', [['Receita', moneyMetric(d.intelligence?.revenue)], ['Vendas', number(d.intelligence?.sales)], ['Conversão', percent(d.intelligence?.conversion)], ['Base', 'Observada']], '/dashboard/ia'],
   ] as Array<[string, Array<[string, string]>, string?]>
   const visibleModules = modules.filter(([name]) => !search.trim() || name.toLowerCase().includes(search.toLowerCase()))
@@ -101,7 +118,7 @@ export default function DashboardProduction() {
     <header className="rounded-3xl border border-white/[.07] bg-[#080a09] p-5 sm:p-6">
       <p className="text-[10px] font-black uppercase tracking-[.22em] text-[#1DB854]">ALTHEA PAY · CONTROL CENTER</p>
       <div className="mt-2 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div><h1 className="text-2xl font-black">Dashboard operacional</h1><p className="mt-1 max-w-2xl text-xs leading-5 text-[#69736e]">Visão executiva e operacional baseada exclusivamente nos dados do usuário autenticado.</p></div>
+        <div><h1 className="text-2xl font-black">Dashboard operacional</h1><p className="mt-1 max-w-2xl text-xs leading-5 text-[#69736e]">Visão executiva e operacional com os dados reais da organização atual.</p></div>
         <div className="flex flex-wrap gap-2">
           <label className="rounded-xl border border-white/[.07] bg-[#101311] px-3 py-2 text-[10px] font-bold">De <input type="date" min={minDate} max={end} value={start} onChange={e => setStart(e.target.value)} className="ml-2 bg-transparent [color-scheme:dark]" /></label>
           <label className="rounded-xl border border-white/[.07] bg-[#101311] px-3 py-2 text-[10px] font-bold">Até <input type="date" min={start} max={today} value={end} onChange={e => setEnd(e.target.value)} className="ml-2 bg-transparent [color-scheme:dark]" /></label>
@@ -117,8 +134,12 @@ export default function DashboardProduction() {
     {loading ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{[1, 2, 3, 4].map(item => <div key={item} className="h-32 animate-pulse rounded-2xl border border-white/[.06] bg-[#080a09]" />)}</div> : <>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{cards.map(([label, raw, previous, value, Icon, route]) => { const change = delta(raw, previous); return <button key={label} onClick={() => router.push(route)} className="rounded-2xl border border-white/[.07] bg-[#080a09] p-5 text-left transition hover:border-white/[.14]"><div className="flex items-center justify-between"><span className="rounded-xl bg-[#101512] p-2.5 text-[#1DB854]"><Icon size={17} /></span>{change !== null && <span className={`inline-flex items-center gap-1 text-[10px] font-black ${change >= 0 ? 'text-[#5ed98b]' : 'text-red-400'}`}>{change >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(change).toFixed(1).replace('.', ',')}%</span>}</div><p className="mt-5 text-[10px] font-bold uppercase tracking-wider text-[#69736e]">{label}</p><p className="mt-1 text-2xl font-black">{value}</p><p className="mt-1 text-[9px] text-[#4f5b55]">Período anterior: {previous == null ? 'N/D' : label.includes('Receita') ? money(previous, currency) : label.includes('Conversão') ? percent(previous) : number(previous)}</p></button> })}</section>
       <section className="grid gap-4 xl:grid-cols-[1.7fr_1fr]">
-        <div className="rounded-2xl border border-white/[.07] bg-[#080a09] p-5"><div className="flex items-center justify-between"><div><p className="text-sm font-black">Receita por dia</p><p className="mt-1 text-[10px] text-[#69736e]">Série filtrada e isolada pelo usuário autenticado.</p></div><Activity size={16} className="text-[#1DB854]" /></div>{monetaryCurrency ? <><div className="mt-5 flex h-48 items-end gap-1">{trend.map((item: any) => <div key={String(item.date)} title={`${item.date} · ${money(item.revenue, currency)} · ${number(item.sales)} vendas`} className="flex h-full min-w-[7px] flex-1 items-end"><div className="w-full rounded-t bg-[#1DB854]/70" style={{ height: `${Math.max(3, Number(item.revenue ?? 0) / maxRevenue * 100)}%` }} /></div>)}</div><div className="mt-3 flex justify-between text-[9px] text-[#4f5b55]"><span>{trend[0]?.date || start}</span><span>{trend.length ? trend[trend.length - 1]?.date : end}</span></div></> : <div className="mt-5 flex h-48 items-center justify-center rounded-xl border border-dashed border-white/[.07] px-6 text-center text-xs text-[#69736e]">Selecione uma moeda nos filtros para visualizar receita e métricas monetárias sem misturar moedas.</div>}</div>
+        <div className="rounded-2xl border border-white/[.07] bg-[#080a09] p-5"><div className="flex items-center justify-between"><div><p className="text-sm font-black">Receita por dia</p><p className="mt-1 text-[10px] text-[#69736e]">Série filtrada e isolada pela organização atual.</p></div><Activity size={16} className="text-[#1DB854]" /></div>{monetaryCurrency ? <><div className="mt-5 flex h-48 items-end gap-1">{trend.map((item: any) => <div key={String(item.date)} title={`${item.date} · ${money(item.revenue, currency)} · ${number(item.sales)} vendas`} className="flex h-full min-w-[7px] flex-1 items-end"><div className="w-full rounded-t bg-[#1DB854]/70" style={{ height: `${Math.max(3, Number(item.revenue ?? 0) / maxRevenue * 100)}%` }} /></div>)}</div><div className="mt-3 flex justify-between text-[9px] text-[#4f5b55]"><span>{trend[0]?.date || start}</span><span>{trend.length ? trend[trend.length - 1]?.date : end}</span></div></> : <div className="mt-5 flex h-48 items-center justify-center rounded-xl border border-dashed border-white/[.07] px-6 text-center text-xs text-[#69736e]">Selecione uma moeda nos filtros para visualizar receita e métricas monetárias sem misturar moedas.</div>}</div>
         <div className="rounded-2xl border border-white/[.07] bg-[#080a09] p-5"><div className="flex items-center gap-2"><AlertTriangle size={16} className="text-[#e4b85c]" /><p className="text-sm font-black">Central de atenção</p></div><div className="mt-4 space-y-2">{[['Falhas de gateway', d.alerts?.gatewayFailures, '/dashboard/gateways'], ['Falhas operacionais', d.alerts?.failedOperations, '/dashboard/webhooks'], ['CRM não lido', d.alerts?.unreadCrm, '/dashboard/crm'], ['Disputas', d.alerts?.disputes, '/dashboard/pagamentos'], ['Assinaturas em atraso', d.alerts?.subscriptionPastDue, '/dashboard/vendas']].map(([label, value, route]: any) => <button key={label} onClick={() => router.push(route)} className="flex w-full justify-between rounded-xl border border-white/[.05] bg-[#0b0d0c] p-3 text-left"><span className="text-[10px] font-bold text-[#9aa49f]">{label}</span><span className={`text-xs font-black ${Number(value) > 0 ? 'text-[#e4b85c]' : 'text-[#5ed98b]'}`}>{number(value)}</span></button>)}</div></div>
+      </section>
+      <section className="rounded-2xl border border-white/[.07] bg-[#080a09] p-5"><div className="flex items-center justify-between"><div><p className="text-sm font-black">Atividade recente</p><p className="mt-1 text-[10px] text-[#69736e]">Pagamentos, clientes, ligações e conversas da organização.</p></div><Activity size={16} className="text-[#1DB854]" /></div>
+        {activity === null ? <p className="mt-4 text-xs text-[#69736e]">Não foi possível carregar a atividade recente.</p> : activity.length === 0 ? <p className="mt-4 text-xs text-[#69736e]">Nenhuma atividade registrada ainda.</p>
+          : <ul className="mt-4 divide-y divide-white/[.05]">{activity.map(item => { const [title, detail, href] = activityText(item); return <li key={`${item.kind}-${item.id}-${item.at}`}><button onClick={() => router.push(href)} className="flex w-full items-center justify-between gap-3 py-2.5 text-left hover:bg-white/[.02]"><span className="min-w-0"><b className="block truncate text-xs">{title}</b><span className="block truncate text-[10px] text-[#69736e]">{detail}</span></span><span className="shrink-0 text-[10px] text-[#69736e]">há {timeAgo(item.at)}</span></button></li> })}</ul>}
       </section>
       <section><div className="mb-3 flex items-center justify-between"><div><p className="text-sm font-black">Mapa operacional</p><p className="mt-1 text-[10px] text-[#69736e]">Módulos conectados ao mesmo contrato de dados do Dashboard.</p></div><span className="text-[9px] font-black uppercase tracking-wider text-[#5ed98b]">Tempo real</span></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{visibleModules.map(([name, metrics, route]) => <article key={name} className="rounded-2xl border border-white/[.07] bg-[#080a09] p-5"><div className="flex items-center justify-between"><h2 className="text-sm font-black">{name}</h2>{route && <button onClick={() => router.push(route)} className="text-[9px] font-black text-[#1DB854]">Abrir →</button>}</div><div className="mt-4 grid grid-cols-2 gap-2">{metrics.map(([label, value]) => <div key={label} className="rounded-xl border border-white/[.04] bg-[#0b0d0c] p-3"><p className="text-[9px] uppercase tracking-wider text-[#59635e]">{label}</p><p className="mt-1 truncate text-xs font-black">{value}</p></div>)}</div></article>)}</div></section>
     </>}
