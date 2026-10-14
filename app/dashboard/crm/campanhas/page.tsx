@@ -1,0 +1,219 @@
+'use client'
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Loader2, Pencil, Plus, RefreshCw, X } from 'lucide-react'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { hasOrganizationCapability, parseOrganizationAccess, type OrganizationAccess } from '@/lib/auth/organization-access'
+
+type Channel = 'whatsapp' | 'email' | 'sms'
+type Template = { id: string; name: string; channel: Channel; trigger_event: string | null; subject: string | null; body: string; variables: string[]; whatsapp_template_name: string | null; language: string; active: boolean }
+type SegmentDefinition = { tag_ids?: string[]; checkout_status?: string[]; last_activity_days?: number }
+type Segment = { id: string; name: string; description: string | null; definition: SegmentDefinition; active: boolean }
+type Campaign = { id: string; name: string; channel_account_id: string; template_id: string; segment_id: string; status: 'draft' | 'scheduled' | 'enqueued' | 'cancelled'; scheduled_at: string | null; enqueued_at: string | null; recipient_count: number }
+type Metrics = { campaign_id: string; queued: number; sent: number; delivered: number; read: number; failed: number; opted_out: number }
+type Account = { id: string; channel: string; provider: string; display_name: string | null; status: string }
+type Tag = { id: string; name: string }
+type Tab = 'campaigns' | 'templates' | 'segments'
+type Editor =
+  | { kind: 'campaign'; id: string | null; name: string; accountId: string; templateId: string; segmentId: string }
+  | { kind: 'template'; id: string | null; name: string; channel: Channel; subject: string; body: string; variables: string[]; waName: string; language: string; recovery: boolean; active: boolean }
+  | { kind: 'segment'; id: string | null; name: string; description: string; tagIds: string[]; checkout: string[]; days: string; active: boolean }
+  | { kind: 'schedule'; id: string; name: string; at: string }
+
+const CHANNELS: Record<string, string> = { whatsapp: 'WhatsApp', email: 'E-mail', sms: 'SMS' }
+const VARIABLES: Record<string, string> = { nome: 'Nome', primeiro_nome: 'Primeiro nome', email: 'E-mail', telefone: 'Telefone', link: 'Link do checkout', valor: 'Valor', produto: 'Produto' }
+const CHECKOUT: Record<string, string> = { respondendo_quiz: 'Respondendo quiz', no_checkout: 'Sem checkout', parado_no_caixa: 'Parado no caixa', cartao_recusado: 'Cartão recusado', pago: 'Pago' }
+const STATUS: Record<Campaign['status'], [string, string]> = { draft: ['Rascunho', 'text-slate-400'], scheduled: ['Agendada', 'text-amber-300'], enqueued: ['Disparada', 'text-emerald-400'], cancelled: ['Cancelada', 'text-slate-600'] }
+const ERRORS: Record<string, string> = {
+  FORBIDDEN: 'Seu acesso não permite alterar campanhas.', NAME_TAKEN: 'Já existe um item com esse nome.', TEMPLATE_INVALID: 'Revise o template: WhatsApp exige o nome do template aprovado e e-mail exige assunto.',
+  SEGMENT_DEFINITION_INVALID: 'Revise os filtros do segmento.', SEGMENT_NAME_INVALID: 'Informe um nome de até 80 caracteres.', CAMPAIGN_REFERENCES_INVALID: 'Conta, template e segmento precisam ser da organização e do mesmo canal.',
+  CAMPAIGN_STATUS_CONFLICT: 'A campanha mudou de estado, ou a conta/template está inativo. Atualize a página.', CAMPAIGN_NOT_EDITABLE: 'Só rascunhos podem ser editados.',
+}
+const messageOf = (cause: unknown) => { const raw = cause && typeof cause === 'object' && 'message' in cause ? String((cause as { message: unknown }).message) : ''; return ERRORS[raw] ?? 'Não foi possível salvar.' }
+const input = 'h-10 w-full rounded-xl border border-white/10 bg-white/[.03] px-3 text-sm outline-none focus:border-emerald-500/40'
+const label = 'text-[10px] font-bold uppercase tracking-widest text-slate-500'
+const toggle = (list: string[], value: string) => list.includes(value) ? list.filter(item => item !== value) : [...list, value]
+const localNow = () => { const d = new Date(Date.now() + 10 * 60_000); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16) }
+
+export default function CrmCampanhasPage() {
+  const db = useMemo(() => createSupabaseBrowserClient(), [])
+  const [access, setAccess] = useState<OrganizationAccess | null>(null)
+  const [tab, setTab] = useState<Tab>('campaigns')
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [metrics, setMetrics] = useState<Record<string, Metrics>>({})
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [segments, setSegments] = useState<Segment[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [editor, setEditor] = useState<Editor | null>(null)
+  const [audience, setAudience] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
+  const canManage = hasOrganizationCapability(access, 'can_manage_automations')
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('')
+    try {
+      const accessResult = await db.rpc('organization_my_access_v1', { p_organization_id: null })
+      if (accessResult.error) throw accessResult.error
+      const current = parseOrganizationAccess(accessResult.data)
+      setAccess(current)
+      if (!current) return
+      const org = current.organization_id
+      const [campaignResult, templateResult, segmentResult, accountResult, tagResult] = await Promise.all([
+        db.from('crm_campaigns').select('id,name,channel_account_id,template_id,segment_id,status,scheduled_at,enqueued_at,recipient_count').eq('organization_id', org).order('created_at', { ascending: false }).limit(100),
+        db.from('crm_message_templates').select('id,name,channel,trigger_event,subject,body,variables,whatsapp_template_name,language,active').eq('organization_id', org).order('name'),
+        db.from('crm_segments').select('id,name,description,definition,active').eq('organization_id', org).order('name'),
+        hasOrganizationCapability(current, 'can_manage_integrations') || hasOrganizationCapability(current, 'can_manage_automations')
+          ? db.from('crm_channel_accounts').select('id,channel,provider,display_name,status').eq('organization_id', org).in('channel', ['whatsapp', 'email', 'sms'])
+          : Promise.resolve({ data: [], error: null }),
+        db.from('crm_tags').select('id,name').eq('organization_id', org).eq('active', true).order('name'),
+      ])
+      for (const result of [campaignResult, templateResult, segmentResult, accountResult, tagResult]) if (result.error) throw result.error
+      const list = (campaignResult.data ?? []) as Campaign[]
+      setCampaigns(list)
+      setTemplates((templateResult.data ?? []) as Template[])
+      setSegments((segmentResult.data ?? []) as Segment[])
+      setAccounts((accountResult.data ?? []) as Account[])
+      setTags((tagResult.data ?? []) as Tag[])
+      if (list.length) {
+        const metricResult = await db.rpc('crm_campaign_metrics', { p_campaign_ids: list.map(item => item.id) })
+        if (metricResult.error) throw metricResult.error
+        setMetrics(Object.fromEntries(((metricResult.data ?? []) as Metrics[]).map(row => [row.campaign_id, row])))
+      }
+    } catch (cause) {
+      console.error('[ALTHEA-CRM-CAMPAIGNS]', cause)
+      setError('Não foi possível carregar as campanhas.')
+    } finally { setLoading(false) }
+  }, [db])
+
+  useEffect(() => { void load() }, [load])
+
+  const campaignChannel = editor?.kind === 'campaign' ? accounts.find(account => account.id === editor.accountId)?.channel : undefined
+  const campaignSegment = editor?.kind === 'campaign' ? editor.segmentId : ''
+  useEffect(() => {
+    setAudience(null)
+    if (!campaignChannel || !campaignSegment) return
+    let live = true
+    void db.rpc('crm_segment_audience_count', { p_segment_id: campaignSegment, p_channel: campaignChannel }).then(({ data, error: countError }: { data: number | null; error: unknown }) => { if (live && !countError) setAudience(Number(data ?? 0)) })
+    return () => { live = false }
+  }, [db, campaignChannel, campaignSegment])
+
+  async function run(call: Promise<{ error: unknown }>) {
+    setSaving(true); setError('')
+    const result = await call
+    setSaving(false)
+    if (result.error) { setError(messageOf(result.error)); return }
+    setEditor(null)
+    await load()
+  }
+
+  function save() {
+    if (!editor) return
+    if (editor.kind === 'campaign') return run(db.rpc('crm_campaign_save', { p_id: editor.id, p_name: editor.name, p_channel_account_id: editor.accountId, p_template_id: editor.templateId, p_segment_id: editor.segmentId }))
+    if (editor.kind === 'template') return run(db.rpc('crm_template_save', { p_id: editor.id, p_name: editor.name, p_channel: editor.channel, p_body: editor.body, p_variables: editor.variables, p_subject: editor.channel === 'email' ? editor.subject : null, p_whatsapp_template_name: editor.channel === 'whatsapp' ? editor.waName : null, p_language: editor.language, p_trigger_event: editor.recovery ? 'checkout_abandoned' : null, p_active: editor.active }))
+    if (editor.kind === 'segment') {
+      const definition: SegmentDefinition = { ...(editor.tagIds.length ? { tag_ids: editor.tagIds } : {}), ...(editor.checkout.length ? { checkout_status: editor.checkout } : {}), ...(editor.days ? { last_activity_days: Number(editor.days) } : {}) }
+      return run(db.rpc('crm_segment_save', { p_id: editor.id, p_name: editor.name, p_definition: definition, p_description: editor.description, p_active: editor.active }))
+    }
+    return run(db.rpc('crm_campaign_set_status', { p_id: editor.id, p_status: 'scheduled', p_scheduled_at: new Date(editor.at).toISOString() }))
+  }
+
+  const setStatus = (campaign: Campaign, status: 'draft' | 'cancelled') => {
+    if (status === 'cancelled' && !window.confirm(`Cancelar a campanha "${campaign.name}"?`)) return
+    void run(db.rpc('crm_campaign_set_status', { p_id: campaign.id, p_status: status }))
+  }
+
+  const nameOf = <T extends { id: string; name: string }>(list: T[], id: string) => list.find(item => item.id === id)?.name ?? '—'
+  const accountName = (account?: Account) => account ? account.display_name || `${CHANNELS[account.channel] ?? account.channel} · ${account.provider}` : '—'
+  const tabs: [Tab, string, number][] = [['campaigns', 'Campanhas', campaigns.length], ['templates', 'Templates', templates.length], ['segments', 'Segmentos', segments.length]]
+  const empty = (text: string) => <div className="p-10 text-center text-sm text-slate-600">{text}</div>
+  const editButton = (name: string, onClick: () => void) => <button type="button" aria-label={`Editar ${name}`} onClick={onClick} className="rounded-md p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
+  const inactive = (active: boolean) => !active && <span className="ml-2 rounded-full bg-white/[.06] px-2 py-0.5 text-[10px] text-slate-500">inativo</span>
+  const small = 'rounded-lg border border-white/10 px-2.5 py-1 text-xs hover:bg-white/[.06] disabled:opacity-40'
+  const newEditor = (): Editor => tab === 'campaigns' ? { kind: 'campaign', id: null, name: '', accountId: '', templateId: '', segmentId: '' }
+    : tab === 'templates' ? { kind: 'template', id: null, name: '', channel: 'whatsapp', subject: '', body: '', variables: [], waName: '', language: 'pt_BR', recovery: false, active: true }
+      : { kind: 'segment', id: null, name: '', description: '', tagIds: [], checkout: [], days: '', active: true }
+  const invalid = !editor ? true
+    : editor.kind === 'campaign' ? !editor.name.trim() || !editor.accountId || !editor.templateId || !editor.segmentId
+      : editor.kind === 'template' ? !editor.name.trim() || !editor.body.trim() || (editor.channel === 'whatsapp' && !editor.waName.trim()) || (editor.channel === 'email' && !editor.subject.trim())
+        : editor.kind === 'segment' ? !editor.name.trim()
+          : !editor.at
+
+  return <main className="min-h-screen bg-[#070A09] px-4 py-6 text-slate-100 lg:px-8">
+    <div className="mx-auto max-w-4xl">
+      <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div><div className="mb-2 text-[10px] font-black uppercase tracking-[.28em] text-emerald-400">ALTHEA PAY // CRM</div><h1 className="text-3xl font-black tracking-tight">Campanhas</h1><p className="mt-1 text-sm text-slate-500">Remarketing por WhatsApp, e-mail e SMS. Contatos que pediram para sair nunca recebem.</p></div>
+        <div className="flex gap-2">
+          {canManage && <button type="button" onClick={() => setEditor(newEditor())} className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400"><Plus size={15} /> {tab === 'campaigns' ? 'Nova campanha' : tab === 'templates' ? 'Novo template' : 'Novo segmento'}</button>}
+          <button type="button" onClick={() => void load()} disabled={loading} aria-label="Atualizar" className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/[.03] px-3 hover:bg-white/[.06] disabled:opacity-50"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
+        </div>
+      </header>
+
+      <div role="tablist" aria-label="Seção" className="mb-4 flex flex-wrap gap-1">{tabs.map(([id, name, count]) => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`rounded-lg px-3 py-1.5 text-sm ${tab === id ? 'bg-white/[.08] text-white' : 'text-slate-500 hover:text-slate-300'}`}>{name} <span className="text-slate-600">{count}</span></button>)}</div>
+      {error && <div role="alert" className="mb-4 rounded-xl border border-red-500/20 bg-red-500/[.06] px-4 py-3 text-sm text-red-300">{error}</div>}
+      {!canManage && !loading && <p className="mb-4 text-xs text-slate-500">Somente leitura: criar e disparar campanhas exige a permissão de gerenciar automações.</p>}
+
+      <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.02]">
+        {loading ? <div className="flex min-h-40 items-center justify-center gap-2 text-slate-500"><Loader2 size={18} className="animate-spin text-emerald-400" /> Carregando</div>
+          : tab === 'campaigns' ? (campaigns.length ? campaigns.map(campaign => {
+            const [statusLabel, tone] = STATUS[campaign.status]
+            const m = metrics[campaign.id]
+            return <div key={campaign.id} className="border-b border-white/[.06] px-4 py-3 last:border-0">
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1"><b className="text-sm">{campaign.name}</b><span className={`ml-2 text-[11px] ${tone}`}>{statusLabel}</span>
+                  <p className="truncate text-xs text-slate-500">{accountName(accounts.find(account => account.id === campaign.channel_account_id))} · {nameOf(templates, campaign.template_id)} · {nameOf(segments, campaign.segment_id)}{campaign.scheduled_at && campaign.status === 'scheduled' ? ` · ${new Date(campaign.scheduled_at).toLocaleString('pt-BR')}` : ''}</p></div>
+                {canManage && campaign.status === 'draft' && <>{editButton(campaign.name, () => setEditor({ kind: 'campaign', id: campaign.id, name: campaign.name, accountId: campaign.channel_account_id, templateId: campaign.template_id, segmentId: campaign.segment_id }))}<button type="button" className={small} disabled={saving} onClick={() => setEditor({ kind: 'schedule', id: campaign.id, name: campaign.name, at: localNow() })}>Agendar</button></>}
+                {canManage && campaign.status === 'scheduled' && <button type="button" className={small} disabled={saving} onClick={() => setStatus(campaign, 'draft')}>Voltar a rascunho</button>}
+                {canManage && (campaign.status === 'draft' || campaign.status === 'scheduled') && <button type="button" className={`${small} text-red-300`} disabled={saving} onClick={() => setStatus(campaign, 'cancelled')}>Cancelar</button>}
+              </div>
+              {campaign.status === 'enqueued' && m && <dl className="mt-2 grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-6">{([['Contatos', campaign.recipient_count], ['Na fila', m.queued], ['Enviadas', m.sent], ['Entregues', m.delivered], ['Lidas', m.read], ['Falhas', m.failed + m.opted_out]] as [string, number][]).map(([name, value]) => <div key={name} className="rounded-lg bg-white/[.03] px-2 py-1.5"><dt className="text-slate-500">{name}</dt><dd className="font-bold tabular-nums">{value}</dd></div>)}</dl>}
+            </div>
+          }) : empty('Nenhuma campanha. Crie um template e um segmento antes da primeira campanha.'))
+          : tab === 'templates' ? (templates.length ? templates.map(template => <div key={template.id} className="flex items-start gap-3 border-b border-white/[.06] px-4 py-3 last:border-0"><div className="min-w-0 flex-1"><b className="text-sm">{template.name}</b>{inactive(template.active)}<span className="ml-2 text-[11px] text-slate-500">{CHANNELS[template.channel]}{template.whatsapp_template_name ? ` · ${template.whatsapp_template_name}` : ''}</span>{template.trigger_event && <span className="ml-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">recuperação de carrinho</span>}<p className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-xs text-slate-500">{template.body}</p></div>{canManage && editButton(template.name, () => setEditor({ kind: 'template', id: template.id, name: template.name, channel: template.channel, subject: template.subject ?? '', body: template.body, variables: template.variables, waName: template.whatsapp_template_name ?? '', language: template.language, recovery: template.trigger_event === 'checkout_abandoned', active: template.active }))}</div>) : empty('Nenhum template. No WhatsApp, use o nome de um template já aprovado na Infobip.'))
+          : segments.length ? segments.map(segment => <div key={segment.id} className="flex items-center gap-3 border-b border-white/[.06] px-4 py-3 last:border-0"><div className="min-w-0 flex-1"><b className="text-sm">{segment.name}</b>{inactive(segment.active)}<p className="truncate text-xs text-slate-500">{[segment.definition.tag_ids?.length ? `etiquetas: ${segment.definition.tag_ids.map(id => nameOf(tags, id)).join(', ')}` : '', segment.definition.checkout_status?.length ? `checkout: ${segment.definition.checkout_status.map(s => CHECKOUT[s] ?? s).join(', ')}` : '', segment.definition.last_activity_days ? `ativos nos últimos ${segment.definition.last_activity_days} dias` : ''].filter(Boolean).join(' · ') || 'todos os contatos'}</p></div>{canManage && editButton(segment.name, () => setEditor({ kind: 'segment', id: segment.id, name: segment.name, description: segment.description ?? '', tagIds: segment.definition.tag_ids ?? [], checkout: segment.definition.checkout_status ?? [], days: segment.definition.last_activity_days ? String(segment.definition.last_activity_days) : '', active: segment.active }))}</div>) : empty('Nenhum segmento. Segmentos filtram contatos por etiqueta, situação do checkout e atividade recente.')}
+      </section>
+    </div>
+
+    {editor && <div role="dialog" aria-modal="true" aria-label="Editar" className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm md:items-center md:p-6" onClick={event => { if (event.currentTarget === event.target) setEditor(null) }}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-[#0b100e] p-6 md:rounded-3xl">
+        <div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-black">{editor.kind === 'schedule' ? `Agendar "${editor.name}"` : `${editor.id ? 'Editar' : 'Novo'} ${editor.kind === 'campaign' ? 'campanha' : editor.kind === 'template' ? 'template' : 'segmento'}`}</h2><button type="button" onClick={() => setEditor(null)} aria-label="Fechar" className="rounded-lg p-2 text-slate-500 hover:bg-white/5"><X size={18} /></button></div>
+        <div className="space-y-3">
+          {editor.kind === 'campaign' && <>
+            <label className="block space-y-1"><span className={label}>Nome</span><input value={editor.name} maxLength={120} onChange={event => setEditor({ ...editor, name: event.target.value })} className={input} /></label>
+            <label className="block space-y-1"><span className={label}>Conta de envio</span><select value={editor.accountId} onChange={event => setEditor({ ...editor, accountId: event.target.value, templateId: '' })} className={`${input} bg-[#0b100e]`}><option value="">Selecione</option>{accounts.filter(account => account.status === 'active').map(account => <option key={account.id} value={account.id}>{accountName(account)}</option>)}</select></label>
+            <label className="block space-y-1"><span className={label}>Template</span><select value={editor.templateId} disabled={!campaignChannel} onChange={event => setEditor({ ...editor, templateId: event.target.value })} className={`${input} bg-[#0b100e]`}><option value="">Selecione</option>{templates.filter(template => template.active && template.channel === campaignChannel).map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
+            <label className="block space-y-1"><span className={label}>Segmento</span><select value={editor.segmentId} onChange={event => setEditor({ ...editor, segmentId: event.target.value })} className={`${input} bg-[#0b100e]`}><option value="">Selecione</option>{segments.filter(segment => segment.active).map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select></label>
+            {audience !== null && <p className="text-xs text-slate-400"><b className="text-white">{audience}</b> contato(s) alcançáveis hoje neste canal, sem contar quem pediu para sair.</p>}
+          </>}
+          {editor.kind === 'template' && <>
+            <label className="block space-y-1"><span className={label}>Nome</span><input value={editor.name} maxLength={80} onChange={event => setEditor({ ...editor, name: event.target.value })} className={input} /></label>
+            <label className="block space-y-1"><span className={label}>Canal</span><select value={editor.channel} onChange={event => setEditor({ ...editor, channel: event.target.value as Channel })} className={`${input} bg-[#0b100e]`}>{Object.entries(CHANNELS).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+            {editor.channel === 'whatsapp' && <div className="grid grid-cols-[1fr_7rem] gap-2"><label className="block space-y-1"><span className={label}>Template aprovado (Infobip)</span><input value={editor.waName} placeholder="carrinho_abandonado" onChange={event => setEditor({ ...editor, waName: event.target.value.toLowerCase() })} className={input} /></label><label className="block space-y-1"><span className={label}>Idioma</span><input value={editor.language} onChange={event => setEditor({ ...editor, language: event.target.value })} className={input} /></label></div>}
+            {editor.channel === 'email' && <label className="block space-y-1"><span className={label}>Assunto</span><input value={editor.subject} maxLength={200} onChange={event => setEditor({ ...editor, subject: event.target.value })} className={input} /></label>}
+            <label className="block space-y-1"><span className={label}>{editor.channel === 'whatsapp' ? 'Texto (cópia do template, para o histórico)' : 'Texto'}</span><textarea value={editor.body} maxLength={4000} rows={5} onChange={event => setEditor({ ...editor, body: event.target.value })} className="w-full rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-sm outline-none focus:border-emerald-500/40" /></label>
+            <fieldset className="space-y-1"><legend className={label}>Variáveis, na ordem {'{{1}}'}, {'{{2}}'}…</legend>
+              <div className="flex flex-wrap gap-1.5">{Object.entries(VARIABLES).map(([key, name]) => { const position = editor.variables.indexOf(key); return <button key={key} type="button" aria-pressed={position >= 0} onClick={() => setEditor({ ...editor, variables: toggle(editor.variables, key) })} className={`rounded-full border px-2.5 py-1 text-xs ${position >= 0 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-white/10 text-slate-400'}`}>{position >= 0 ? `{{${position + 1}}} ` : ''}{name}</button> })}</div>
+              <p className="text-[11px] text-slate-500">Em campanhas só nome, e-mail e telefone são conhecidos; link, valor e produto vêm dos gatilhos de checkout.</p>
+            </fieldset>
+            <label className="flex items-center gap-3"><input type="checkbox" checked={editor.recovery} onChange={event => setEditor({ ...editor, recovery: event.target.checked })} className="accent-emerald-500" /><span className="text-sm">Usar na recuperação de carrinho abandonado <span className="block text-xs text-slate-500">Um template ativo por canal. Sem ele, a recuperação usa o texto padrão.</span></span></label>
+          </>}
+          {editor.kind === 'segment' && <>
+            <label className="block space-y-1"><span className={label}>Nome</span><input value={editor.name} maxLength={80} onChange={event => setEditor({ ...editor, name: event.target.value })} className={input} /></label>
+            <label className="block space-y-1"><span className={label}>Descrição</span><input value={editor.description} maxLength={500} onChange={event => setEditor({ ...editor, description: event.target.value })} className={input} /></label>
+            <fieldset className="space-y-1"><legend className={label}>Com alguma destas etiquetas</legend><div className="flex flex-wrap gap-1.5">{tags.length ? tags.map(tag => <button key={tag.id} type="button" aria-pressed={editor.tagIds.includes(tag.id)} onClick={() => setEditor({ ...editor, tagIds: toggle(editor.tagIds, tag.id) })} className={`rounded-full border px-2.5 py-1 text-xs ${editor.tagIds.includes(tag.id) ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-white/10 text-slate-400'}`}>{tag.name}</button>) : <span className="text-xs text-slate-600">Nenhuma etiqueta ativa.</span>}</div></fieldset>
+            <fieldset className="space-y-1"><legend className={label}>Situação do checkout</legend><div className="flex flex-wrap gap-1.5">{Object.entries(CHECKOUT).map(([key, name]) => <button key={key} type="button" aria-pressed={editor.checkout.includes(key)} onClick={() => setEditor({ ...editor, checkout: toggle(editor.checkout, key) })} className={`rounded-full border px-2.5 py-1 text-xs ${editor.checkout.includes(key) ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-white/10 text-slate-400'}`}>{name}</button>)}</div></fieldset>
+            <label className="block space-y-1"><span className={label}>Ativos nos últimos (dias)</span><input type="number" min={1} max={3650} value={editor.days} onChange={event => setEditor({ ...editor, days: event.target.value })} className={input} /></label>
+          </>}
+          {editor.kind === 'schedule' && <>
+            <label className="block space-y-1"><span className={label}>Disparar em</span><input type="datetime-local" value={editor.at} onChange={event => setEditor({ ...editor, at: event.target.value })} className={input} /></label>
+            <p className="text-xs text-slate-500">A lista de contatos é montada no momento do disparo. Até lá dá para voltar a rascunho ou cancelar.</p>
+          </>}
+          {(editor.kind === 'template' || editor.kind === 'segment') && <label className="flex items-center gap-3"><input type="checkbox" checked={editor.active} onChange={event => setEditor({ ...editor, active: event.target.checked })} className="accent-emerald-500" /><span className="text-sm">Ativo</span></label>}
+        </div>
+        <button type="button" onClick={() => void save()} disabled={saving || invalid} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-bold text-black hover:bg-emerald-400 disabled:opacity-40">{saving && <Loader2 size={15} className="animate-spin" />} {editor.kind === 'schedule' ? 'Agendar disparo' : 'Salvar'}</button>
+      </div>
+    </div>}
+  </main>
+}
