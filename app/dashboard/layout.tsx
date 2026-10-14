@@ -3,6 +3,7 @@
 import { useCallback, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
+import { ConnectionStatus } from '@/components/connection-status'
 
 const routes: Record<MobileShellTab, string> = { dashboard: '/dashboard', vendas: '/dashboard/vendas', chat: '/dashboard/crm', ia: '/dashboard/ia', funil: '/dashboard/funil' }
 
@@ -25,6 +26,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <MobileShell activeTab={activeTab} onTabChange={selectTab}>
+      <ConnectionStatus />
       <div className="althea-page-content">{children}</div>
 
     </MobileShell>
