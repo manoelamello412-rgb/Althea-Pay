@@ -24,7 +24,7 @@ const fmtDate = (value: string) => value ? new Intl.DateTimeFormat('pt-BR', { ti
 const fmtDateTime = (value: string) => value ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—'
 const isApproved = (status: string | null) => normalizeStatus(status) === 'approved'
 const isPending = (status: string | null) => normalizeStatus(status) === 'pending'
-const isCancelled = (status: string | null) => ['failed', 'cancelled'].includes(normalizeStatus(status))
+const isCancelled = (status: string | null) => ['failed', 'declined', 'cancelled'].includes(normalizeStatus(status))
 const shiftDays = (value: string, days: number) => { const date = new Date(`${value}T12:00:00-03:00`); date.setDate(date.getDate() + days); return date.toISOString().slice(0, 10) }
 
 export default function SalesMobile() {
@@ -110,7 +110,7 @@ export default function SalesMobile() {
     }
   }, [filtered])
   const clear = () => { setQuery(''); setStartDate(today); setEndDate(today); setStatus('Todas'); setDraftStatus('Todas'); setDraftStartDate(today); setDraftEndDate(today) }
-  const label = (sale: Sale) => ({ approved: 'Aprovada', pending: 'Pendente', failed: 'Falhou', cancelled: 'Cancelada', refunded: 'Reembolsada', chargeback: 'Chargeback' } as Record<string, string>)[normalizeStatus(sale.status)] ?? 'Outro'
+  const label = (sale: Sale) => ({ approved: 'Aprovada', pending: 'Pendente', failed: 'Falhou', declined: 'Recusada', cancelled: 'Cancelada', refunded: 'Reembolsada', chargeback: 'Chargeback' } as Record<string, string>)[normalizeStatus(sale.status)] ?? 'Outro'
   const openPeriod = () => { setDraftStartDate(startDate); setDraftEndDate(endDate); setPeriodOpen(true) }
   const applyPeriod = () => { if (!draftDateRangeValid) return; setStartDate(draftStartDate); setEndDate(draftEndDate); setPeriodOpen(false) }
 
