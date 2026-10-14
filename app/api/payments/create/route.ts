@@ -45,13 +45,7 @@ export async function POST(request: Request) {
     if (text(session.idempotency_key) !== idempotencyKey) return NextResponse.json({ ok: false, code: 'CHECKOUT_SESSION_TOKEN_MISMATCH' }, { status: 403 })
     if (session.status !== 'started') return NextResponse.json({ ok: false, code: 'CHECKOUT_NOT_PAYABLE' }, { status: 409 })
 
-    const metadata: JsonObject = { source: 'public_checkout', payment_method: paymentMethod, checkout_session_id: session.id }
-    const { data: transaction, error: transactionError } = await admin.rpc('create_gateway_transaction', { p_user_id: session.user_id, p_organization_id: session.organization_id, p_funnel_id: session.funnel_id, p_product_id: session.product_id, p_amount: session.amount, p_currency: session.currency, p_customer: session.customer, p_metadata: metadata, p_idempotency_key: `payment:${idempotencyKey}` })
-    if (transactionError || !transaction) { console.error('[ALTHEA-PAYMENTS-CREATE]', transactionError); return NextResponse.json({ ok: false, code: safeErrorCode(transactionError) }, { status: 500 }) }
-
-    if (TERMINAL_TRANSACTION_STATES.has(text(transaction.status))) return NextResponse.json({ ok: true, transaction: { id: transaction.id, status: transaction.status, amount: transaction.amount, currency: transaction.currency, gateway_id: transaction.gateway_id }, next: 'complete' })
-    if (text(transaction.status) === 'pending') return NextResponse.json({ ok: true, transaction: { id: transaction.id, status: transaction.status, amount: transaction.amount, currency: transaction.currency, gateway_id: transaction.gateway_id }, next: 'awaiting_gateway' })
-
+    // Route first: gateway_transactions requires gateway_id from the moment it is created.
     const { data: binding, error: bindingError } = await admin
       .from('funnel_gateway_bindings')
       .select('gateway_id,priority,role,is_primary,status,gateways!inner(id,provider,environment,status,organization_id)')
@@ -67,6 +61,14 @@ export async function POST(request: Request) {
     if (!gateway || gateway.organization_id !== session.organization_id || !['active','connected','degraded'].includes(text(gateway.status).toLowerCase())) return NextResponse.json({ ok: false, code: 'GATEWAY_NOT_OPERATIONAL' }, { status: 409 })
 
     const selectedGatewayId = text(binding.gateway_id)
+
+    const metadata: JsonObject = { source: 'public_checkout', payment_method: paymentMethod, checkout_session_id: session.id }
+    const { data: transaction, error: transactionError } = await admin.rpc('create_gateway_transaction', { p_user_id: session.user_id, p_organization_id: session.organization_id, p_funnel_id: session.funnel_id, p_product_id: session.product_id, p_amount: session.amount, p_currency: session.currency, p_customer: session.customer, p_metadata: metadata, p_idempotency_key: `payment:${idempotencyKey}`, p_gateway_id: selectedGatewayId })
+    if (transactionError || !transaction) { console.error('[ALTHEA-PAYMENTS-CREATE]', transactionError); return NextResponse.json({ ok: false, code: safeErrorCode(transactionError) }, { status: 500 }) }
+
+    if (TERMINAL_TRANSACTION_STATES.has(text(transaction.status))) return NextResponse.json({ ok: true, transaction: { id: transaction.id, status: transaction.status, amount: transaction.amount, currency: transaction.currency, gateway_id: transaction.gateway_id }, next: 'complete' })
+    if (text(transaction.status) === 'pending') return NextResponse.json({ ok: true, transaction: { id: transaction.id, status: transaction.status, amount: transaction.amount, currency: transaction.currency, gateway_id: transaction.gateway_id }, next: 'awaiting_gateway' })
+
     const expectedVersion = Number(transaction.version)
     const { data: boundTransaction, error: bindError } = await admin.rpc('bind_gateway_transaction_gateway', { p_transaction_id: transaction.id, p_user_id: session.user_id, p_gateway_id: selectedGatewayId, p_expected_version: Number.isFinite(expectedVersion) ? expectedVersion : null })
     if (bindError || !boundTransaction) { console.error('[ALTHEA-PAYMENTS-BIND]', bindError); return NextResponse.json({ ok: false, code: 'GATEWAY_BIND_FAILED' }, { status: 409 }) }
