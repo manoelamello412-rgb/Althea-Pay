@@ -1,11 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MessageCircle, Send, X } from 'lucide-react'
+import { FileText, MessageCircle, Paperclip, Send, X } from 'lucide-react'
+import { RECEIPT_ACCEPT, RECEIPT_MAX_BYTES } from '@/lib/chat/receipt'
 
 type Customer = { name?: string; email?: string; phone?: string }
 type Cart = { items?: { name: string; amount: number }[]; total?: number }
-type ChatMessage = { id: string; direction: 'inbound' | 'outbound' | 'system'; body: string; created_at: string }
+type ChatMessage = { id: string; direction: 'inbound' | 'outbound' | 'system'; body: string; created_at: string; attachment?: { file_name?: string; mime_type?: string } }
 type Props = {
   funnelId: string
   productName: string
@@ -42,6 +43,8 @@ export function FunnelWhiteLabelChat({
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const endRef = useRef<HTMLDivElement | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+  const [uploading, setUploading] = useState(false)
   const api = endpoint || '/api/funnel/chat'
   const brand = brandName || `Suporte ${productName}`
 
@@ -131,6 +134,29 @@ export function FunnelWhiteLabelChat({
     }
   }
 
+  async function uploadReceipt(file: File) {
+    if (!token || uploading) return
+    if (file.size > RECEIPT_MAX_BYTES) { setError('O comprovante deve ter no máximo 4 MB.'); return }
+    setUploading(true)
+    setError('')
+    try {
+      const form = new FormData()
+      form.set('conversation_token', token)
+      form.set('file', file)
+      const response = await fetch(`${api}/attachment`, { method: 'POST', body: form, cache: 'no-store' })
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) {
+        throw new Error(data.error === 'invalid_file_type' ? 'Envie uma imagem (JPG, PNG ou WEBP) ou um PDF.' : data.error === 'file_too_large' ? 'O comprovante deve ter no máximo 4 MB.' : 'Não foi possível enviar o comprovante.')
+      }
+      await sync(token)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Falha ao enviar o comprovante.')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
   function openChat() {
     setOpen(true)
     void start()
@@ -171,6 +197,12 @@ export function FunnelWhiteLabelChat({
               {messages.map(item => (
                 <div key={item.id} className={`flex ${item.direction === 'inbound' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[86%] rounded-2xl px-3 py-2.5 text-sm ${item.direction === 'inbound' ? 'rounded-br-md bg-emerald-500 text-black' : 'rounded-bl-md bg-white/[0.08] text-white/85'}`}>
+                    {item.attachment && (
+                      <span className={`mb-1.5 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs ${item.direction === 'inbound' ? 'bg-black/10' : 'bg-white/5'}`}>
+                        <FileText size={14} className="shrink-0" />
+                        <span className="truncate">{item.attachment.file_name || 'Comprovante'}</span>
+                      </span>
+                    )}
                     <span className="whitespace-pre-wrap break-words">{item.body}</span>
                     <small className={`mt-1 block text-[9px] ${item.direction === 'inbound' ? 'text-black/55' : 'text-white/35'}`}>
                       {new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -183,6 +215,23 @@ export function FunnelWhiteLabelChat({
             </div>
 
             <footer className="flex items-end gap-2 border-t border-white/10 p-3">
+              <input
+                ref={fileRef}
+                type="file"
+                accept={RECEIPT_ACCEPT}
+                className="hidden"
+                onChange={event => { const file = event.target.files?.[0]; if (file) void uploadReceipt(file) }}
+              />
+              <button
+                type="button"
+                aria-label="Enviar comprovante de transferência"
+                title="Enviar comprovante de transferência"
+                disabled={loading || uploading || !token}
+                onClick={() => fileRef.current?.click()}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 text-white/70 hover:bg-white/5 disabled:opacity-35"
+              >
+                {uploading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Paperclip size={17} />}
+              </button>
               <textarea
                 value={text}
                 disabled={loading || sending || !token}
