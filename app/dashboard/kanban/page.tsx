@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Kanban, Loader2, Plus, RefreshCw, Settings2, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Kanban, Loader2, Phone, Plus, RefreshCw, Settings2, Trash2, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { hasOrganizationCapability, parseOrganizationAccess, type OrganizationAccess } from '@/lib/auth/organization-access'
 
@@ -12,6 +12,9 @@ type Stage = { id: string; pipeline_id: string; name: string; position: number; 
 type Card = { id: string; pipeline_id: string; stage_id: string; client_id: string; version: number; stage_entered_at: string }
 type Client = { id: string; data: Json | null; created_at: string }
 type DraftStage = { id?: string; name: string; kind: StageKind }
+type Outcome = 'answered' | 'no_answer' | 'busy' | 'voicemail' | 'wrong_number' | 'callback' | 'converted' | 'not_interested'
+type Attempt = { id: string; outcome: Outcome; notes: string | null; duration_seconds: number | null; callback_at: string | null; to_stage_id: string | null; created_at: string }
+type CallDraft = { card: Card; attemptId: string; outcome: Outcome; notes: string; minutes: string; callbackAt: string; stageId: string; history: Attempt[] }
 
 const DEFAULT_STAGES: DraftStage[] = [
   { name: 'Novo lead', kind: 'open' },
@@ -20,6 +23,7 @@ const DEFAULT_STAGES: DraftStage[] = [
   { name: 'Ganho', kind: 'won' },
   { name: 'Perdido', kind: 'lost' },
 ]
+const OUTCOME_LABEL: Record<Outcome, string> = { answered: 'Atendeu', no_answer: 'Não atendeu', busy: 'Ocupado', voicemail: 'Caixa postal', wrong_number: 'Número errado', callback: 'Pediu retorno', converted: 'Fechou', not_interested: 'Sem interesse' }
 const KIND_LABEL: Record<StageKind, string> = { open: 'Em andamento', won: 'Ganho', lost: 'Perdido' }
 const KIND_TONE: Record<StageKind, string> = { open: 'text-slate-400', won: 'text-emerald-400', lost: 'text-red-400' }
 const ERRORS: Record<string, string> = {
@@ -30,6 +34,8 @@ const ERRORS: Record<string, string> = {
   STAGES_REQUIRED: 'Informe de 1 a 20 etapas.',
   STAGE_NAME_REQUIRED: 'Toda etapa precisa de nome.',
   PIPELINE_NAME_REQUIRED: 'Informe o nome do pipeline.',
+  CALLBACK_AT_REQUIRED: 'Informe quando retornar a ligação.',
+  CARD_NOT_FOUND: 'Este card não existe mais. O quadro foi atualizado.',
 }
 
 const obj = (value: unknown): Json => value && typeof value === 'object' && !Array.isArray(value) ? value as Json : {}
@@ -37,6 +43,8 @@ const text = (value: unknown) => typeof value === 'string' ? value.trim() : ''
 const pick = (data: Json, keys: string[]) => { for (const key of keys) { const value = text(data[key]); if (value) return value } for (const parent of ['customer', 'buyer', 'profile']) { const nested = obj(data[parent]); for (const key of keys) { const value = text(nested[key]); if (value) return value } } return '' }
 const nameOf = (client?: Client) => pick(obj(client?.data), ['name', 'full_name', 'nome', 'customer_name']) || 'Cliente sem nome'
 const contactOf = (client?: Client) => pick(obj(client?.data), ['email', 'buyer_email', 'customer_email']) || pick(obj(client?.data), ['phone', 'whatsapp', 'mobile'])
+const phoneOf = (client?: Client) => pick(obj(client?.data), ['phone', 'whatsapp', 'mobile', 'telefone', 'celular', 'phone_e164'])
+const when = (value: string) => new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 const since = (value: string) => { const days = Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000); return days <= 0 ? 'hoje' : days === 1 ? '1 dia' : `${days} dias` }
 const messageOf = (cause: unknown) => { const raw = cause && typeof cause === 'object' && 'message' in cause ? String((cause as { message: unknown }).message) : ''; return ERRORS[raw] ?? 'Não foi possível concluir a operação.' }
 
@@ -57,6 +65,8 @@ export default function KanbanPage() {
   const [adding, setAdding] = useState(false)
   const [candidates, setCandidates] = useState<Client[]>([])
   const [search, setSearch] = useState('')
+  const [callbacks, setCallbacks] = useState<Record<string, string>>({})
+  const [call, setCall] = useState<CallDraft | null>(null)
 
   const canConfigure = hasOrganizationCapability(access, 'can_manage_funnels')
   const canMove = hasOrganizationCapability(access, 'can_view_customers') && hasOrganizationCapability(access, 'can_reply_chats')
@@ -96,6 +106,11 @@ export default function KanbanPage() {
         for (const client of (clientResult.data ?? []) as Client[]) found[client.id] = client
       }
       setClients(found)
+      const callbackResult = await db.from('crm_call_attempts').select('client_id,callback_at').eq('organization_id', current.organization_id).gte('callback_at', new Date().toISOString()).order('callback_at').limit(500)
+      if (callbackResult.error) throw callbackResult.error
+      const next: Record<string, string> = {}
+      for (const row of (callbackResult.data ?? []) as { client_id: string; callback_at: string }[]) next[row.client_id] ??= row.callback_at
+      setCallbacks(next)
     } catch (cause) {
       console.error('[ALTHEA-KANBAN]', cause)
       setError('Não foi possível carregar o Kanban.')
@@ -148,6 +163,38 @@ export default function KanbanPage() {
     await load(pipelineId)
   }
 
+  async function openCall(card: Card) {
+    setError('')
+    const result = await db.from('crm_call_attempts').select('id,outcome,notes,duration_seconds,callback_at,to_stage_id,created_at').eq('client_id', card.client_id).order('created_at', { ascending: false }).limit(10)
+    if (result.error) { setError('Não foi possível carregar as ligações.'); return }
+    setCall({ card, attemptId: crypto.randomUUID(), outcome: 'answered', notes: '', minutes: '', callbackAt: '', stageId: '', history: (result.data ?? []) as Attempt[] })
+  }
+
+  async function logCall() {
+    if (!call) return
+    setSaving(true); setError('')
+    const minutes = Number(call.minutes)
+    const result = await db.rpc('crm_call_log', {
+      p_attempt_id: call.attemptId, p_client_id: call.card.client_id, p_outcome: call.outcome, p_notes: call.notes || null,
+      p_duration_seconds: call.minutes && Number.isFinite(minutes) ? Math.round(minutes * 60) : null,
+      p_callback_at: call.outcome === 'callback' && call.callbackAt ? new Date(call.callbackAt).toISOString() : null,
+      p_card_id: call.card.id, p_stage_id: call.stageId || null, p_expected_version: call.card.version,
+    })
+    setSaving(false)
+    if (result.error) {
+      // the attempt was rolled back: keep the draft (same attempt id) and retry against the fresh card
+      setError(messageOf(result.error))
+      const fresh = await db.from('crm_pipeline_cards').select('id,pipeline_id,stage_id,client_id,version,stage_entered_at').eq('id', call.card.id).maybeSingle()
+      if (fresh.data) setCall(current => current && { ...current, card: fresh.data as Card })
+      else setCall(null)
+      await load(pipelineId)
+      return
+    }
+    setCall(null)
+    setNotice('Ligação registrada.')
+    await load(pipelineId)
+  }
+
   const pipeline = pipelines.find(item => item.id === pipelineId)
   const filtered = candidates.filter(client => !search.trim() || [nameOf(client), contactOf(client), client.id].join(' ').toLowerCase().includes(search.trim().toLowerCase())).slice(0, 50)
   const editStages = (update: (stages: DraftStage[]) => DraftStage[]) => setEditor(current => current && { ...current, stages: update(current.stages) })
@@ -180,7 +227,9 @@ export default function KanbanPage() {
               return <article key={card.id} draggable={canMove} onDragStart={() => setDragging(card.id)} onDragEnd={() => setDragging('')} className={`rounded-xl border border-white/[.08] bg-[#0b100e] p-3 ${canMove ? 'cursor-grab active:cursor-grabbing' : ''} ${dragging === card.id ? 'opacity-40' : ''}`}>
                 <b className="block truncate text-sm">{nameOf(client)}</b>
                 <span className="block truncate pt-0.5 text-xs text-slate-500">{contactOf(client) || card.client_id}</span>
+                {callbacks[card.client_id] && <span className="mt-1 block text-[10px] text-amber-400">retornar {when(callbacks[card.client_id])}</span>}
                 <div className="mt-2 flex items-center justify-between gap-2"><span className="text-[10px] text-slate-600">nesta etapa há {since(card.stage_entered_at)}</span>
+                  {canMove && <button type="button" onClick={() => void openCall(card)} aria-label={`Registrar ligação para ${nameOf(client)}`} className="ml-auto rounded-md p-1 text-slate-500 hover:bg-white/5 hover:text-emerald-400"><Phone size={13} /></button>}
                   {canMove && <select aria-label={`Mover ${nameOf(client)} para`} value={card.stage_id} onChange={event => void move(card, event.target.value)} className="max-w-28 rounded-md border border-white/10 bg-transparent px-1 py-0.5 text-[10px] text-slate-400">{stages.map(option => <option key={option.id} value={option.id} className="bg-[#0b100e]">{option.name}</option>)}</select>}
                 </div>
               </article>
@@ -211,6 +260,25 @@ export default function KanbanPage() {
         <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-black">Adicionar ao {pipeline?.name}</h2><button type="button" onClick={() => setAdding(false)} aria-label="Fechar" className="rounded-lg p-2 text-slate-500 hover:bg-white/5"><X size={18} /></button></div>
         <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar nome, e-mail, telefone ou ID..." className="mb-3 h-10 w-full rounded-xl border border-white/10 bg-white/[.03] px-3 text-sm outline-none focus:border-emerald-500/40" />
         <div className="space-y-1">{filtered.map(client => <button key={client.id} type="button" onClick={() => void addClient(client)} className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left hover:bg-white/[.04]"><span className="min-w-0"><b className="block truncate text-sm">{nameOf(client)}</b><span className="block truncate text-xs text-slate-500">{contactOf(client) || client.id}</span></span><Plus size={15} className="shrink-0 text-emerald-400" /></button>)}{!filtered.length && <p className="py-6 text-center text-sm text-slate-500">Nenhum cliente fora deste pipeline.</p>}</div>
+      </div>
+    </div>}
+
+    {call && <div role="dialog" aria-modal="true" aria-label="Registrar ligação" className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm md:items-center md:p-6" onClick={event => { if (event.currentTarget === event.target) setCall(null) }}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-white/10 bg-[#0b100e] p-6 md:rounded-3xl">
+        <div className="mb-4 flex items-center justify-between"><div className="min-w-0"><h2 className="truncate text-lg font-black">{nameOf(clients[call.card.client_id])}</h2>
+          {phoneOf(clients[call.card.client_id]) ? <a href={`tel:${phoneOf(clients[call.card.client_id]).replace(/[^\d+]/g, '')}`} className="inline-flex items-center gap-1 text-sm text-emerald-400 hover:text-emerald-300"><Phone size={13} /> {phoneOf(clients[call.card.client_id])}</a> : <span className="text-sm text-slate-500">Cliente sem telefone cadastrado</span>}</div>
+          <button type="button" onClick={() => setCall(null)} aria-label="Fechar" className="rounded-lg p-2 text-slate-500 hover:bg-white/5"><X size={18} /></button></div>
+        <fieldset className="mb-4"><legend className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">Resultado</legend>
+          <div className="grid grid-cols-2 gap-2">{(Object.keys(OUTCOME_LABEL) as Outcome[]).map(outcome => <button key={outcome} type="button" aria-pressed={call.outcome === outcome} onClick={() => setCall({ ...call, outcome })} className={`h-9 rounded-lg border text-sm ${call.outcome === outcome ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300' : 'border-white/10 text-slate-300 hover:bg-white/[.04]'}`}>{OUTCOME_LABEL[outcome]}</button>)}</div>
+        </fieldset>
+        {call.outcome === 'callback' && <label className="mb-4 block space-y-1"><span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Retornar em</span><input type="datetime-local" required value={call.callbackAt} onChange={event => setCall({ ...call, callbackAt: event.target.value })} className="h-10 w-full rounded-xl border border-white/10 bg-white/[.03] px-3 text-sm outline-none focus:border-emerald-500/40" /></label>}
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <label className="block space-y-1"><span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Duração (min)</span><input type="number" min={0} step="0.5" inputMode="decimal" value={call.minutes} onChange={event => setCall({ ...call, minutes: event.target.value })} className="h-10 w-full rounded-xl border border-white/10 bg-white/[.03] px-3 text-sm outline-none focus:border-emerald-500/40" /></label>
+          <label className="block space-y-1"><span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Mover para</span><select value={call.stageId} onChange={event => setCall({ ...call, stageId: event.target.value })} className="h-10 w-full rounded-xl border border-white/10 bg-[#0b100e] px-2 text-sm"><option value="">{call.outcome === 'converted' ? 'Etapa de ganho' : call.outcome === 'not_interested' ? 'Etapa de perda' : 'Manter etapa'}</option>{stages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}</select></label>
+        </div>
+        <label className="block space-y-1"><span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Anotações</span><textarea value={call.notes} maxLength={2000} rows={3} onChange={event => setCall({ ...call, notes: event.target.value })} className="w-full rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-sm outline-none focus:border-emerald-500/40" /></label>
+        <button type="button" onClick={() => void logCall()} disabled={saving || (call.outcome === 'callback' && !call.callbackAt)} className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-bold text-black hover:bg-emerald-400 disabled:opacity-40">{saving && <Loader2 size={15} className="animate-spin" />} Registrar ligação</button>
+        {call.history.length > 0 && <div className="mt-6"><h3 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">Últimas ligações</h3><ul className="space-y-2">{call.history.map(item => <li key={item.id} className="rounded-lg border border-white/[.06] px-3 py-2 text-xs"><div className="flex justify-between gap-2"><b className="text-slate-300">{OUTCOME_LABEL[item.outcome]}</b><span className="text-slate-600">{when(item.created_at)}</span></div>{item.notes && <p className="pt-1 text-slate-500">{item.notes}</p>}{item.callback_at && <p className="pt-1 text-amber-400">retornar {when(item.callback_at)}</p>}</li>)}</ul></div>}
       </div>
     </div>}
   </main>
