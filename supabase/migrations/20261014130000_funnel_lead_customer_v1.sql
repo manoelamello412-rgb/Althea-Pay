@@ -4,6 +4,8 @@
 -- Clientes or the Kanban. Now any funnel event carrying an email or phone resolves the customer
 -- (clients_enter_default_pipeline then drops it on the default pipeline) and links the funnel's
 -- open conversations for that email.
+-- data.funnel_id is what crm_mirror_client_event reads, so the conversation it opens for a new
+-- customer belongs to the funnel and is the same one chat and checkout reuse (one per email+funnel).
 
 create or replace function private.materialize_funnel_lead_customer()
 returns trigger
@@ -26,13 +28,17 @@ begin
 
   v_client := private.resolve_customer(
     new.organization_id,new.user_id,v_email,v_phone,coalesce(new.visitor_id,p->>'visitor_id'),null,
-    jsonb_strip_nulls(jsonb_build_object('name',nullif(btrim(coalesce(c->>'name',p->>'name',p->>'buyer_name','')),''),'source_funnel_id',new.funnel_id)));
+    jsonb_strip_nulls(jsonb_build_object('name',nullif(btrim(coalesce(c->>'name',p->>'name',p->>'buyer_name','')),''),'funnel_id',new.funnel_id)));
 
   if v_client is not null and v_email is not null then
     update public.crm_conversations
        set customer_id=v_client
      where user_id=new.user_id and funnel_id=new.funnel_id and customer_id is null
-       and status in ('open','pending') and lower(buyer_email)=v_email;
+       and status in ('open','pending') and lower(buyer_email)=v_email
+       -- Same person under another email (matched by phone) may already own this funnel's conversation.
+       and not exists (select 1 from public.crm_conversations x
+                        where x.user_id=new.user_id and x.funnel_id=new.funnel_id and x.customer_id=v_client
+                          and x.status in ('open','pending'));
   end if;
   return new;
 exception when others then
@@ -72,7 +78,7 @@ begin
     new.organization_id,new.user_id,normalized_email,
     coalesce(c->>'phone',c->>'whatsapp',p->>'phone',p->>'whatsapp',p->>'customer_whatsapp'),
     coalesce(new.visitor_id,p->>'visitor_id'),supplied_customer_id,
-    jsonb_strip_nulls(jsonb_build_object('name',nullif(coalesce(c->>'name',p->>'name',p->>'buyer_name'),''))));
+    jsonb_strip_nulls(jsonb_build_object('name',nullif(coalesce(c->>'name',p->>'name',p->>'buyer_name'),''),'funnel_id',new.funnel_id)));
 
   if supplied_token is not null then
     select id into conv from public.crm_conversations
@@ -142,14 +148,25 @@ begin
       coalesce(e.payload->'customer'->>'email',e.payload->>'email',e.payload->>'buyer_email'),
       coalesce(e.payload->'customer'->>'phone',e.payload->>'phone'),
       e.visitor_id,null,
-      jsonb_strip_nulls(jsonb_build_object('name',coalesce(e.payload->'customer'->>'name',e.payload->>'name'),'source_funnel_id',e.funnel_id)));
+      jsonb_strip_nulls(jsonb_build_object('name',coalesce(e.payload->'customer'->>'name',e.payload->>'name'),'funnel_id',e.funnel_id)));
   end loop;
 end
 $backfill$;
 
-update public.crm_conversations cv
-   set customer_id=ci.client_id
-  from public.funnels f, public.customer_identities ci
- where cv.customer_id is null and cv.buyer_email is not null and cv.status in ('open','pending')
-   and f.id=cv.funnel_id and ci.organization_id=f.organization_id and ci.user_id=cv.user_id
-   and ci.kind='email' and ci.value=private.normalize_customer_identity('email',cv.buyer_email);
+with candidate as (
+  select cv.id,cv.user_id,cv.funnel_id,ci.client_id,
+         row_number() over (partition by cv.user_id,cv.funnel_id,ci.client_id order by cv.updated_at desc) rn
+    from public.crm_conversations cv
+    join public.funnels f on f.id=cv.funnel_id
+    join public.customer_identities ci
+      on ci.organization_id=f.organization_id and ci.user_id=cv.user_id and ci.kind='email'
+     and ci.value=private.normalize_customer_identity('email',cv.buyer_email)
+   where cv.customer_id is null and cv.buyer_email is not null and cv.status in ('open','pending')
+)
+update public.crm_conversations t
+   set customer_id=c.client_id
+  from candidate c
+ where t.id=c.id and c.rn=1
+   and not exists (select 1 from public.crm_conversations x
+                    where x.user_id=c.user_id and x.funnel_id=c.funnel_id and x.customer_id=c.client_id
+                      and x.status in ('open','pending'));

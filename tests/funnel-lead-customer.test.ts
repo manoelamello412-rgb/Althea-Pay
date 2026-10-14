@@ -12,6 +12,13 @@ describe('funnel leads become customers', () => {
     expect(migration).toContain('revoke all on function private.materialize_funnel_lead_customer() from public, anon, authenticated;')
   })
 
+  it('opens the customer conversation inside the funnel and never gives one customer two open conversations there', () => {
+    // crm_mirror_client_event reads data.funnel_id; without it the new customer got a funnel-less duplicate conversation.
+    expect(migration).toContain("'funnel_id',new.funnel_id)));")
+    expect(migration).not.toContain('source_funnel_id')
+    expect(migration.match(/x\.customer_id=(v_client|c\.client_id)/g)).toHaveLength(2)
+  })
+
   it('chat falls back to the email when the resolved customer has no conversation yet', () => {
     expect(migration).toContain('if conv is null and normalized_email is not null then')
     expect(migration).not.toContain('canonical_customer_id is null and normalized_email is not null')
