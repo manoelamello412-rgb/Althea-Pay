@@ -23,6 +23,8 @@ describe('transactions ledger contract', () => {
     expect(body).toContain('from public.gateway_payment_attempts pa')
     expect(body).toContain('from public.gateway_webhook_events w')
     expect(body).toContain("where id = p_transaction_id and organization_id = v_org")
+    // crm_conversations.transaction_id is text in production; comparing it to the uuid fails at runtime.
+    expect(body).not.toMatch(/[^.]transaction_id = v_tx\.id(?!::text)\b/)
     expect(body).toContain("v_receipts := v_values and private.has_org_capability(v_org, 'can_view_chats')")
   })
 

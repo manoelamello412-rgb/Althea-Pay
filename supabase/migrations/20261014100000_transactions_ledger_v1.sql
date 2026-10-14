@@ -124,7 +124,7 @@ begin
   v_email := lower(nullif(btrim(v_tx.customer->>'email'), ''));
 
   select customer_id into v_client from public.crm_conversations
-   where organization_id = v_org and transaction_id = v_tx.id and customer_id is not null
+   where organization_id = v_org and transaction_id = v_tx.id::text and customer_id is not null
    order by last_activity_at desc limit 1;
   if v_client is null and v_email is not null then
     select client_id into v_client from public.customer_identities
@@ -191,7 +191,7 @@ begin
       'error_message', v_tx.error_message, 'failure_code', v_tx.failure_code,
       'created_at', v_tx.created_at, 'updated_at', v_tx.updated_at, 'completed_at', v_tx.completed_at),
     'client_id', v_client,
-    'conversation_id', (select id from public.crm_conversations where organization_id = v_org and (transaction_id = v_tx.id or (v_client is not null and customer_id = v_client)) order by (transaction_id = v_tx.id) desc, last_activity_at desc limit 1),
+    'conversation_id', (select id from public.crm_conversations where organization_id = v_org and (transaction_id = v_tx.id::text or (v_client is not null and customer_id = v_client)) order by (transaction_id = v_tx.id::text) desc, last_activity_at desc limit 1),
     'timeline', v_timeline,
     'receipts', v_linked,
     'receipt_candidates', v_candidates,

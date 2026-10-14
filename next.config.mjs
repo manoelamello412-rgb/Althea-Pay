@@ -1,3 +1,9 @@
+// Dev only: allow a local Supabase (http/ws) and the eval React needs in development.
+const dev = process.env.NODE_ENV !== 'production'
+const localSupabase = dev && process.env.NEXT_PUBLIC_SUPABASE_URL?.startsWith('http://')
+  ? ` ${process.env.NEXT_PUBLIC_SUPABASE_URL} ${process.env.NEXT_PUBLIC_SUPABASE_URL.replace('http://', 'ws://')}`
+  : ''
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async headers() {
@@ -21,8 +27,8 @@ const nextConfig = {
               "img-src 'self' data: blob: https:",
               "font-src 'self' data: https:",
               "style-src 'self' 'unsafe-inline' https:",
-              "script-src 'self' 'unsafe-inline' https:",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https:",
+              `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''} https:`,
+              `connect-src 'self' https://*.supabase.co wss://*.supabase.co https:${localSupabase}`,
               "frame-src 'self' https://*.supabase.co https:",
               "worker-src 'self' blob:",
             ].join('; '),

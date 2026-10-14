@@ -242,7 +242,7 @@ declare
   v_emails text[];
   v_conversations jsonb := '[]'::jsonb;
   v_tasks jsonb := '[]'::jsonb;
-  v_conversation_tx uuid[];
+  v_conversation_tx text[];
 begin
   if auth.uid() is null or v_org is null then raise exception 'AUTH_REQUIRED' using errcode='42501'; end if;
   if not private.has_org_capability(v_org, 'can_view_customers') then raise exception 'FORBIDDEN' using errcode='42501'; end if;
@@ -290,7 +290,7 @@ begin
                 'amount', case when v_values then t.amount end, 'currency', t.currency) order by t.created_at desc), '[]'::jsonb)
                 from (select * from public.gateway_transactions g
                        where g.organization_id = v_org
-                         and (g.id = any(coalesce(v_conversation_tx, '{}')) or lower(g.customer->>'email') = any(coalesce(v_emails, '{}')))
+                         and (g.id::text = any(coalesce(v_conversation_tx, '{}')) or lower(g.customer->>'email') = any(coalesce(v_emails, '{}')))
                        order by g.created_at desc limit 10) t),
     'members', private.org_members_json(v_org),
     'can_view_chats', v_chats,
