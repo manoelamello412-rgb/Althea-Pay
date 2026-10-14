@@ -59,4 +59,27 @@ describe('frontend organization access contract', () => {
     expect(source).toContain("'id,transaction_id,status,error_reason,received_at'")
     expect(source).toContain("if (!c.transaction_id || !organizationId || !canViewValues)")
   })
+
+  it('scopes org-RLS tables by the current organization instead of the owner user_id', () => {
+    const orgScopedTables = ['funnels', 'funnel_connections', 'clients', 'sales', 'gateway_transactions', 'checkout_sessions', 'integration_events', 'webhook_integrations', 'automation_executions', 'api_keys', 'api_request_logs', 'outbound_webhooks', 'outbound_webhook_deliveries', 'transaction_routing_logs', 'crm_channel_delivery_events']
+    for (const file of [
+      'app/dashboard/funil/page.tsx',
+      'app/dashboard/funil/central/page.tsx',
+      'app/dashboard/api/page.tsx',
+      'app/dashboard/clientes/page.tsx',
+      'app/dashboard/webhooks/page.tsx',
+      'app/dashboard/analytics/page.tsx',
+      'components/sales-mobile.tsx',
+      'app/api/crm/observability/route.ts',
+      'app/dashboard/pagamentos/page.tsx',
+      'app/dashboard/settings/desempenho/page.tsx',
+    ]) {
+      const source = readFileSync(file, 'utf8')
+      expect(source, file).toContain('loadOrganizationAccess(')
+      for (const table of orgScopedTables) {
+        expect(source, `${file} ${table}`).not.toMatch(new RegExp(`from\\(['"]${table}['"]\\)[^\\n]*eq\\(['"]user_id['"]`))
+      }
+      expect(source, `${file} realtime`).not.toContain('filter: `user_id=eq.')
+    }
+  })
 })

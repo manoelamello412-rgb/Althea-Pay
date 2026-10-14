@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 
 type Inbound = {
   id: string
@@ -107,12 +108,12 @@ export default function WebhooksPage() {
         router.replace('/login')
         return
       }
-      const uid = auth.user.id
+      const { organization_id: organizationId } = await loadOrganizationAccess(db)
       const [i, o, d, e] = await Promise.all([
-        db.from('webhook_integrations').select('id,name,provider,endpoint_key,status,secret_prefix,last_used_at,last_event_at,event_count,funnel_id').eq('user_id', uid).order('created_at', { ascending: false }).limit(200),
-        db.from('outbound_webhooks').select('id,name,endpoint_url,events,status,max_attempts,created_at,updated_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(200),
-        db.from('outbound_webhook_deliveries').select('id,webhook_id,event_type,status,attempt,response_code,response_time_ms,error_message,created_at,delivered_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(100),
-        db.from('integration_events').select('id,event_type,status,created_at,processed_at,retry_count').eq('user_id', uid).order('created_at', { ascending: false }).limit(100),
+        db.from('webhook_integrations').select('id,name,provider,endpoint_key,status,secret_prefix,last_used_at,last_event_at,event_count,funnel_id').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(200),
+        db.from('outbound_webhooks').select('id,name,endpoint_url,events,status,max_attempts,created_at,updated_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(200),
+        db.from('outbound_webhook_deliveries').select('id,webhook_id,event_type,status,attempt,response_code,response_time_ms,error_message,created_at,delivered_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(100),
+        db.from('integration_events').select('id,event_type,status,created_at,processed_at,retry_count').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(100),
       ])
       if (i.error) throw i.error
       if (o.error) throw o.error
@@ -134,17 +135,16 @@ export default function WebhooksPage() {
   useEffect(() => {
     let cancelled = false
     const channels: ReturnType<typeof db.channel>[] = []
-    void db.auth.getUser().then(({ data }) => {
-      if (cancelled || !data.user) return
-      const uid = data.user.id
+    void loadOrganizationAccess(db).then(({ organization_id: org }) => {
+      if (cancelled) return
       for (const table of ['webhook_integrations', 'outbound_webhooks', 'outbound_webhook_deliveries', 'integration_events']) {
         const channel = db
-          .channel(`webhooks-${table}-${uid}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${uid}` }, () => void load())
+          .channel(`webhooks-${table}-${org}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table, filter: `organization_id=eq.${org}` }, () => void load())
           .subscribe()
         channels.push(channel)
       }
-    })
+    }).catch(() => undefined)
     return () => {
       cancelled = true
       channels.forEach(channel => { void db.removeChannel(channel) })

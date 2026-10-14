@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, KeyRound, RefreshCw, ShieldCheck, XCircle } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 
 type ApiKey = { id: string; name: string; key_prefix: string; scopes: unknown; expires_at: string | null; last_used_at: string | null; revoked_at: string | null; created_at: string }
 type RequestLog = { id: string; api_key_id: string | null; request_id: string; method: string; path: string; status_code: number | null; latency_ms: number | null; scope: string | null; created_at: string }
@@ -23,10 +24,10 @@ export default function ApiPage() {
     try {
       const { data: auth } = await db.auth.getUser()
       if (!auth.user) { setKeys([]); setLogs([]); return }
-      const uid = auth.user.id
+      const { organization_id: organizationId } = await loadOrganizationAccess(db)
       const [keyResult, logResult] = await Promise.all([
-        db.from('api_keys').select('id,name,key_prefix,scopes,expires_at,last_used_at,revoked_at,created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(200),
-        db.from('api_request_logs').select('id,api_key_id,request_id,method,path,status_code,latency_ms,scope,created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(100),
+        db.from('api_keys').select('id,name,key_prefix,scopes,expires_at,last_used_at,revoked_at,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(200),
+        db.from('api_request_logs').select('id,api_key_id,request_id,method,path,status_code,latency_ms,scope,created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(100),
       ])
       if (keyResult.error) throw keyResult.error; if (logResult.error) throw logResult.error
       setKeys((keyResult.data ?? []) as ApiKey[]); setLogs((logResult.data ?? []) as RequestLog[])
@@ -37,14 +38,13 @@ export default function ApiPage() {
   useEffect(() => { void load() }, [load])
   useEffect(() => {
     let cancelled = false; const channels: ReturnType<typeof db.channel>[] = []
-    void db.auth.getUser().then(({ data }) => {
-      if (cancelled || !data.user) return
-      const uid = data.user.id
+    void loadOrganizationAccess(db).then(({ organization_id: org }) => {
+      if (cancelled) return
       for (const table of ['api_keys', 'api_request_logs']) {
-        const channel = db.channel(`api-${table}-${uid}`).on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${uid}` }, () => void load()).subscribe()
+        const channel = db.channel(`api-${table}-${org}`).on('postgres_changes', { event: '*', schema: 'public', table, filter: `organization_id=eq.${org}` }, () => void load()).subscribe()
         channels.push(channel)
       }
-    })
+    }).catch(() => undefined)
     return () => { cancelled = true; channels.forEach(channel => { void db.removeChannel(channel) }) }
   }, [db, load])
 

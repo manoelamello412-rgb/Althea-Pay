@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, BarChart3, RefreshCw, TrendingUp, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 
 type Transaction = { id: string; amount: number | null; currency: string | null; status: string; funnel_id: string | null; gateway_id: string | null; created_at: string; completed_at: string | null }
 type Checkout = { id: string; status: string; amount: number | null; created_at: string; completed_at: string | null }
@@ -23,10 +24,11 @@ export default function AnalyticsPage() {
     try {
       const { data: auth } = await db.auth.getUser()
       if (!auth.user) { setTransactions([]); setCheckouts([]); return }
+      const { organization_id: organizationId } = await loadOrganizationAccess(db)
       const since = new Date(Date.now() - period * 86400000).toISOString()
       const [tx, co] = await Promise.all([
-        db.from('gateway_transactions').select('id,amount,currency,status,funnel_id,gateway_id,created_at,completed_at').eq('user_id', auth.user.id).gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
-        db.from('checkout_sessions').select('id,status,amount,created_at,completed_at').eq('user_id', auth.user.id).gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
+        db.from('gateway_transactions').select('id,amount,currency,status,funnel_id,gateway_id,created_at,completed_at').eq('organization_id', organizationId).gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
+        db.from('checkout_sessions').select('id,status,amount,created_at,completed_at').eq('organization_id', organizationId).gte('created_at', since).order('created_at', { ascending: false }).limit(10000),
       ])
       if (tx.error) throw tx.error
       if (co.error) throw co.error
@@ -42,10 +44,10 @@ export default function AnalyticsPage() {
   useEffect(() => {
     let cancelled = false
     let channel: ReturnType<typeof db.channel> | null = null
-    void db.auth.getUser().then(({ data }) => {
-      if (cancelled || !data.user) return
-      channel = db.channel(`analytics-${data.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_transactions', filter: `user_id=eq.${data.user.id}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'checkout_sessions', filter: `user_id=eq.${data.user.id}` }, () => void load()).subscribe()
-    })
+    void loadOrganizationAccess(db).then(({ organization_id: org }) => {
+      if (cancelled) return
+      channel = db.channel(`analytics-${org}`).on('postgres_changes', { event: '*', schema: 'public', table: 'gateway_transactions', filter: `organization_id=eq.${org}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'checkout_sessions', filter: `organization_id=eq.${org}` }, () => void load()).subscribe()
+    }).catch(() => undefined)
     return () => { cancelled = true; if (channel) void db.removeChannel(channel) }
   }, [db, load])
 

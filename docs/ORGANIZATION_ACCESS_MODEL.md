@@ -108,3 +108,40 @@ The RPC layer:
 - hides gateway error details unless `can_manage_gateways=true`.
 
 This prevents a hidden UI field from becoming a backend data leak. Owner-attributed direct reads remain temporarily available for the existing owner frontend while Codex migrates the browser queries to the organization-aware contracts.
+
+
+## Organization scope migration status (2026-10-13)
+
+`user_id` on legacy rows means the **operation owner** (the organization owner whose funnels, gateways and
+events the workers key on). Browser reads and member-facing actions are authorized by organization +
+capability; writes that workers consume keep the owner's `user_id`.
+
+### Browser reads
+All dashboard reads of organization data filter by the current organization (`loadOrganizationAccess`),
+including realtime subscriptions. Stage B added `organization_id` and organization read policies to
+`api_request_logs`, `outbound_webhooks`, `outbound_webhook_deliveries` (members),
+`transaction_routing_logs` (`can_view_values`) and `crm_channel_delivery_events` (`can_view_chats`).
+
+### Edge Functions
+Service-role functions resolve the caller with `organization_member_authority_v1` (shared helper
+`supabase/functions/_shared/organization-authority.ts`). The capability rule has a single source,
+`private.member_has_org_capability`, which `private.has_org_capability` (RLS) also delegates to.
+
+| Function | Authorization |
+|---|---|
+| `gateway-connection-test` | gateway's organization + `can_manage_gateways` |
+| `outbound-webhook-management` | `can_manage_integrations`; webhooks are created under the organization owner so the dispatcher fires them |
+| `iara-ai-core` | current organization; values need `can_view_values`, CRM search needs `can_view_chats` + `can_view_customers`; chat history stays personal |
+| `iara-copilot` | conversation's organization + `can_reply_chats`; payment attempts need `can_view_values`, buyer identity needs `can_view_customers` |
+| `funnel-connection-control`, `funnel-command-worker` | already organization + role |
+
+Intentionally still owner-scoped:
+- Service workers and internal callers (`*-worker`, `*-dispatcher`, `automation-engine-v2`, `althea-webhook`,
+  `integration-event-processor`, `funnel-events`, `webhook-integrations`, `gateway-attempt-recovery`,
+  `reconciliation-worker`, `iara-commercial-intervention`): `user_id` is the row owner, which is correct.
+- `althea-public-api`: authenticated by API key, which already belongs to one owner/organization.
+- `checkout-engine-v2` / `gateway-orchestrator`, `althea-api`, `sandbox-provision`, `iara-funnel-activate`,
+  `iara-financial-command`, `iara-financial-confirm`, `iara-daily-report`: no dashboard caller for members;
+  they remain owner operations. Migrate one when a member-facing screen starts calling it.
+- `platform_settings` (IARA display name, unused recovery knobs) and `merchant_business_profiles` are
+  per-user records: no worker reads them.

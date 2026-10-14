@@ -3,6 +3,7 @@
 import { CalendarDays, CheckCircle2, CreditCard, Filter, Search, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 import { amountOf, customerNameOf, dateOf, normalizeStatus, todayInSaoPaulo, type AnalyticsSale } from '@/lib/analytics/sales'
 
 type Sale = AnalyticsSale & { currency?: string | null }
@@ -53,10 +54,11 @@ export default function SalesMobile() {
     try {
       const { data: auth } = await db.auth.getUser()
       if (!auth.user) { setSales([]); return }
+      const { organization_id: organizationId } = await loadOrganizationAccess(db)
       const queryResult = await db
         .from('sales')
         .select('id,amount,status,currency,data,gateway_id,external_id,transaction_id,occurred_at,created_at')
-        .eq('user_id', auth.user.id)
+        .eq('organization_id', organizationId)
         .order('occurred_at', { ascending: false })
         .limit(5000)
       if (queryResult.error) throw queryResult.error
@@ -72,11 +74,11 @@ export default function SalesMobile() {
     let channel: ReturnType<typeof db.channel> | null = null
     let cancelled = false
     const subscribe = async () => {
-      const { data: auth } = await db.auth.getUser()
-      if (cancelled || !auth.user) return
-      channel = db.channel(`sales-mobile-${auth.user.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'sales', filter: `user_id=eq.${auth.user.id}` }, () => void load()).subscribe()
+      const { organization_id: org } = await loadOrganizationAccess(db)
+      if (cancelled) return
+      channel = db.channel(`sales-mobile-${org}`).on('postgres_changes', { event: '*', schema: 'public', table: 'sales', filter: `organization_id=eq.${org}` }, () => void load()).subscribe()
     }
-    void subscribe()
+    void subscribe().catch(() => undefined)
     return () => { cancelled = true; if (channel) void db.removeChannel(channel) }
   }, [db, load])
 

@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { can, organizationAuthority } from "../_shared/organization-authority.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -61,11 +62,16 @@ Deno.serve(async (request) => {
 
   const gatewayResult = await db
     .from("gateways")
-    .select("id,user_id,provider,environment,status,credential_id,circuit_id")
+    .select("id,user_id,organization_id,provider,environment,status,credential_id,circuit_id")
     .eq("id", gatewayId)
-    .eq("user_id", userId)
     .maybeSingle();
   if (gatewayResult.error || !gatewayResult.data) return response({ ok: false, error: "gateway_not_found" }, 404);
+  const gateway = gatewayResult.data;
+  const organizationId = text(gateway.organization_id);
+  const authority = await organizationAuthority(db, userId, ["can_manage_gateways"], organizationId);
+  // Same 404 as a missing gateway: a non-member must not learn that the id exists.
+  if (!authority) return response({ ok: false, error: "gateway_not_found" }, 404);
+  if (!can(authority, "can_manage_gateways")) return response({ ok: false, error: "forbidden" }, 403);
   if (!gatewayResult.data.credential_id) return response({ ok: false, error: "provider_credential_missing" }, 422);
 
   const registryResult = await db
@@ -80,11 +86,11 @@ Deno.serve(async (request) => {
   const environment = text(gatewayResult.data.environment).toLowerCase() === "sandbox" ? "sandbox" : "production";
   const adapterUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/gateway-provider-adapter`;
   const recordHealth = async (success: boolean, latencyMs: number) => {
-    const circuitId = text(gatewayResult.data.circuit_id);
+    const circuitId = text(gateway.circuit_id);
     if (!circuitId) return;
     const health = await db.rpc("record_gateway_health", {
       p_gateway_id: circuitId,
-      p_gateway_name: text(gatewayResult.data.provider).toLowerCase(),
+      p_gateway_name: text(gateway.provider).toLowerCase(),
       p_success: success,
       p_latency_ms: latencyMs,
     });
@@ -117,7 +123,7 @@ Deno.serve(async (request) => {
       const message = providerError(payload, "connection_test_failed");
       const latencyMs = Math.max(0, Math.round(performance.now() - started));
       await recordHealth(false, latencyMs);
-      await db.from("gateways").update({ status: "error" }).eq("id", gatewayId).eq("user_id", userId);
+      await db.from("gateways").update({ status: "error" }).eq("id", gatewayId).eq("organization_id", organizationId);
       return response({
         ok: false,
         error: message,
@@ -129,7 +135,7 @@ Deno.serve(async (request) => {
 
     const latencyMs = Math.max(0, Math.round(performance.now() - started));
     await recordHealth(true, latencyMs);
-    const update = await db.from("gateways").update({ status: "connected" }).eq("id", gatewayId).eq("user_id", userId);
+    const update = await db.from("gateways").update({ status: "connected" }).eq("id", gatewayId).eq("organization_id", organizationId);
     if (update.error) return response({ ok: false, error: "gateway_status_update_failed", provider: gatewayResult.data.provider, environment, latency_ms: latencyMs }, 500);
 
     return response({
@@ -142,7 +148,7 @@ Deno.serve(async (request) => {
   } catch (error) {
     const latencyMs = Math.max(0, Math.round(performance.now() - started));
     await recordHealth(false, latencyMs);
-    await db.from("gateways").update({ status: "error" }).eq("id", gatewayId).eq("user_id", userId);
+    await db.from("gateways").update({ status: "error" }).eq("id", gatewayId).eq("organization_id", organizationId);
     const message = error instanceof Error ? error.message : "connection_test_failed";
     return response({
       ok: false,

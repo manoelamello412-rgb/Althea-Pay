@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Activity, ArrowRight, BarChart3, CheckCircle2, GitBranch, Loader2, Plus, RefreshCw, Settings2, ShoppingCart, Sparkles, Zap } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 
 type Tab = 'overview' | 'steps' | 'offers' | 'automations' | 'analytics' | 'events'
 type Funnel = { id: string; nome: string; url: string | null; status: string | null; created_at: string | null }
@@ -39,7 +40,8 @@ export default function FunnelCentralPage() {
     setError('')
     const { data: auth, error: authError } = await supabase.auth.getUser()
     if (authError || !auth.user) throw new Error('Sessão expirada. Faça login novamente.')
-    const { data: funnelRows, error: funnelError } = await supabase.from('funnels').select('id,nome,url,status,created_at').eq('user_id', auth.user.id).is('deleted_at', null).order('created_at', { ascending: false }).limit(100)
+    const { organization_id: organizationId } = await loadOrganizationAccess(supabase)
+    const { data: funnelRows, error: funnelError } = await supabase.from('funnels').select('id,nome,url,status,created_at').eq('organization_id', organizationId).is('deleted_at', null).order('created_at', { ascending: false }).limit(100)
     if (funnelError) throw funnelError
     const list = (funnelRows ?? []) as Funnel[]
     setFunnels(list)
@@ -51,8 +53,8 @@ export default function FunnelCentralPage() {
       supabase.from('funnel_offers').select('id,name,offer_type,price,currency,status,product_id').eq('funnel_id', id).order('created_at', { ascending: false }),
       supabase.from('funnel_automation_rules').select('id,name,trigger_type,action_type,enabled').eq('funnel_id', id).order('created_at', { ascending: false }),
       supabase.from('integration_events').select('id,event_type,external_id,status,occurred_at,error_message').eq('funnel_id', id).order('created_at', { ascending: false }).limit(100),
-      supabase.from('sales').select('amount,status,currency').eq('user_id', auth.user.id).eq('funnel_id', id).limit(5000),
-      supabase.from('funnel_connections').select('event_count,error_count').eq('user_id', auth.user.id).eq('funnel_id', id).maybeSingle(),
+      supabase.from('sales').select('amount,status,currency').eq('funnel_id', id).limit(5000),
+      supabase.from('funnel_connections').select('event_count,error_count').eq('funnel_id', id).maybeSingle(),
     ])
     for (const result of [stepResult, offerResult, automationResult, eventResult, salesResult, connectionResult]) if (result.error) throw result.error
     const sales = (salesResult.data ?? []) as Array<{ amount: number | string | null; status: string | null; currency: string | null }>
