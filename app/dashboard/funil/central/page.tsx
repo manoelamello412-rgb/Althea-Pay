@@ -52,7 +52,7 @@ export default function FunnelCentralPage() {
       supabase.from('funnel_steps').select('id,step_key,step_type,name,position,status').eq('funnel_id', id).order('position', { ascending: true }),
       supabase.from('funnel_offers').select('id,name,offer_type,price,currency,status,product_id').eq('funnel_id', id).order('created_at', { ascending: false }),
       supabase.from('funnel_automation_rules').select('id,name,trigger_type,action_type,enabled').eq('funnel_id', id).order('created_at', { ascending: false }),
-      supabase.from('integration_events').select('id,event_type,external_id,status,occurred_at,error_message').eq('funnel_id', id).order('created_at', { ascending: false }).limit(100),
+      supabase.from('integration_events').select('id,event_type,external_id,status,occurred_at,error_message', { count: 'exact' }).eq('funnel_id', id).order('created_at', { ascending: false }).limit(100),
       supabase.from('sales').select('amount,status,currency').eq('funnel_id', id).limit(5000),
       supabase.from('funnel_connections').select('event_count,error_count').eq('funnel_id', id).maybeSingle(),
     ])
@@ -64,7 +64,7 @@ export default function FunnelCentralPage() {
     const revenue = !hasUnknownCurrency && currencies.length <= 1 ? approved.reduce((sum, sale) => sum + Number(sale.amount ?? 0), 0) : null
     const eventList = (eventResult.data ?? []) as Event[]
     setSteps((stepResult.data ?? []) as Step[]); setOffers((offerResult.data ?? []) as Offer[]); setAutomations((automationResult.data ?? []) as Automation[]); setEvents(eventList)
-    setMetrics({ sales: approved.length, revenue, currency: currencies[0] || 'BRL', currencyCount: currencies.length, hasUnknownCurrency, events: Number(connectionResult.data?.event_count ?? eventList.length), failedEvents: Number(connectionResult.data?.error_count ?? eventList.filter((e) => e.status === 'failed' || e.error_message).length), approval: sales.length ? approved.length / sales.length * 100 : 0 })
+    setMetrics({ sales: approved.length, revenue, currency: currencies[0] || 'BRL', currencyCount: currencies.length, hasUnknownCurrency, events: eventResult.count ?? eventList.length, failedEvents: Number(connectionResult.data?.error_count ?? eventList.filter((e) => e.status === 'failed' || e.error_message).length), approval: sales.length ? approved.length / sales.length * 100 : 0 })
   }, [selectedId, supabase])
 
   useEffect(() => {
