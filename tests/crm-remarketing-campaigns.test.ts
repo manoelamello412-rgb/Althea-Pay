@@ -65,6 +65,15 @@ describe('campaign migration', () => {
     expect(migration).toContain("cron.schedule('althea-crm-campaign-enqueue'")
   })
 
+  it('fills link, valor and produto from the latest checkout and keeps enqueue idempotent', () => {
+    const v2 = readFileSync('supabase/migrations/20261014150000_crm_campaign_checkout_variables_v1.sql', 'utf8')
+    expect(v2).toContain("if k.variables && array['link', 'valor', 'produto'] then")
+    expect(v2).toMatch(/'link', coalesce\([\s\S]*recovery_url[\s\S]*f\.url/)
+    expect(v2).toContain("on conflict (user_id, idempotency_key) do nothing")
+    expect(v2).toContain('grant execute on function public.crm_campaign_enqueue_due(integer) to service_role;')
+    expect(readFileSync('supabase/migrations/20261014140000_crm_outbox_dispatcher_cron_v1.sql', 'utf8')).toContain("cron.schedule(\n  'althea-crm-outbox-dispatcher'")
+  })
+
   it('only lets drafts be edited and requires active account and template to schedule', () => {
     expect(body('crm_campaign_save')).toContain("status = 'draft'")
     expect(body('crm_campaign_set_status')).toMatch(/a\.status = 'active'[\s\S]*t\.active/)
