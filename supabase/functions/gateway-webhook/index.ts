@@ -161,6 +161,16 @@ Deno.serve(async (request) => {
     );
   } else if (provider === "asaas") {
     valid = safe(secret, request.headers.get("asaas-access-token") ?? "");
+  } else if (provider === "afiliaxpay") {
+    // ponytail: AfiliaxPay não assina o postback; token secreto vai na query da URL de postback.
+    valid = safe(secret, url.searchParams.get("token") ?? "");
+    if (valid && String(payload.typeTransaction ?? "PIX").toUpperCase() !== "PIX") {
+      return json({ ok: true, ignored: "unsupported_transaction_type" });
+    }
+    if (valid && payload.idTransaction != null) {
+      payload.external_transaction_id ??= payload.idTransaction;
+      payload.id ??= `${payload.idTransaction}:${payload.status ?? ""}`;
+    }
   } else if (provider === "mercado_pago") {
     const signature = request.headers.get("x-signature") ?? "";
     const requestId = request.headers.get("x-request-id") ?? "";

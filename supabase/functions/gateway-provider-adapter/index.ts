@@ -49,6 +49,37 @@ async function mercadoPago(operation:Operation,b:O,c:O){
   return out({ok:true,id,external_id:id,status:norm(ps,{}),provider_status:ps,amount:Number(amount),currency:currency.toUpperCase(),response:p});
 }
 
+// AfiliaxPay: auth vai no corpo JSON; postback não é assinado, então o token do webhook segue na query (validado em gateway-webhook).
+const AFILIAX_STATUS:O={pago:"approved",pendente:"pending",revisao:"pending",med:"pending",cancelado:"declined",estorno:"declined"};
+async function afiliaxpay(operation:Operation,b:O,c:O,gid:string){
+  const token=str(c.token),secret=str(c.secret);if(!token||!secret)throw new Error("provider_credentials_missing");
+  const base="https://app.afiliaxpay.com";
+  const external=str(b.external_transaction_id??b.original_external_id??b.provider_transaction_id);
+  let path:string,payload:O={token,secret};
+  if(operation==="health_check")path="/api/seller/info";
+  else if(["payment_status","retrieve_payment","retrieve","status"].includes(operation)){if(!external)throw new Error("external_transaction_id_required");path="/api/status";payload.idTransaction=external}
+  else if(operation==="create_payment"){
+    const pm=obj(b.payment_method)?b.payment_method:{};if(str(pm.type)&&str(pm.type)!=="pix")throw new Error("payment_method_not_supported");
+    const amount=Number(b.amount??0);if(!Number.isFinite(amount)||amount<=0)throw new Error("invalid_amount");
+    const cu=obj(b.customer)?b.customer:{},details=obj(pm.details)?pm.details:{};
+    const digits=(v:unknown)=>String(v??"").replace(/\D/g,"");
+    const doc=digits(details.document??cu.document??cu.cpf),phone=digits(cu.phone);
+    if(doc.length!==11)throw new Error("customer_document_required");
+    const hook=str(c.webhook_secret),su=str(Deno.env.get("SUPABASE_URL"));if(!hook||!su)throw new Error("webhook_postback_not_configured");
+    path="/api/wallet/deposit/payment";
+    Object.assign(payload,{amount:Number(amount.toFixed(2)),debtor_name:str(cu.name),email:str(cu.email),debtor_document_number:doc,phone,method_pay:"pix",postback:`${su.replace(/\/$/,"")}/functions/v1/gateway-webhook?gateway_id=${encodeURIComponent(gid)}&token=${encodeURIComponent(hook)}`});
+    const product=obj(b.metadata)?str(b.metadata.product_name??b.metadata.description):"";if(product)payload.produto_name=product.slice(0,255);
+  }else throw new Error("operation_not_supported");
+  const r=await fetch(base+path,{method:"POST",headers:{Accept:"application/json","Content-Type":"application/json"},body:JSON.stringify(payload),signal:AbortSignal.timeout(15000)});
+  const p=await parse(r);if(!r.ok)return out({ok:false,error:err(p,`gateway_http_${r.status}`),failure_code:`http_${r.status}`},r.status);
+  if(operation==="health_check")return out({ok:true,status:"approved",provider_status:first(p,["status"],"healthy")});
+  if(operation!=="create_payment"){const ps=first(p,["status"],"");return out({ok:true,id:external,external_id:external,status:norm(ps,AFILIAX_STATUS),provider_status:ps,amount:Number(b.amount??0),currency:"BRL"})}
+  const id=first(p,["idTransaction"]);if(!id)return out({ok:false,error:"provider_transaction_id_missing"},502);
+  // A API devolve "base64data:image/png;base64,..." — normaliza para data URI válida.
+  const img=first(p,["qr_code_image_url"]),di=img.indexOf("data:image/"),qr=di>=0?img.slice(di):img?`data:image/png;base64,${img.replace(/^base64/,"")}`:"";
+  return out({ok:true,id,external_id:id,status:"pending",provider_status:"pendente",amount:Number(b.amount??0),currency:"BRL",action_type:"pix",qr_code:qr||null,copy_paste:first(p,["qrcode"])||null});
+}
+
 async function generic(operation:Operation,b:O,c:O){
   const checked=await assertPublicHttpsUrl(str(c.base_url));if(!checked.ok)throw new Error(`target_not_allowed:${checked.reason}`);
   const statusOps=["payment_status","retrieve_payment","retrieve","status"];
@@ -77,5 +108,5 @@ Deno.serve(async req=>{
   if(op!=="health_check"&&!["connected","degraded"].includes(str(g.data.status).toLowerCase()))return out({ok:false,error:"gateway_not_operational"},422);
   const reg=await db.from("gateway_provider_registry").select("provider_key,adapter_key,operational,is_active").eq("provider_key",str(g.data.provider).toLowerCase()).eq("is_active",true).maybeSingle();if(reg.error)return out({ok:false,error:"provider_registry_lookup_failed"},500);if(!reg.data||reg.data.operational!==true)return out({ok:false,error:"provider_adapter_not_operational"},422);
   const cr=await db.rpc("resolve_gateway_credential_for_gateway",{p_gateway_id:gid});if(cr.error||!obj(cr.data))return out({ok:false,error:"provider_credential_missing"},422);const credential=obj(cr.data.credentials)?cr.data.credentials:cr.data;
-  try{if(str(g.data.provider).toLowerCase()==="mercado_pago")return await mercadoPago(op,b,credential);return await generic(op,b,credential)}catch(e){return out({ok:false,error:e instanceof Error?e.message:"gateway_adapter_error"},502)}
+  try{if(str(g.data.provider).toLowerCase()==="mercado_pago")return await mercadoPago(op,b,credential);if(str(g.data.provider).toLowerCase()==="afiliaxpay")return await afiliaxpay(op,b,credential,gid);return await generic(op,b,credential)}catch(e){return out({ok:false,error:e instanceof Error?e.message:"gateway_adapter_error"},502)}
 });
