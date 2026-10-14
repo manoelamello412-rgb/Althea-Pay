@@ -7,7 +7,20 @@ const localSupabase = dev && process.env.NEXT_PUBLIC_SUPABASE_URL?.startsWith('h
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async headers() {
+    // Public checkout routes are called from funnel pages on other domains. No cookies are involved,
+    // so a wildcard origin adds nothing a server-side caller couldn't already do.
+    // ponytail: wildcard origin; restrict to each funnel's saved page domain if abuse shows up.
+    const publicCheckoutCors = [
+      { key: 'Access-Control-Allow-Origin', value: '*' },
+      { key: 'Access-Control-Allow-Methods', value: 'GET, POST, OPTIONS' },
+      { key: 'Access-Control-Allow-Headers', value: 'content-type' },
+      { key: 'Access-Control-Max-Age', value: '600' },
+    ]
     return [
+      { source: '/api/checkout/public', headers: publicCheckoutCors },
+      { source: '/api/payments/create', headers: publicCheckoutCors },
+      { source: '/api/payments/action', headers: publicCheckoutCors },
+      { source: '/althea.js', headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }] },
       {
         source: '/(.*)',
         headers: [

@@ -81,6 +81,15 @@ describe('origin-bound client token contract', () => {
   const migration = readFileSync('supabase/migrations/20261013160000_funnel_public_origin_v1.sql', 'utf8')
   const fn = readFileSync('supabase/functions/funnel-client-token/index.ts', 'utf8')
 
+  it('serves the snippet and public checkout routes to funnel pages on other domains', () => {
+    // The auth proxy must not redirect the snippet to /login.
+    const matcher = new RegExp('^' + /matcher: \['([^']+)'\]/.exec(readFileSync('proxy.ts', 'utf8'))![1].replaceAll('\\\\', '\\') + '$')
+    expect(matcher.test('/althea.js')).toBe(false)
+    expect(matcher.test('/dashboard')).toBe(true)
+    const config = readFileSync('next.config.mjs', 'utf8')
+    for (const route of ['/api/checkout/public', '/api/payments/create', '/api/payments/action']) expect(config).toContain(`source: '${route}', headers: publicCheckoutCors`)
+  })
+
   it('keeps the origin resolver server-only', () => {
     expect(migration).toMatch(/revoke all on function public\.resolve_funnel_public_origin\(text, text\) from public, anon, authenticated/)
     expect(migration).toContain('to service_role')
