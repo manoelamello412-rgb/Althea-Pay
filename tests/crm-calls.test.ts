@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const migration = readFileSync('supabase/migrations/20261013210000_crm_calls_v1.sql', 'utf8')
-const page = readFileSync('app/dashboard/kanban/page.tsx', 'utf8')
+// the call form lives in the dialog shared by the Kanban and the Atendimento screens
+const page = readFileSync('components/crm-call-dialog.tsx', 'utf8')
 const body = migration.slice(migration.indexOf('function public.crm_call_log('), migration.indexOf('$function$;', migration.indexOf('function public.crm_call_log(')))
 
 describe('CRM calls contract', () => {
@@ -28,8 +29,8 @@ describe('CRM calls contract', () => {
     expect(body).toContain("'ATTEMPT_ID_REQUIRED'")
     expect(body).toMatch(/if v_attempt\.organization_id <> v_org then raise exception 'FORBIDDEN'/)
     expect(body).toContain("'replayed', true")
-    expect(page).toContain('attemptId: crypto.randomUUID()')
-    expect(page).toContain('p_attempt_id: call.attemptId')
+    expect(page).toContain('useState(() => crypto.randomUUID())')
+    expect(page).toContain('p_attempt_id: attemptId')
   })
 
   it('updates the Kanban stage through crm_card_move with the expected version', () => {
@@ -37,7 +38,7 @@ describe('CRM calls contract', () => {
     expect(body).toContain('public.crm_card_move(v_card.id, v_attempt.to_stage_id, coalesce(p_expected_version, v_card.version))')
     expect(body).toContain("'CARD_REQUIRED_FOR_STAGE'")
     expect(body).toContain("'CALLBACK_AT_REQUIRED'")
-    expect(page).toContain('p_expected_version: call.card.version')
+    expect(page).toContain('p_expected_version: card?.version ?? null')
     expect(page).not.toMatch(/\.eq\('user_id'/)
   })
 })

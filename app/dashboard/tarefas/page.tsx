@@ -7,9 +7,9 @@ import { hasOrganizationCapability, parseOrganizationAccess, type OrganizationAc
 
 type Status = 'open' | 'in_progress' | 'completed' | 'cancelled'
 type Priority = 'low' | 'normal' | 'high' | 'urgent'
-type Task = { id: string; title: string; description: string | null; status: Status; priority: Priority; due_at: string | null; assigned_to: string | null; conversation_id: string | null; completed_at: string | null; created_at: string }
+type Task = { id: string; title: string; description: string | null; status: Status; priority: Priority; due_at: string | null; assigned_to: string | null; conversation_id: string | null; client_id: string | null; completed_at: string | null; created_at: string }
 type Member = { user_id: string; name: string }
-type Draft = { id: string | null; title: string; description: string; priority: Priority; due: string; assignedTo: string; conversationId: string | null }
+type Draft = { id: string | null; title: string; description: string; priority: Priority; due: string; assignedTo: string; conversationId: string | null; clientId: string | null }
 
 const STATUS_LABEL: Record<Status, string> = { open: 'Aberta', in_progress: 'Em andamento', completed: 'Concluída', cancelled: 'Cancelada' }
 const PRIORITY_LABEL: Record<Priority, string> = { low: 'Baixa', normal: 'Normal', high: 'Alta', urgent: 'Urgente' }
@@ -48,7 +48,7 @@ export default function TarefasPage() {
       setAccess(current)
       if (!current) return
       const [taskResult, memberResult] = await Promise.all([
-        db.from('crm_tasks').select('id,title,description,status,priority,due_at,assigned_to,conversation_id,completed_at,created_at').eq('organization_id', current.organization_id).order('due_at', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false }).limit(500),
+        db.from('crm_tasks').select('id,title,description,status,priority,due_at,assigned_to,conversation_id,client_id,completed_at,created_at').eq('organization_id', current.organization_id).order('due_at', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false }).limit(500),
         db.from('organization_members').select('user_id').eq('organization_id', current.organization_id),
       ])
       if (taskResult.error) throw taskResult.error
@@ -91,7 +91,7 @@ export default function TarefasPage() {
   async function save() {
     if (!draft) return
     setSaving(true); setError('')
-    const result = await db.rpc('crm_task_save', { p_id: draft.id, p_title: draft.title, p_description: draft.description, p_priority: draft.priority, p_due_at: draft.due ? new Date(draft.due).toISOString() : null, p_assigned_to: draft.assignedTo || null, p_conversation_id: draft.conversationId })
+    const result = await db.rpc('crm_task_save', { p_id: draft.id, p_title: draft.title, p_description: draft.description, p_priority: draft.priority, p_due_at: draft.due ? new Date(draft.due).toISOString() : null, p_assigned_to: draft.assignedTo || null, p_conversation_id: draft.conversationId, p_client_id: draft.clientId })
     setSaving(false)
     if (result.error) { setError(messageOf(result.error)); return }
     setDraft(null)
@@ -103,7 +103,7 @@ export default function TarefasPage() {
       <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div><div className="mb-2 text-[10px] font-black uppercase tracking-[.28em] text-emerald-400">ALTHEA PAY // TAREFAS</div><h1 className="text-3xl font-black tracking-tight">Tarefas</h1><p className="mt-1 text-sm text-slate-500">Follow-ups da equipe, com responsável e prazo.</p></div>
         <div className="flex gap-2">
-          {canWrite && <button type="button" onClick={() => setDraft({ id: null, title: '', description: '', priority: 'normal', due: '', assignedTo: access?.user_id ?? '', conversationId: null })} className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400"><Plus size={15} /> Nova tarefa</button>}
+          {canWrite && <button type="button" onClick={() => setDraft({ id: null, title: '', description: '', priority: 'normal', due: '', assignedTo: access?.user_id ?? '', conversationId: null, clientId: null })} className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400"><Plus size={15} /> Nova tarefa</button>}
           <button type="button" onClick={() => void load()} disabled={loading} aria-label="Atualizar" className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/[.03] px-3 hover:bg-white/[.06] disabled:opacity-50"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
         </div>
       </header>
@@ -122,11 +122,11 @@ export default function TarefasPage() {
               <div className="min-w-0 flex-1">
                 <b className={`block text-sm ${done ? 'text-slate-500 line-through' : ''}`}>{task.title}</b>
                 {task.description && <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{task.description}</p>}
-                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500"><span className={PRIORITY_TONE[task.priority]}>{PRIORITY_LABEL[task.priority]}</span><span>{memberName(task.assigned_to)}</span>{due && <span className={due.late ? 'text-red-400' : ''}>{due.late ? 'Atrasada · ' : ''}{due.text}</span>}{task.conversation_id && <span>Ligada a uma conversa</span>}</div>
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500"><span className={PRIORITY_TONE[task.priority]}>{PRIORITY_LABEL[task.priority]}</span><span>{memberName(task.assigned_to)}</span>{due && <span className={due.late ? 'text-red-400' : ''}>{due.late ? 'Atrasada · ' : ''}{due.text}</span>}{task.client_id ? <span>Ligada a um cliente</span> : task.conversation_id && <span>Ligada a uma conversa</span>}</div>
               </div>
               {canWrite && <div className="flex shrink-0 items-center gap-1">
                 <select aria-label={`Status de ${task.title}`} value={task.status} onChange={event => void setStatus(task, event.target.value as Status)} className="rounded-md border border-white/10 bg-[#0b100e] px-1.5 py-1 text-[11px] text-slate-400">{(Object.keys(STATUS_LABEL) as Status[]).map(status => <option key={status} value={status}>{STATUS_LABEL[status]}</option>)}</select>
-                <button type="button" aria-label={`Editar ${task.title}`} onClick={() => setDraft({ id: task.id, title: task.title, description: task.description ?? '', priority: task.priority, due: toLocalInput(task.due_at), assignedTo: task.assigned_to ?? '', conversationId: task.conversation_id })} className="rounded-md p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
+                <button type="button" aria-label={`Editar ${task.title}`} onClick={() => setDraft({ id: task.id, title: task.title, description: task.description ?? '', priority: task.priority, due: toLocalInput(task.due_at), assignedTo: task.assigned_to ?? '', conversationId: task.conversation_id, clientId: task.client_id })} className="rounded-md p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
               </div>}
             </article>
           })}
