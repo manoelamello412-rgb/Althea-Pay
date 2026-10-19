@@ -18,7 +18,8 @@ interface Funnel {
 }
 
 function pageSnippet(funnelId: string) {
-  return `<script async src="${window.location.origin}/althea.js" data-funnel-id="${funnelId}" data-api="${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}"></script>`
+  const host = process.env.NEXT_PUBLIC_FUNNEL_HOST || window.location.origin
+  return `<script async src="${host}/s.js" data-funnel-id="${funnelId}" data-ns="ft"></script>`
 }
 
 interface FunnelConnection {

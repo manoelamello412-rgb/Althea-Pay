@@ -52,5 +52,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|althea\\.js$|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|althea\\.js$|s\\.js$|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }

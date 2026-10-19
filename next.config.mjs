@@ -6,6 +6,11 @@ const localSupabase = dev && process.env.NEXT_PUBLIC_SUPABASE_URL?.startsWith('h
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  poweredByHeader: false,
+  // Neutral public name for the funnel snippet; existing pages keep loading /althea.js.
+  async rewrites() {
+    return [{ source: '/s.js', destination: '/althea.js' }]
+  },
   async headers() {
     // Public checkout routes are called from funnel pages on other domains. No cookies are involved,
     // so a wildcard origin adds nothing a server-side caller couldn't already do.
@@ -21,8 +26,10 @@ const nextConfig = {
       { source: '/api/payments/create', headers: publicCheckoutCors },
       { source: '/api/payments/action', headers: publicCheckoutCors },
       { source: '/althea.js', headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }] },
+      { source: '/s.js', headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }] },
       {
-        source: '/(.*)',
+        // Funnel-facing routes (snippet + its proxy) skip this block: the CSP names the backend host.
+        source: '/:path((?!api/x/|s\\.js$|althea\\.js$).*)',
         headers: [
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },

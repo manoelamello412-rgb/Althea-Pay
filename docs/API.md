@@ -14,18 +14,20 @@ This file lists the current public-facing Edge Functions (`supabase/functions/**
 - `POST /funnel-client-token` — issues a 10-minute `events:write` browser token. Server side with the secret `x-funnel-event-token`, or from a page with only `funnel_id` when the browser `Origin` matches the funnel's page URL.
 - `POST /funnel-events` — ingests funnel/quiz/checkout lifecycle events. Accepts a client token (`x-funnel-client-token`), the per-funnel `x-funnel-event-token`, or an ALTHEA API key.
 
-## Page snippet (`althea.js`)
+## Page snippet (`s.js`)
 
 Paste in every page of the funnel, before `</head>`. The dashboard (Funil → Estado da Integração) shows it ready to copy:
 
 ```html
-<script async src="https://<app>/althea.js" data-funnel-id="<funnel_id>" data-api="https://<project>.supabase.co"></script>
+<script async src="https://<host>/s.js" data-funnel-id="<funnel_id>" data-ns="ft"></script>
 ```
+
+- `<host>` is `NEXT_PUBLIC_FUNNEL_HOST` (a neutral domain pointed at this app) or the app origin. The snippet calls back only to that host (`/api/x/t`, `/api/x/e`), which proxies to the functions and returns just the body, so the page never sees the backend or its headers. `data-ns` names the global (`window.ft`); old pages using `/althea.js` keep working as `window.althea`.
 
 - Requires the funnel's "Link da Página" to be saved: tokens are only issued to that host (`www.` ignored). The ingestion token is never placed in the page.
 - Sends `page_view` on load with a persistent `visitor_id`, a `session_id` (30 min idle), `page_url`, `referrer` and the session's UTMs / `gclid` / `fbclid`.
-- `althea.identify({ name, email, phone, customer_id })` attaches the buyer to the following events (feeds canonical customer resolution).
-- `althea.track('checkout_started', { product_id, checkout_id })` sends any catalog event; each call gets a unique `event_id`, or pass your own to make retries idempotent.
+- `ft.identify({ name, email, phone, customer_id })` attaches the buyer to the following events (feeds canonical customer resolution).
+- `ft.track('checkout_started', { product_id, checkout_id })` sends any catalog event; each call gets a unique `event_id`, or pass your own to make retries idempotent.
 
 ## For third-party integrators (customer-configured webhooks)
 

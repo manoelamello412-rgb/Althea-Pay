@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const snippet = readFileSync('public/althea.js', 'utf8')
-const API = 'https://project.supabase.co'
+const API = 'https://app.example'
 
 type Call = { url: string; headers: Record<string, string>; body: Record<string, unknown> }
 
@@ -11,12 +11,12 @@ function boot(search = '') {
   window.history.replaceState(null, '', '/quiz' + search)
   const script = document.createElement('script')
   script.setAttribute('data-funnel-id', 'funnel-1')
-  script.setAttribute('data-api', API + '/')
+  script.src = API + '/s.js'
   Object.defineProperty(document, 'currentScript', { value: script, configurable: true })
   const calls: Call[] = []
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
     calls.push({ url, headers: init.headers as Record<string, string>, body: JSON.parse(String(init.body)) })
-    const body = url.endsWith('/funnel-client-token') ? { token: 'alt_fct_abc.sig', expires_in: 600 } : { accepted: true }
+    const body = url.endsWith('/api/x/t') ? { token: 'alt_fct_abc.sig', expires_in: 600 } : { accepted: true }
     return new Response(JSON.stringify(body), { status: 200 })
   }))
   new Function(snippet)()
@@ -36,7 +36,7 @@ describe('althea.js page snippet', () => {
   it('sends page_view on load with only the funnel id as credential', async () => {
     const calls = boot('?utm_source=meta&utm_campaign=black&fbclid=fb1')
     await flush(); await flush()
-    expect(calls.map(c => c.url)).toEqual([`${API}/functions/v1/funnel-client-token`, `${API}/functions/v1/funnel-events`])
+    expect(calls.map(c => c.url)).toEqual([`${API}/api/x/t`, `${API}/api/x/e`])
     expect(calls[0].body).toEqual({ funnel_id: 'funnel-1' })
     expect(calls[0].headers).not.toHaveProperty('x-funnel-event-token')
     expect(calls[1].headers['x-funnel-client-token']).toBe('alt_fct_abc.sig')
@@ -51,7 +51,7 @@ describe('althea.js page snippet', () => {
     althea().identify({ email: 'a@b.com' })
     await althea().track('checkout_started', { product_id: 'p1' })
     const [, pageView, checkout] = calls
-    expect(calls.filter(c => c.url.endsWith('/funnel-client-token'))).toHaveLength(1)
+    expect(calls.filter(c => c.url.endsWith('/api/x/t'))).toHaveLength(1)
     expect(checkout.body).toMatchObject({ event_type: 'checkout_started', product_id: 'p1', source: 'google', customer: { email: 'a@b.com' } })
     expect(checkout.body.visitor_id).toBe(pageView.body.visitor_id)
     expect(checkout.body.session_id).toBe(pageView.body.session_id)
@@ -85,6 +85,7 @@ describe('origin-bound client token contract', () => {
     // The auth proxy must not redirect the snippet to /login.
     const matcher = new RegExp('^' + /matcher: \['([^']+)'\]/.exec(readFileSync('proxy.ts', 'utf8'))![1].replaceAll('\\\\', '\\') + '$')
     expect(matcher.test('/althea.js')).toBe(false)
+    expect(matcher.test('/s.js')).toBe(false)
     expect(matcher.test('/dashboard')).toBe(true)
     const config = readFileSync('next.config.mjs', 'utf8')
     for (const route of ['/api/checkout/public', '/api/payments/create', '/api/payments/action']) expect(config).toContain(`source: '${route}', headers: publicCheckoutCors`)
