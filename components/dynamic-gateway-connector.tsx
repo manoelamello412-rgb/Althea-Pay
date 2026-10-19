@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, Cpu, Loader2, Pencil, Power, RefreshCw, Unplug, X } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Cpu, Loader2, Pencil, Power, RefreshCw, Trash2, Unplug, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { getOperationalCredentialFields, getWebhookCredentialFields, type GatewayCredentialField } from '@/components/gateway-provider-fields'
 
@@ -225,6 +225,22 @@ export const DynamicGatewayConnector: React.FC = () => {
     await load()
   }
 
+  const remove = async (gateway: Gateway) => {
+    if (testing || !window.confirm(`Excluir o gateway "${gateway.display_name || gateway.provider}"?`)) return
+    const { error: deleteError } = await db.rpc('delete_dynamic_gateway', { p_gateway_id: gateway.id })
+    if (deleteError) {
+      const messages: Record<string, string> = {
+        gateway_has_history: 'Este gateway já tem transações. Use desconectar para preservar o histórico.',
+        gateway_in_use: 'Este gateway está ligado a um funil ou rota. Troque o gateway do funil antes de excluir.',
+      }
+      setError(messages[deleteError.message] || deleteError.message)
+      return
+    }
+    if (editing === gateway.id) reset()
+    setMessage('Gateway excluído.')
+    await load()
+  }
+
   const renderField = (credential: GatewayCredentialField, target: 'credential' | 'webhook' = 'credential') => {
     const source = target === 'webhook' ? webhookValues : values
     const setSource = target === 'webhook' ? setWebhookValues : setValues
@@ -283,6 +299,7 @@ export const DynamicGatewayConnector: React.FC = () => {
                   <button type="button" onClick={() => void test(gateway.id)} disabled={testing !== null} className="rounded-md border border-neutral-700 px-2.5 py-2 text-[9px] font-bold font-mono text-white">{testing === gateway.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'TESTAR'}</button>
                   <button type="button" onClick={() => void toggle(gateway)} disabled={testing !== null || !gateway.credential_id} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Power className="h-3.5 w-3.5" /></button>
                   <button type="button" onClick={() => void disconnect(gateway)} disabled={testing !== null} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Unplug className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => void remove(gateway)} disabled={testing !== null} aria-label="Excluir gateway" className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
             ))}
