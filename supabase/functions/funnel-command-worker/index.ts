@@ -5,7 +5,7 @@ type Json = Record<string, unknown>;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, x-althea-internal-secret",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-althea-internal-secret",
   "Access-Control-Allow-Methods": "POST,OPTIONS",
 };
 const HEADERS = { ...CORS, "Content-Type": "application/json", "Cache-Control": "no-store" };
