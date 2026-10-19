@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, Pencil, Plus, RefreshCw, X } from 'lucide-react'
+import { Loader2, Mic, Pencil, Plus, RefreshCw, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { hasOrganizationCapability, parseOrganizationAccess, type OrganizationAccess } from '@/lib/auth/organization-access'
 
@@ -9,13 +9,14 @@ type Channel = 'whatsapp' | 'email' | 'sms'
 type Template = { id: string; name: string; channel: Channel; trigger_event: string | null; subject: string | null; body: string; variables: string[]; whatsapp_template_name: string | null; language: string; active: boolean }
 type SegmentDefinition = { tag_ids?: string[]; checkout_status?: string[]; last_activity_days?: number }
 type Segment = { id: string; name: string; description: string | null; definition: SegmentDefinition; active: boolean }
-type Campaign = { id: string; name: string; channel_account_id: string; template_id: string; segment_id: string; status: 'draft' | 'scheduled' | 'enqueued' | 'cancelled'; scheduled_at: string | null; enqueued_at: string | null; recipient_count: number }
+type ContactList = { id: string; name: string }
+type Campaign = { id: string; name: string; channel_account_id: string; template_id: string; segment_id: string | null; list_id: string | null; audio_path: string | null; status: 'draft' | 'scheduled' | 'enqueued' | 'cancelled'; scheduled_at: string | null; enqueued_at: string | null; recipient_count: number }
 type Metrics = { campaign_id: string; queued: number; sent: number; delivered: number; read: number; failed: number; opted_out: number }
 type Account = { id: string; channel: string; provider: string; display_name: string | null; status: string }
 type Tag = { id: string; name: string }
 type Tab = 'campaigns' | 'templates' | 'segments'
 type Editor =
-  | { kind: 'campaign'; id: string | null; name: string; accountId: string; templateId: string; segmentId: string }
+  | { kind: 'campaign'; id: string | null; name: string; accountId: string; templateId: string; target: 'list' | 'segment'; segmentId: string; listId: string; audioPath: string; uploading: boolean }
   | { kind: 'template'; id: string | null; name: string; channel: Channel; subject: string; body: string; variables: string[]; waName: string; language: string; recovery: boolean; active: boolean }
   | { kind: 'segment'; id: string | null; name: string; description: string; tagIds: string[]; checkout: string[]; days: string; active: boolean }
   | { kind: 'schedule'; id: string; name: string; at: string }
@@ -25,9 +26,9 @@ const VARIABLES: Record<string, string> = { nome: 'Nome', primeiro_nome: 'Primei
 const CHECKOUT: Record<string, string> = { respondendo_quiz: 'Respondendo quiz', no_checkout: 'Sem checkout', parado_no_caixa: 'Parado no caixa', cartao_recusado: 'Cartão recusado', pago: 'Pago' }
 const STATUS: Record<Campaign['status'], [string, string]> = { draft: ['Rascunho', 'text-slate-400'], scheduled: ['Agendada', 'text-amber-300'], enqueued: ['Disparada', 'text-emerald-400'], cancelled: ['Cancelada', 'text-slate-600'] }
 const ERRORS: Record<string, string> = {
-  FORBIDDEN: 'Seu acesso não permite alterar campanhas.', NAME_TAKEN: 'Já existe um item com esse nome.', TEMPLATE_INVALID: 'Revise o template: WhatsApp exige o nome do template aprovado e e-mail exige assunto.',
-  SEGMENT_DEFINITION_INVALID: 'Revise os filtros do segmento.', SEGMENT_NAME_INVALID: 'Informe um nome de até 80 caracteres.', CAMPAIGN_REFERENCES_INVALID: 'Conta, template e segmento precisam ser da organização e do mesmo canal.',
-  CAMPAIGN_STATUS_CONFLICT: 'A campanha mudou de estado, ou a conta/template está inativo. Atualize a página.', CAMPAIGN_NOT_EDITABLE: 'Só rascunhos podem ser editados.',
+  FORBIDDEN: 'Seu acesso não permite alterar campanhas.', NAME_TAKEN: 'Já existe um item com esse nome.', TEMPLATE_INVALID: 'Revise o template: e-mail exige assunto.',
+  SEGMENT_DEFINITION_INVALID: 'Revise os filtros do segmento.', SEGMENT_NAME_INVALID: 'Informe um nome de até 80 caracteres.', CAMPAIGN_REFERENCES_INVALID: 'Conta, template e lista/segmento precisam ser da organização e do mesmo canal.', CAMPAIGN_AUDIO_INVALID: 'Áudio só pode ser enviado no WhatsApp.',
+  CAMPAIGN_STATUS_CONFLICT: 'A campanha mudou de estado, ou a conta/template está inativo. Atualize a página.', CAMPAIGN_NOT_EDITABLE: 'Só rascunhos podem ser editados.', CAMPAIGN_ENQUEUE_FAILED: 'Não foi possível montar a fila de envio. Tente de novo.', SEND_NOW_FAILED: 'Não foi possível enviar agora. Tente de novo.', UNAUTHORIZED: 'Sessão expirada. Entre de novo.',
 }
 const messageOf = (cause: unknown) => { const raw = cause && typeof cause === 'object' && 'message' in cause ? String((cause as { message: unknown }).message) : ''; return ERRORS[raw] ?? 'Não foi possível salvar.' }
 const input = 'h-10 w-full rounded-xl border border-white/10 bg-white/[.03] px-3 text-sm outline-none focus:border-emerald-500/40'
@@ -43,6 +44,7 @@ export default function CrmCampanhasPage() {
   const [metrics, setMetrics] = useState<Record<string, Metrics>>({})
   const [templates, setTemplates] = useState<Template[]>([])
   const [segments, setSegments] = useState<Segment[]>([])
+  const [lists, setLists] = useState<ContactList[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [tags, setTags] = useState<Tag[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,16 +63,18 @@ export default function CrmCampanhasPage() {
       setAccess(current)
       if (!current) return
       const org = current.organization_id
-      const [campaignResult, templateResult, segmentResult, accountResult, tagResult] = await Promise.all([
-        db.from('crm_campaigns').select('id,name,channel_account_id,template_id,segment_id,status,scheduled_at,enqueued_at,recipient_count').eq('organization_id', org).order('created_at', { ascending: false }).limit(100),
+      const [campaignResult, templateResult, segmentResult, accountResult, tagResult, listResult] = await Promise.all([
+        db.from('crm_campaigns').select('id,name,channel_account_id,template_id,segment_id,list_id,audio_path,status,scheduled_at,enqueued_at,recipient_count').eq('organization_id', org).order('created_at', { ascending: false }).limit(100),
         db.from('crm_message_templates').select('id,name,channel,trigger_event,subject,body,variables,whatsapp_template_name,language,active').eq('organization_id', org).order('name'),
         db.from('crm_segments').select('id,name,description,definition,active').eq('organization_id', org).order('name'),
         hasOrganizationCapability(current, 'can_manage_integrations') || hasOrganizationCapability(current, 'can_manage_automations')
           ? db.from('crm_channel_accounts').select('id,channel,provider,display_name,status').eq('organization_id', org).in('channel', ['whatsapp', 'email', 'sms'])
           : Promise.resolve({ data: [], error: null }),
         db.from('crm_tags').select('id,name').eq('organization_id', org).eq('active', true).order('name'),
+        db.from('crm_contact_lists').select('id,name').eq('organization_id', org).order('name'),
       ])
-      for (const result of [campaignResult, templateResult, segmentResult, accountResult, tagResult]) if (result.error) throw result.error
+      for (const result of [campaignResult, templateResult, segmentResult, accountResult, tagResult, listResult]) if (result.error) throw result.error
+      setLists((listResult.data ?? []) as ContactList[])
       const list = (campaignResult.data ?? []) as Campaign[]
       setCampaigns(list)
       setTemplates((templateResult.data ?? []) as Template[])
@@ -91,14 +95,31 @@ export default function CrmCampanhasPage() {
   useEffect(() => { void load() }, [load])
 
   const campaignChannel = editor?.kind === 'campaign' ? accounts.find(account => account.id === editor.accountId)?.channel : undefined
-  const campaignSegment = editor?.kind === 'campaign' ? editor.segmentId : ''
+  const campaignAccount = editor?.kind === 'campaign' ? accounts.find(account => account.id === editor.accountId) : undefined
+  const campaignSegment = editor?.kind === 'campaign' && editor.target === 'segment' ? editor.segmentId : ''
+  const campaignList = editor?.kind === 'campaign' && editor.target === 'list' ? editor.listId : ''
   useEffect(() => {
     setAudience(null)
-    if (!campaignChannel || !campaignSegment) return
+    if (!campaignChannel || (!campaignSegment && !campaignList)) return
     let live = true
-    void db.rpc('crm_segment_audience_count', { p_segment_id: campaignSegment, p_channel: campaignChannel }).then(({ data, error: countError }: { data: number | null; error: unknown }) => { if (live && !countError) setAudience(Number(data ?? 0)) })
+    const count = campaignList
+      ? db.rpc('crm_list_audience_count', { p_list_id: campaignList, p_channel: campaignChannel })
+      : db.rpc('crm_segment_audience_count', { p_segment_id: campaignSegment, p_channel: campaignChannel })
+    void count.then(({ data, error: countError }: { data: number | null; error: unknown }) => { if (live && !countError) setAudience(Number(data ?? 0)) })
     return () => { live = false }
-  }, [db, campaignChannel, campaignSegment])
+  }, [db, campaignChannel, campaignSegment, campaignList])
+
+  // Audio goes to the organization's folder in the private crm-campaign-media bucket.
+  async function uploadAudio(file: File) {
+    if (editor?.kind !== 'campaign' || !access) return
+    if (file.size > 16 * 1024 * 1024) { setError('O áudio pode ter no máximo 16 MB.'); return }
+    const ext = (file.name.split('.').pop() ?? 'mp3').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp3'
+    const path = `${access.organization_id}/${crypto.randomUUID()}.${ext}`
+    setEditor({ ...editor, uploading: true }); setError('')
+    const { error: uploadError } = await db.storage.from('crm-campaign-media').upload(path, file, { contentType: file.type || undefined })
+    if (uploadError) { setError('Não foi possível enviar o áudio. Use .ogg, .mp3 ou .m4a.'); setEditor({ ...editor, uploading: false }); return }
+    setEditor({ ...editor, uploading: false, audioPath: path })
+  }
 
   async function run(call: Promise<{ error: unknown }>) {
     setSaving(true); setError('')
@@ -111,13 +132,19 @@ export default function CrmCampanhasPage() {
 
   function save() {
     if (!editor) return
-    if (editor.kind === 'campaign') return run(db.rpc('crm_campaign_save', { p_id: editor.id, p_name: editor.name, p_channel_account_id: editor.accountId, p_template_id: editor.templateId, p_segment_id: editor.segmentId }))
-    if (editor.kind === 'template') return run(db.rpc('crm_template_save', { p_id: editor.id, p_name: editor.name, p_channel: editor.channel, p_body: editor.body, p_variables: editor.variables, p_subject: editor.channel === 'email' ? editor.subject : null, p_whatsapp_template_name: editor.channel === 'whatsapp' ? editor.waName : null, p_language: editor.language, p_trigger_event: editor.recovery ? 'checkout_abandoned' : null, p_active: editor.active }))
+    if (editor.kind === 'campaign') return run(db.rpc('crm_campaign_save', { p_id: editor.id, p_name: editor.name, p_channel_account_id: editor.accountId, p_template_id: editor.templateId, p_segment_id: editor.target === 'segment' ? editor.segmentId : null, p_list_id: editor.target === 'list' ? editor.listId : null, p_audio_path: campaignChannel === 'whatsapp' ? editor.audioPath || null : null }))
+    if (editor.kind === 'template') return run(db.rpc('crm_template_save', { p_id: editor.id, p_name: editor.name, p_channel: editor.channel, p_body: editor.body, p_variables: editor.variables, p_subject: editor.channel === 'email' ? editor.subject : null, p_whatsapp_template_name: editor.channel === 'whatsapp' ? editor.waName : null, p_language: editor.language, p_trigger_event: editor.recovery ? (editor.channel === 'whatsapp' ? 'payment_pending' : 'checkout_abandoned') : null, p_active: editor.active }))
     if (editor.kind === 'segment') {
       const definition: SegmentDefinition = { ...(editor.tagIds.length ? { tag_ids: editor.tagIds } : {}), ...(editor.checkout.length ? { checkout_status: editor.checkout } : {}), ...(editor.days ? { last_activity_days: Number(editor.days) } : {}) }
       return run(db.rpc('crm_segment_save', { p_id: editor.id, p_name: editor.name, p_definition: definition, p_description: editor.description, p_active: editor.active }))
     }
     return run(db.rpc('crm_campaign_set_status', { p_id: editor.id, p_status: 'scheduled', p_scheduled_at: new Date(editor.at).toISOString() }))
+  }
+
+  const sendNow = (campaign: Campaign) => {
+    if (!window.confirm(`Enviar a campanha "${campaign.name}" agora?`)) return
+    void run(fetch('/api/crm/campaigns/send-now', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: campaign.id }) })
+      .then(async res => res.ok ? { error: null } : { error: { message: ((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'SEND_NOW_FAILED' } }))
   }
 
   const setStatus = (campaign: Campaign, status: 'draft' | 'cancelled') => {
@@ -132,12 +159,12 @@ export default function CrmCampanhasPage() {
   const editButton = (name: string, onClick: () => void) => <button type="button" aria-label={`Editar ${name}`} onClick={onClick} className="rounded-md p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
   const inactive = (active: boolean) => !active && <span className="ml-2 rounded-full bg-white/[.06] px-2 py-0.5 text-[10px] text-slate-500">inativo</span>
   const small = 'rounded-lg border border-white/10 px-2.5 py-1 text-xs hover:bg-white/[.06] disabled:opacity-40'
-  const newEditor = (): Editor => tab === 'campaigns' ? { kind: 'campaign', id: null, name: '', accountId: '', templateId: '', segmentId: '' }
+  const newEditor = (): Editor => tab === 'campaigns' ? { kind: 'campaign', id: null, name: '', accountId: '', templateId: '', target: 'list', segmentId: '', listId: '', audioPath: '', uploading: false }
     : tab === 'templates' ? { kind: 'template', id: null, name: '', channel: 'whatsapp', subject: '', body: '', variables: [], waName: '', language: 'pt_BR', recovery: false, active: true }
       : { kind: 'segment', id: null, name: '', description: '', tagIds: [], checkout: [], days: '', active: true }
   const invalid = !editor ? true
-    : editor.kind === 'campaign' ? !editor.name.trim() || !editor.accountId || !editor.templateId || !editor.segmentId
-      : editor.kind === 'template' ? !editor.name.trim() || !editor.body.trim() || (editor.channel === 'whatsapp' && !editor.waName.trim()) || (editor.channel === 'email' && !editor.subject.trim())
+    : editor.kind === 'campaign' ? !editor.name.trim() || !editor.accountId || !editor.templateId || editor.uploading || !(editor.target === 'list' ? editor.listId : editor.segmentId)
+      : editor.kind === 'template' ? !editor.name.trim() || !editor.body.trim() || (editor.channel === 'email' && !editor.subject.trim())
         : editor.kind === 'segment' ? !editor.name.trim()
           : !editor.at
 
@@ -163,15 +190,15 @@ export default function CrmCampanhasPage() {
             return <div key={campaign.id} className="border-b border-white/[.06] px-4 py-3 last:border-0">
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1"><b className="text-sm">{campaign.name}</b><span className={`ml-2 text-[11px] ${tone}`}>{statusLabel}</span>
-                  <p className="truncate text-xs text-slate-500">{accountName(accounts.find(account => account.id === campaign.channel_account_id))} · {nameOf(templates, campaign.template_id)} · {nameOf(segments, campaign.segment_id)}{campaign.scheduled_at && campaign.status === 'scheduled' ? ` · ${new Date(campaign.scheduled_at).toLocaleString('pt-BR')}` : ''}</p></div>
-                {canManage && campaign.status === 'draft' && <>{editButton(campaign.name, () => setEditor({ kind: 'campaign', id: campaign.id, name: campaign.name, accountId: campaign.channel_account_id, templateId: campaign.template_id, segmentId: campaign.segment_id }))}<button type="button" className={small} disabled={saving} onClick={() => setEditor({ kind: 'schedule', id: campaign.id, name: campaign.name, at: localNow() })}>Agendar</button></>}
+                  <p className="truncate text-xs text-slate-500">{accountName(accounts.find(account => account.id === campaign.channel_account_id))} · {nameOf(templates, campaign.template_id)} · {campaign.list_id ? `lista ${nameOf(lists, campaign.list_id)}` : nameOf(segments, campaign.segment_id ?? '')}{campaign.audio_path ? ' · com áudio' : ''}{campaign.scheduled_at && campaign.status === 'scheduled' ? ` · ${new Date(campaign.scheduled_at).toLocaleString('pt-BR')}` : ''}</p></div>
+                {canManage && campaign.status === 'draft' && <>{editButton(campaign.name, () => setEditor({ kind: 'campaign', id: campaign.id, name: campaign.name, accountId: campaign.channel_account_id, templateId: campaign.template_id, target: campaign.list_id ? 'list' : 'segment', segmentId: campaign.segment_id ?? '', listId: campaign.list_id ?? '', audioPath: campaign.audio_path ?? '', uploading: false }))}<button type="button" className={`${small} border-emerald-500/40 text-emerald-200`} disabled={saving} onClick={() => sendNow(campaign)}>Enviar agora</button><button type="button" className={small} disabled={saving} onClick={() => setEditor({ kind: 'schedule', id: campaign.id, name: campaign.name, at: localNow() })}>Agendar</button></>}
                 {canManage && campaign.status === 'scheduled' && <button type="button" className={small} disabled={saving} onClick={() => setStatus(campaign, 'draft')}>Voltar a rascunho</button>}
                 {canManage && (campaign.status === 'draft' || campaign.status === 'scheduled') && <button type="button" className={`${small} text-red-300`} disabled={saving} onClick={() => setStatus(campaign, 'cancelled')}>Cancelar</button>}
               </div>
               {campaign.status === 'enqueued' && m && <dl className="mt-2 grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-6">{([['Contatos', campaign.recipient_count], ['Na fila', m.queued], ['Enviadas', m.sent], ['Entregues', m.delivered], ['Lidas', m.read], ['Falhas', m.failed + m.opted_out]] as [string, number][]).map(([name, value]) => <div key={name} className="rounded-lg bg-white/[.03] px-2 py-1.5"><dt className="text-slate-500">{name}</dt><dd className="font-bold tabular-nums">{value}</dd></div>)}</dl>}
             </div>
           }) : empty('Nenhuma campanha. Crie um template e um segmento antes da primeira campanha.'))
-          : tab === 'templates' ? (templates.length ? templates.map(template => <div key={template.id} className="flex items-start gap-3 border-b border-white/[.06] px-4 py-3 last:border-0"><div className="min-w-0 flex-1"><b className="text-sm">{template.name}</b>{inactive(template.active)}<span className="ml-2 text-[11px] text-slate-500">{CHANNELS[template.channel]}{template.whatsapp_template_name ? ` · ${template.whatsapp_template_name}` : ''}</span>{template.trigger_event && <span className="ml-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">recuperação de carrinho</span>}<p className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-xs text-slate-500">{template.body}</p></div>{canManage && editButton(template.name, () => setEditor({ kind: 'template', id: template.id, name: template.name, channel: template.channel, subject: template.subject ?? '', body: template.body, variables: template.variables, waName: template.whatsapp_template_name ?? '', language: template.language, recovery: template.trigger_event === 'checkout_abandoned', active: template.active }))}</div>) : empty('Nenhum template. No WhatsApp, use o nome de um template já aprovado na Infobip.'))
+          : tab === 'templates' ? (templates.length ? templates.map(template => <div key={template.id} className="flex items-start gap-3 border-b border-white/[.06] px-4 py-3 last:border-0"><div className="min-w-0 flex-1"><b className="text-sm">{template.name}</b>{inactive(template.active)}<span className="ml-2 text-[11px] text-slate-500">{CHANNELS[template.channel]}{template.whatsapp_template_name ? ` · ${template.whatsapp_template_name}` : ''}</span>{template.trigger_event && <span className="ml-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">{template.trigger_event === 'payment_pending' ? 'pagamento pendente' : 'recuperação de carrinho'}</span>}<p className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-xs text-slate-500">{template.body}</p></div>{canManage && editButton(template.name, () => setEditor({ kind: 'template', id: template.id, name: template.name, channel: template.channel, subject: template.subject ?? '', body: template.body, variables: template.variables, waName: template.whatsapp_template_name ?? '', language: template.language, recovery: template.trigger_event !== null, active: template.active }))}</div>) : empty('Nenhum template ainda.'))
           : segments.length ? segments.map(segment => <div key={segment.id} className="flex items-center gap-3 border-b border-white/[.06] px-4 py-3 last:border-0"><div className="min-w-0 flex-1"><b className="text-sm">{segment.name}</b>{inactive(segment.active)}<p className="truncate text-xs text-slate-500">{[segment.definition.tag_ids?.length ? `etiquetas: ${segment.definition.tag_ids.map(id => nameOf(tags, id)).join(', ')}` : '', segment.definition.checkout_status?.length ? `checkout: ${segment.definition.checkout_status.map(s => CHECKOUT[s] ?? s).join(', ')}` : '', segment.definition.last_activity_days ? `ativos nos últimos ${segment.definition.last_activity_days} dias` : ''].filter(Boolean).join(' · ') || 'todos os contatos'}</p></div>{canManage && editButton(segment.name, () => setEditor({ kind: 'segment', id: segment.id, name: segment.name, description: segment.description ?? '', tagIds: segment.definition.tag_ids ?? [], checkout: segment.definition.checkout_status ?? [], days: segment.definition.last_activity_days ? String(segment.definition.last_activity_days) : '', active: segment.active }))}</div>) : empty('Nenhum segmento. Segmentos filtram contatos por etiqueta, situação do checkout e atividade recente.')}
       </section>
     </div>
@@ -184,20 +211,32 @@ export default function CrmCampanhasPage() {
             <label className="block space-y-1"><span className={label}>Nome</span><input value={editor.name} maxLength={120} onChange={event => setEditor({ ...editor, name: event.target.value })} className={input} /></label>
             <label className="block space-y-1"><span className={label}>Conta de envio</span><select value={editor.accountId} onChange={event => setEditor({ ...editor, accountId: event.target.value, templateId: '' })} className={`${input} bg-[#0b100e]`}><option value="">Selecione</option>{accounts.filter(account => account.status === 'active').map(account => <option key={account.id} value={account.id}>{accountName(account)}</option>)}</select></label>
             <label className="block space-y-1"><span className={label}>Template</span><select value={editor.templateId} disabled={!campaignChannel} onChange={event => setEditor({ ...editor, templateId: event.target.value })} className={`${input} bg-[#0b100e]`}><option value="">Selecione</option>{templates.filter(template => template.active && template.channel === campaignChannel).map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
-            <label className="block space-y-1"><span className={label}>Segmento</span><select value={editor.segmentId} onChange={event => setEditor({ ...editor, segmentId: event.target.value })} className={`${input} bg-[#0b100e]`}><option value="">Selecione</option>{segments.filter(segment => segment.active).map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select></label>
-            {audience !== null && <p className="text-xs text-slate-400"><b className="text-white">{audience}</b> contato(s) alcançáveis hoje neste canal, sem contar quem pediu para sair.</p>}
+            <fieldset className="space-y-1"><legend className={label}>Enviar para</legend>
+              <div className="flex gap-1.5">{([['list', 'Lista de clientes'], ['segment', 'Segmento']] as const).map(([id, name]) => <button key={id} type="button" aria-pressed={editor.target === id} onClick={() => setEditor({ ...editor, target: id })} className={`rounded-full border px-3 py-1 text-xs ${editor.target === id ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-white/10 text-slate-400'}`}>{name}</button>)}</div>
+            </fieldset>
+            {editor.target === 'list'
+              ? <label className="block space-y-1"><span className={label}>Lista</span><select value={editor.listId} onChange={event => setEditor({ ...editor, listId: event.target.value })} className={`${input} bg-[#0b100e]`}><option value="">Selecione</option>{lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}</select>{!lists.length && <span className="block text-[11px] text-slate-500">Monte uma lista em Clientes: selecione os clientes e use &quot;Adicionar à lista&quot;.</span>}</label>
+              : <label className="block space-y-1"><span className={label}>Segmento</span><select value={editor.segmentId} onChange={event => setEditor({ ...editor, segmentId: event.target.value })} className={`${input} bg-[#0b100e]`}><option value="">Selecione</option>{segments.filter(segment => segment.active).map(segment => <option key={segment.id} value={segment.id}>{segment.name}</option>)}</select></label>}
+            {campaignChannel === 'whatsapp' && <div className="space-y-1"><span className={label}>Áudio (opcional, enviado antes do texto)</span>
+              {campaignAccount?.provider === 'infobip'
+                ? <p className="text-[11px] text-amber-300">A Infobip não entrega áudio em campanhas (fora da janela de 24h só template aprovado). Use o Baileys para enviar áudio.</p>
+                : editor.audioPath
+                  ? <div className="flex items-center gap-2 text-xs text-slate-300"><Mic size={14} className="text-emerald-400" /> {editor.audioPath.split('/').pop()}<button type="button" onClick={() => setEditor({ ...editor, audioPath: '' })} className="text-slate-500 hover:text-white">remover</button></div>
+                  : <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/15 px-3 py-2.5 text-xs text-slate-400 hover:border-emerald-500/40">{editor.uploading ? <Loader2 size={14} className="animate-spin" /> : <Mic size={14} />} {editor.uploading ? 'Enviando…' : 'Escolher arquivo (.ogg vira mensagem de voz; .mp3/.m4a vão como áudio)'}<input type="file" accept="audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/webm,.ogg,.opus,.mp3,.m4a" className="sr-only" disabled={editor.uploading} onChange={event => { const file = event.target.files?.[0]; if (file) void uploadAudio(file) }} /></label>}
+            </div>}
+            {audience !== null && <p className="text-xs text-slate-400"><b className="text-white">{audience}</b> contato(s) alcançáveis hoje neste canal, sem contar quem pediu para sair.{campaignChannel === 'whatsapp' && audience > 1 ? ` Os envios saem com 20 a 60 s de intervalo (cerca de ${Math.ceil(audience * 40 / 60)} min no total).` : ''}</p>}
           </>}
           {editor.kind === 'template' && <>
             <label className="block space-y-1"><span className={label}>Nome</span><input value={editor.name} maxLength={80} onChange={event => setEditor({ ...editor, name: event.target.value })} className={input} /></label>
             <label className="block space-y-1"><span className={label}>Canal</span><select value={editor.channel} onChange={event => setEditor({ ...editor, channel: event.target.value as Channel })} className={`${input} bg-[#0b100e]`}>{Object.entries(CHANNELS).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
-            {editor.channel === 'whatsapp' && <div className="grid grid-cols-[1fr_7rem] gap-2"><label className="block space-y-1"><span className={label}>Template aprovado (Infobip)</span><input value={editor.waName} placeholder="carrinho_abandonado" onChange={event => setEditor({ ...editor, waName: event.target.value.toLowerCase() })} className={input} /></label><label className="block space-y-1"><span className={label}>Idioma</span><input value={editor.language} onChange={event => setEditor({ ...editor, language: event.target.value })} className={input} /></label></div>}
+            {editor.channel === 'whatsapp' && <div className="grid grid-cols-[1fr_7rem] gap-2"><label className="block space-y-1"><span className={label}>Template aprovado (só Infobip, opcional)</span><input value={editor.waName} placeholder="carrinho_abandonado" onChange={event => setEditor({ ...editor, waName: event.target.value.toLowerCase() })} className={input} /></label><label className="block space-y-1"><span className={label}>Idioma</span><input value={editor.language} onChange={event => setEditor({ ...editor, language: event.target.value })} className={input} /></label></div>}
             {editor.channel === 'email' && <label className="block space-y-1"><span className={label}>Assunto</span><input value={editor.subject} maxLength={200} onChange={event => setEditor({ ...editor, subject: event.target.value })} className={input} /></label>}
-            <label className="block space-y-1"><span className={label}>{editor.channel === 'whatsapp' ? 'Texto (cópia do template, para o histórico)' : 'Texto'}</span><textarea value={editor.body} maxLength={4000} rows={5} onChange={event => setEditor({ ...editor, body: event.target.value })} className="w-full rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-sm outline-none focus:border-emerald-500/40" /></label>
+            <label className="block space-y-1"><span className={label}>Texto</span><textarea value={editor.body} maxLength={4000} rows={5} onChange={event => setEditor({ ...editor, body: event.target.value })} className="w-full rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-sm outline-none focus:border-emerald-500/40" /></label>
             <fieldset className="space-y-1"><legend className={label}>Variáveis, na ordem {'{{1}}'}, {'{{2}}'}…</legend>
               <div className="flex flex-wrap gap-1.5">{Object.entries(VARIABLES).map(([key, name]) => { const position = editor.variables.indexOf(key); return <button key={key} type="button" aria-pressed={position >= 0} onClick={() => setEditor({ ...editor, variables: toggle(editor.variables, key) })} className={`rounded-full border px-2.5 py-1 text-xs ${position >= 0 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-white/10 text-slate-400'}`}>{position >= 0 ? `{{${position + 1}}} ` : ''}{name}</button> })}</div>
-              <p className="text-[11px] text-slate-500">Em campanhas só nome, e-mail e telefone são conhecidos; link, valor e produto vêm dos gatilhos de checkout.</p>
+              <p className="text-[11px] text-slate-500">Link, valor e produto vêm do último checkout do contato. Para um link fixo, escreva-o direto no texto.</p>
             </fieldset>
-            <label className="flex items-center gap-3"><input type="checkbox" checked={editor.recovery} onChange={event => setEditor({ ...editor, recovery: event.target.checked })} className="accent-emerald-500" /><span className="text-sm">Usar na recuperação de carrinho abandonado <span className="block text-xs text-slate-500">Um template ativo por canal. Sem ele, a recuperação usa o texto padrão.</span></span></label>
+            <label className="flex items-center gap-3"><input type="checkbox" checked={editor.recovery} onChange={event => setEditor({ ...editor, recovery: event.target.checked })} className="accent-emerald-500" /><span className="text-sm">{editor.channel === 'whatsapp' ? 'Usar na mensagem de pagamento pendente (após 5 min)' : 'Usar na recuperação de carrinho abandonado'} <span className="block text-xs text-slate-500">Um template ativo por canal. Sem ele, é usado o texto padrão. Na Infobip, fora da janela de 24h só template aprovado é entregue.</span></span></label>
           </>}
           {editor.kind === 'segment' && <>
             <label className="block space-y-1"><span className={label}>Nome</span><input value={editor.name} maxLength={80} onChange={event => setEditor({ ...editor, name: event.target.value })} className={input} /></label>

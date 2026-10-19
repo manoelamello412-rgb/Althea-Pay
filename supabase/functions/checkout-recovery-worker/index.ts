@@ -17,6 +17,7 @@ type RecoveryJob = {
   checkout_metadata: Json | null;
   recovery_count: number;
   event_attempt_count: number;
+  event_type: string;
 };
 type Account = {
   id: string;
@@ -122,10 +123,16 @@ function recoveryUrl(job: RecoveryJob): string {
   );
 }
 
+const isPaymentPending = (job: RecoveryJob) => job.event_type === "payment_pending";
+
 function messageBody(job: RecoveryJob, customer: Json): string {
   const name = nameOf(customer);
   const url = recoveryUrl(job);
   const greeting = name ? `Olá, ${name}.` : "Olá.";
+  if (isPaymentPending(job)) {
+    const base = `${greeting} Seu pagamento ainda está pendente. Se precisar de ajuda para concluir, é só responder esta mensagem.`;
+    return url ? `${base} Para finalizar: ${url}` : base;
+  }
   const base = `${greeting} Vimos que sua compra não foi concluída. Se você quiser retomar de onde parou, podemos continuar por aqui.`;
   return url ? `${base} Link para retomar: ${url}` : base;
 }
@@ -175,8 +182,12 @@ function chooseChannel(job: RecoveryJob, accounts: Account[]): {
   const phone = phoneOf(customer);
   const email = emailOf(customer);
   const destinations: Record<string, string> = { whatsapp: phone, sms: phone, email };
-  const priority = ["whatsapp", "email", "sms"] as const;
-  const consentedChannels = priority.filter((channel) => channelConsent(customer, metadata, channel));
+  // WhatsApp's only automatic message is the pending-payment nudge. It is transactional (the buyer
+  // gave the number for this purchase), so it skips marketing consent; opt-outs are still enforced
+  // by the outbox dispatcher. Abandoned-cart recovery stays on e-mail/SMS with explicit consent.
+  const consentedChannels: ("whatsapp" | "email" | "sms")[] = isPaymentPending(job)
+    ? ["whatsapp"]
+    : (["email", "sms"] as const).filter((channel) => channelConsent(customer, metadata, channel));
   const missingDestinationChannels: string[] = [];
 
   for (const channel of consentedChannels) {
@@ -329,8 +340,8 @@ async function ensureIdentity(job: RecoveryJob, conversationId: string, selectio
   if (result.error) throw result.error;
 }
 
-// The organization's active checkout_abandoned template wins over the built-in text; on WhatsApp
-// it is the only way to reach the buyer outside the 24h window.
+// The organization's active template for this trigger (checkout_abandoned or payment_pending) wins
+// over the built-in text.
 async function recoveryMessage(job: RecoveryJob, selection: Selection): Promise<{ body: string; metadata: Json }> {
   const customer = objectOf(job.customer);
   const found = await db
@@ -338,7 +349,7 @@ async function recoveryMessage(job: RecoveryJob, selection: Selection): Promise<
     .select("body,subject,variables,whatsapp_template_name,language")
     .eq("organization_id", job.organization_id)
     .eq("channel", selection.channel)
-    .eq("trigger_event", "checkout_abandoned")
+    .eq("trigger_event", isPaymentPending(job) ? "payment_pending" : "checkout_abandoned")
     .eq("active", true)
     .maybeSingle();
   if (found.error) throw found.error;
@@ -357,7 +368,9 @@ async function recoveryMessage(job: RecoveryJob, selection: Selection): Promise<
 
 async function enqueueOutbox(job: RecoveryJob, conversationId: string, selection: Selection): Promise<string> {
   const attempt = Number(job.recovery_count ?? 0) + 1;
-  const idempotencyKey = `checkout-recovery:${job.checkout_id}:${attempt}:${selection.channel}`;
+  const idempotencyKey = isPaymentPending(job)
+    ? `payment-pending:${job.checkout_id}:${selection.channel}`
+    : `checkout-recovery:${job.checkout_id}:${attempt}:${selection.channel}`;
   const message = await recoveryMessage(job, selection);
   const body = message.body;
 
@@ -373,7 +386,7 @@ async function enqueueOutbox(job: RecoveryJob, conversationId: string, selection
       status: "queued",
       metadata: {
         ...message.metadata,
-        source: "checkout_recovery",
+        source: isPaymentPending(job) ? "payment_pending" : "checkout_recovery",
         recovery_event_id: job.event_id,
         recovery_checkout_id: job.checkout_id,
         recovery_attempt: attempt,

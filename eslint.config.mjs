@@ -14,7 +14,7 @@ const legacyClientSyncRules = {
 export default defineConfig([
   ...nextVitals,
   { rules: legacyClientSyncRules },
-  globalIgnores(['.next/**', 'node_modules/**', 'coverage/**', 'supabase/functions/**']),
+  globalIgnores(['.next/**', 'node_modules/**', 'coverage/**', 'supabase/functions/**', 'whatsapp-bridge/**']),
   {
     files: [
       'app/dashboard/crm/page.tsx', 'app/page.tsx', 'app/reset-password/page.tsx',

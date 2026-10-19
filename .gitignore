@@ -8,3 +8,5 @@ coverage/
 .DS_Store
 *.log
 supabase/.temp/
+whatsapp-auth/
+tsconfig.tsbuildinfo

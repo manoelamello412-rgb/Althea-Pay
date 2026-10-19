@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { audioMimetype, bridgeSendRequest, whatsappNumber } from "../_shared/whatsapp.ts";
 import { infobipMessageId, infobipRequest, parseTemplate } from "../_shared/infobip.ts";
 import { signUnsubscribe } from "../_shared/remarketing.ts";
 
@@ -63,8 +64,13 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const adminKey = adminKeyFromEnv();
 const db = createClient(supabaseUrl, adminKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
-function credentials(account: Account): Json {
-  if (!account.credentials_ref) return {};
+// Legacy accounts name an env secret in credentials_ref; accounts configured in the panel keep it in Vault.
+async function credentials(account: Account): Promise<Json> {
+  if (!account.credentials_ref) {
+    const stored = await db.rpc("crm_channel_account_credentials", { p_account_id: account.id });
+    if (stored.error) throw stored.error;
+    return isObject(stored.data) ? stored.data : {};
+  }
   const raw = Deno.env.get(account.credentials_ref);
   if (!raw) throw new Error("provider_credentials_not_configured");
   try {
@@ -103,9 +109,37 @@ async function responseJson(response: Response): Promise<Json> {
   return isObject(payload) ? payload : {};
 }
 
-// WhatsApp goes through Infobip only; Meta stays for Instagram and Messenger.
+// WhatsApp uses the provider chosen for the organization's single WhatsApp account (CRM > Configurações > WhatsApp):
+// the Baileys bridge (one session per account) or Infobip. Meta stays for Instagram and Messenger.
+async function sendWhatsapp(account: Account, identity: Identity, row: Outbox): Promise<DeliveryResult> {
+  const baseUrl = text(Deno.env.get("WHATSAPP_BRIDGE_URL"));
+  const token = text(Deno.env.get("WHATSAPP_BRIDGE_TOKEN"));
+  if (!baseUrl || !token) throw new Error("whatsapp_bridge_not_configured");
+  // Campaign audio goes before the text. ponytail: a retry after the text fails resends the audio too.
+  const audioPath = text(row.metadata?.audio_path);
+  let audio: { url: string; mimetype: string } | null = null;
+  if (audioPath) {
+    const signed = await db.storage.from("crm-campaign-media").createSignedUrl(audioPath, 900);
+    if (signed.error || !signed.data?.signedUrl) throw new Error("campaign_audio_not_found");
+    audio = { url: signed.data.signedUrl, mimetype: audioMimetype(audioPath) };
+  }
+  const { url, init } = bridgeSendRequest({
+    baseUrl,
+    token,
+    accountId: account.id,
+    to: identity.phone_e164 || identity.external_user_id || "",
+    body: row.body,
+    audio,
+  });
+  const payload = await responseJson(await fetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(30_000) }));
+  return { externalId: text(payload.id), provider: account.provider };
+}
+
+// Infobip (official API). Outside the 24h window WhatsApp only accepts approved templates.
 async function sendInfobip(account: Account, identity: Identity, row: Outbox): Promise<DeliveryResult> {
-  const credential = credentials(account);
+  // Outside the 24h window Infobip only takes approved templates, so campaign audio is Baileys-only.
+  if (text(row.metadata?.audio_path)) throw new Error("whatsapp_audio_unsupported");
+  const credential = await credentials(account);
   const apiKey = text(credential.api_key ?? credential.access_token);
   const baseUrl = text(credential.base_url ?? meta(account, "base_url"));
   if (!apiKey || !baseUrl) throw new Error("infobip_configuration_missing");
@@ -117,7 +151,7 @@ async function sendInfobip(account: Account, identity: Identity, row: Outbox): P
     baseUrl,
     apiKey,
     from: String(meta(account, "from_number", account.external_account_id || "")),
-    to: identity.phone_e164 || identity.external_user_id || "",
+    to: whatsappNumber(identity.phone_e164 || identity.external_user_id || ""),
     messageId: row.id,
     body: row.body,
     template: parseTemplate(row.metadata),
@@ -128,7 +162,7 @@ async function sendInfobip(account: Account, identity: Identity, row: Outbox): P
 }
 
 async function sendMeta(account: Account, identity: Identity, body: string): Promise<DeliveryResult> {
-  const credential = credentials(account);
+  const credential = await credentials(account);
   const token = text(credential.access_token ?? credential.token);
   if (!token) throw new Error("meta_access_token_missing");
   const base = "https://graph.facebook.com/" + String(meta(account, "graph_version", "v23.0"));
@@ -157,7 +191,7 @@ async function unsubscribeExtras(row: Outbox, address: string) {
 }
 
 async function sendResend(account: Account, identity: Identity, row: Outbox): Promise<DeliveryResult> {
-  const credential = credentials(account);
+  const credential = await credentials(account);
   const token = text(credential.api_key ?? credential.access_token ?? credential.token);
   const from = String(meta(account, "from_email", credential.from ?? ""));
   const to = identity.email;
@@ -174,7 +208,7 @@ async function sendResend(account: Account, identity: Identity, row: Outbox): Pr
 }
 
 async function sendTwilio(account: Account, identity: Identity, body: string): Promise<DeliveryResult> {
-  const credential = credentials(account);
+  const credential = await credentials(account);
   const sid = String(credential.account_sid ?? account.external_account_id ?? "");
   const auth = String(credential.auth_token ?? "");
   const from = String(meta(account, "from_number", credential.from ?? ""));
@@ -271,6 +305,7 @@ async function deliver(row: Outbox, account: Account | null, identity: Identity 
   if (!identity) throw new Error("channel_identity_not_found");
 
   const provider = account.provider.toLowerCase();
+  if (provider === "baileys" && account.channel === "whatsapp") return sendWhatsapp(account, identity, row);
   if (provider === "infobip" && account.channel === "whatsapp") return sendInfobip(account, identity, row);
   if (["meta_instagram", "instagram", "meta_messenger", "messenger"].includes(provider)) {
     return sendMeta(account, identity, row.body);
@@ -466,6 +501,10 @@ Deno.serve(async (request) => {
           "infobip_configuration_missing",
           "infobip_base_url_invalid",
           "whatsapp_template_invalid",
+          "whatsapp_bridge_not_configured",
+          "whatsapp_audio_unsupported",
+          "campaign_audio_not_found",
+          "whatsapp_bridge_url_invalid",
           "recipient_opted_out",
           "unsubscribe_secret_missing",
           "whatsapp_destination_missing",

@@ -82,7 +82,7 @@ describe('campaign migration', () => {
 
 describe('triggers and screen', () => {
   it('uses the organization template for cart recovery and automation sends', () => {
-    expect(recovery).toContain('.eq("trigger_event", "checkout_abandoned")')
+    expect(recovery).toContain('.eq("trigger_event", isPaymentPending(job) ? "payment_pending" : "checkout_abandoned")')
     expect(recovery).toContain('...message.metadata,')
     expect(automation).toContain('.eq("organization_id",rule.organization_id)')
     expect(automation).toContain('metadata:{...templateMeta,automation_rule_id:rule.id,automated:true}')

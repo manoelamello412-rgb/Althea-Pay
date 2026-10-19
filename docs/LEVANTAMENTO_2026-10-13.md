@@ -76,6 +76,7 @@ O backend está bem mais avançado que o frontend. Ingestão de eventos por funi
 ## Decisões pendentes
 
 - ~~**Fonte de WhatsApp**~~ — **decidido (2026-10-13): Infobip substitui o Meta WhatsApp Cloud.** O adapter Meta sai do dispatcher; o WhatsApp passa a ser só Infobip, atrás do mesmo outbox.
+- **Atualização (2026-10-14):** o WhatsApp agora usa Baileys (QR, como o Bellevo, via `whatsapp-bridge/`) **ou** Infobip, escolhido pela organização em CRM › Configurações › WhatsApp. A única mensagem automática é a de pagamento pendente há mais de 5 minutos.
 - ~~**Regra de merge de cliente**~~ — **decidido (2026-10-13): anexa identidade.** Se o evento casa com um cliente existente por qualquer identidade, as identidades novas são anexadas a ele. Se identidades diferentes apontarem para clientes diferentes, nada é juntado automaticamente: o caso vira candidato a merge para revisão humana.
 
 ## Requisitos adicionados depois do levantamento

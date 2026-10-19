@@ -4,7 +4,8 @@ import { parseInfobipWebhook } from "../_shared/infobip.ts";
 
 // Configure in Infobip (inbound messages + delivery/seen reports):
 //   <SUPABASE_URL>/functions/v1/crm-channel-infobip-webhook?account=<crm_channel_accounts.id>&token=<webhook_token>
-// webhook_token lives in the account credentials (credentials_ref env JSON). Infobip does not sign
+// webhook_token lives in the account credentials (Vault when configured in CRM > Configurações > WhatsApp,
+// or the legacy credentials_ref env JSON). Infobip does not sign
 // webhooks, so the per-account token in the URL is the authenticator.
 
 type Account = { id: string; user_id: string; provider: string; channel: string; status: string; credentials_ref: string | null };
@@ -13,8 +14,12 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
-function webhookToken(account: Account): string {
-  const raw = account.credentials_ref ? Deno.env.get(account.credentials_ref) : undefined;
+async function webhookToken(account: Account): Promise<string> {
+  if (!account.credentials_ref) {
+    const { data } = await db.rpc("crm_channel_account_credentials", { p_account_id: account.id });
+    return typeof data?.webhook_token === "string" ? data.webhook_token : "";
+  }
+  const raw = Deno.env.get(account.credentials_ref);
   if (!raw) return "";
   try {
     const parsed = JSON.parse(raw);
@@ -46,7 +51,7 @@ Deno.serve(async (req) => {
       .eq("id", accountId)
       .maybeSingle<Account>();
     if (error) throw error;
-    const expected = account ? webhookToken(account) : "";
+    const expected = account ? await webhookToken(account) : "";
     if (!account || account.provider !== "infobip" || !expected || !safeEqual(token, expected)) {
       return json({ error: "unauthorized" }, 401);
     }

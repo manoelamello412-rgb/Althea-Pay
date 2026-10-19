@@ -75,8 +75,8 @@ async function afiliaxpay(operation:Operation,b:O,c:O,gid:string){
   if(operation==="health_check")return out({ok:true,status:"approved",provider_status:first(p,["status"],"healthy")});
   if(operation!=="create_payment"){const ps=first(p,["status"],"");return out({ok:true,id:external,external_id:external,status:norm(ps,AFILIAX_STATUS),provider_status:ps,amount:Number(b.amount??0),currency:"BRL"})}
   const id=first(p,["idTransaction"]);if(!id)return out({ok:false,error:"provider_transaction_id_missing"},502);
-  // A API devolve "base64data:image/png;base64,..." — normaliza para data URI válida.
-  const img=first(p,["qr_code_image_url"]),di=img.indexOf("data:image/"),qr=di>=0?img.slice(di):img?`data:image/png;base64,${img.replace(/^base64/,"")}`:"";
+  // A API devolve "base64data:image/png;base64,..." — normaliza para data URI válida; URL https (ex.: quickchart) passa direto.
+  const img=first(p,["qr_code_image_url"]),di=img.indexOf("data:image/"),qr=di>=0?img.slice(di):/^https:\/\//i.test(img)?img:img?`data:image/png;base64,${img.replace(/^base64/,"")}`:"";
   return out({ok:true,id,external_id:id,status:"pending",provider_status:"pendente",amount:Number(b.amount??0),currency:"BRL",action_type:"pix",qr_code:qr||null,copy_paste:first(p,["qrcode"])||null});
 }
 

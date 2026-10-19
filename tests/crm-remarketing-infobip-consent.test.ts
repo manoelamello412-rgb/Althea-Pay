@@ -51,7 +51,7 @@ describe('Infobip WhatsApp adapter', () => {
 })
 
 describe('dispatcher routing and consent', () => {
-  it('routes WhatsApp only through Infobip', () => {
+  it('routes WhatsApp through Infobip or Baileys, never Meta', () => {
     expect(dispatcher).toContain('provider === "infobip" && account.channel === "whatsapp"')
     expect(dispatcher).not.toContain('"meta_whatsapp"')
     expect(dispatcher).not.toContain('messaging_product: "whatsapp"')

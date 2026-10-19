@@ -25,7 +25,7 @@ verify_jwt = false
 [functions.crm-channel-delivery-webhook]
 verify_jwt = false
 
-[functions.crm-channel-infobip-webhook]
+[functions.crm-channel-whatsapp-webhook]
 verify_jwt = false
 
 [functions.crm-channel-inbound-webhook]
@@ -144,4 +144,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.checkout-recovery-worker]
+verify_jwt = false
+
+[functions.crm-channel-infobip-webhook]
 verify_jwt = false

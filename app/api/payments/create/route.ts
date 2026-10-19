@@ -67,14 +67,23 @@ export async function POST(request: Request) {
     if (transactionError || !transaction) { console.error('[ALTHEA-PAYMENTS-CREATE]', transactionError); return NextResponse.json({ ok: false, code: safeErrorCode(transactionError) }, { status: 500 }) }
 
     if (TERMINAL_TRANSACTION_STATES.has(text(transaction.status))) return NextResponse.json({ ok: true, transaction: { id: transaction.id, status: transaction.status, amount: transaction.amount, currency: transaction.currency, gateway_id: transaction.gateway_id }, next: 'complete' })
-    if (text(transaction.status) === 'pending') return NextResponse.json({ ok: true, transaction: { id: transaction.id, status: transaction.status, amount: transaction.amount, currency: transaction.currency, gateway_id: transaction.gateway_id }, next: 'awaiting_gateway' })
+    // Pending with an external id: the provider already holds the charge. Pending without one: the previous
+    // adapter call never produced a charge (timeout, adapter down), so the customer's retry calls it again.
+    const retryingAdapter = text(transaction.status) === 'pending' && !text(transaction.external_id) && text(transaction.gateway_id) === selectedGatewayId
+    if (text(transaction.status) === 'pending' && !retryingAdapter) return NextResponse.json({ ok: true, transaction: { id: transaction.id, status: transaction.status, amount: transaction.amount, currency: transaction.currency, gateway_id: transaction.gateway_id }, next: 'awaiting_gateway' })
+    // <payment>:<gateway> like the orchestrator: guard_gateway_ambiguous_failover groups attempts by the part before the first ':'.
+    const attemptKey = `${idempotencyKey}:${selectedGatewayId}` + (retryingAdapter ? `:${crypto.randomUUID()}` : '')
 
-    const expectedVersion = Number(transaction.version)
-    const { data: boundTransaction, error: bindError } = await admin.rpc('bind_gateway_transaction_gateway', { p_transaction_id: transaction.id, p_user_id: session.user_id, p_gateway_id: selectedGatewayId, p_expected_version: Number.isFinite(expectedVersion) ? expectedVersion : null })
-    if (bindError || !boundTransaction) { console.error('[ALTHEA-PAYMENTS-BIND]', bindError); return NextResponse.json({ ok: false, code: 'GATEWAY_BIND_FAILED' }, { status: 409 }) }
+    let pendingTransaction = transaction
+    if (!retryingAdapter) {
+      const expectedVersion = Number(transaction.version)
+      const { data: boundTransaction, error: bindError } = await admin.rpc('bind_gateway_transaction_gateway', { p_transaction_id: transaction.id, p_user_id: session.user_id, p_gateway_id: selectedGatewayId, p_expected_version: Number.isFinite(expectedVersion) ? expectedVersion : null })
+      if (bindError || !boundTransaction) { console.error('[ALTHEA-PAYMENTS-BIND]', bindError); return NextResponse.json({ ok: false, code: 'GATEWAY_BIND_FAILED' }, { status: 409 }) }
 
-    const { data: pendingTransaction, error: pendingError } = await admin.rpc('transition_gateway_transaction_status', { p_transaction_id: boundTransaction.id, p_user_id: session.user_id, p_next_status: 'pending', p_failure_code: null, p_external_id: null, p_expected_version: Number(boundTransaction.version) })
-    if (pendingError || !pendingTransaction) { console.error('[ALTHEA-PAYMENTS-PENDING]', pendingError); return NextResponse.json({ ok: false, code: 'PAYMENT_STATE_UPDATE_FAILED' }, { status: 500 }) }
+      const { data: pending, error: pendingError } = await admin.rpc('transition_gateway_transaction_status', { p_transaction_id: boundTransaction.id, p_user_id: session.user_id, p_next_status: 'pending', p_failure_code: null, p_external_id: null, p_expected_version: Number(boundTransaction.version) })
+      if (pendingError || !pending) { console.error('[ALTHEA-PAYMENTS-PENDING]', pendingError); return NextResponse.json({ ok: false, code: 'PAYMENT_STATE_UPDATE_FAILED' }, { status: 500 }) }
+      pendingTransaction = pending
+    }
 
     const internalSecret = text(process.env.ALTHEA_INTERNAL_SECRET); const supabaseUrl = text(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)
     if (!internalSecret || !supabaseUrl) { console.error('[ALTHEA-PAYMENTS-CONFIG] gateway execution secret/url is not configured'); return NextResponse.json({ ok: false, code: 'PAYMENT_PROCESSOR_NOT_CONFIGURED' }, { status: 503 }) }
@@ -86,7 +95,7 @@ export async function POST(request: Request) {
       adapterResponse = await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/gateway-provider-adapter`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-althea-internal-secret': internalSecret, 'x-althea-gateway-id': selectedGatewayId }, body: JSON.stringify(adapterPayload), signal: controller.signal, cache: 'no-store' })
     } catch (error) {
       clearTimeout(timeout); console.error('[ALTHEA-PAYMENTS-ADAPTER]', error)
-      const { error: attemptError } = await admin.rpc('allocate_and_insert_gateway_payment_attempt', { p_user_id: session.user_id, p_transaction_id: pendingTransaction.id, p_gateway_id: selectedGatewayId, p_gateway_name: selectedGatewayId, p_idempotency_key: `attempt:${idempotencyKey}`, p_status: 'unknown', p_failure_class: 'timeout', p_external_transaction_id: null, p_routing_rule_id: null, p_routing_policy_id: null, p_routing_policy_version: null, p_decision_reason: 'funnel_primary_binding', p_provider_request_id: null, p_duration_ms: ADAPTER_TIMEOUT_MS, p_sale_id: null, p_product_id: session.product_id })
+      const { error: attemptError } = await admin.rpc('allocate_and_insert_gateway_payment_attempt', { p_user_id: session.user_id, p_transaction_id: pendingTransaction.id, p_gateway_id: selectedGatewayId, p_gateway_name: selectedGatewayId, p_idempotency_key: attemptKey, p_status: 'unknown', p_failure_class: 'timeout', p_external_transaction_id: null, p_routing_rule_id: null, p_routing_policy_id: null, p_routing_policy_version: null, p_decision_reason: 'funnel_primary_binding', p_provider_request_id: null, p_duration_ms: ADAPTER_TIMEOUT_MS, p_sale_id: null, p_product_id: session.product_id })
       if (attemptError) console.error('[ALTHEA-PAYMENTS-ATTEMPT]', attemptError)
       return NextResponse.json({ ok: false, code: 'GATEWAY_TIMEOUT', transaction_id: pendingTransaction.id }, { status: 504 })
     } finally { clearTimeout(timeout) }
@@ -97,7 +106,7 @@ export async function POST(request: Request) {
     let attemptStatus: 'approved' | 'declined' | 'pending' | 'processing' | 'unknown' = 'unknown'; let transactionStatus: 'approved' | 'failed' | 'pending' = 'pending'
     if (adapterResponse.ok && providerStatus === 'approved') { attemptStatus = 'approved'; transactionStatus = 'approved' } else if (adapterResponse.ok && providerStatus === 'pending') { attemptStatus = 'pending'; transactionStatus = 'pending' } else if (adapterResponse.status >= 400 && adapterResponse.status < 500) { attemptStatus = 'declined'; transactionStatus = 'failed' }
 
-    const { error: attemptError } = await admin.rpc('allocate_and_insert_gateway_payment_attempt', { p_user_id: session.user_id, p_transaction_id: pendingTransaction.id, p_gateway_id: selectedGatewayId, p_gateway_name: selectedGatewayId, p_idempotency_key: `attempt:${idempotencyKey}`, p_status: attemptStatus, p_failure_class: attemptStatus === 'declined' ? 'declined' : attemptStatus === 'unknown' ? 'technical' : null, p_external_transaction_id: providerExternalId || null, p_routing_rule_id: null, p_routing_policy_id: null, p_routing_policy_version: null, p_decision_reason: 'funnel_primary_binding', p_provider_request_id: providerRequestId || null, p_duration_ms: durationMs, p_sale_id: null, p_product_id: session.product_id })
+    const { error: attemptError } = await admin.rpc('allocate_and_insert_gateway_payment_attempt', { p_user_id: session.user_id, p_transaction_id: pendingTransaction.id, p_gateway_id: selectedGatewayId, p_gateway_name: selectedGatewayId, p_idempotency_key: attemptKey, p_status: attemptStatus, p_failure_class: attemptStatus === 'declined' ? 'declined' : attemptStatus === 'unknown' ? 'technical' : null, p_external_transaction_id: providerExternalId || null, p_routing_rule_id: null, p_routing_policy_id: null, p_routing_policy_version: null, p_decision_reason: 'funnel_primary_binding', p_provider_request_id: providerRequestId || null, p_duration_ms: durationMs, p_sale_id: null, p_product_id: session.product_id })
     if (attemptError) { console.error('[ALTHEA-PAYMENTS-ATTEMPT]', attemptError); return NextResponse.json({ ok: false, code: 'PAYMENT_ATTEMPT_PERSIST_FAILED', transaction_id: pendingTransaction.id }, { status: 500 }) }
 
     const { data: finalTransaction, error: transitionError } = await admin.rpc('transition_gateway_transaction_status', { p_transaction_id: pendingTransaction.id, p_user_id: session.user_id, p_next_status: transactionStatus, p_failure_code: attemptStatus === 'declined' || attemptStatus === 'unknown' ? text(adapterPayloadResult.failure_code ?? adapterPayloadResult.error) || 'GATEWAY_EXECUTION_PENDING_OR_FAILED' : null, p_external_id: providerExternalId || null, p_expected_version: Number(pendingTransaction.version) })
