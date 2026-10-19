@@ -23,14 +23,14 @@ export default function FunnelCommercialSelector({ value, onChange }: { value: F
       if (authError || !auth.user) throw new Error('Sessão expirada. Faça login novamente.')
       const [{ data: productRows, error: productError }, { data: gatewayRows, error: gatewayError }] = await Promise.all([
         db.from('products').select('id,name,unit_amount,currency,status').eq('status', 'active').is('deleted_at', null).order('name', { ascending: true }),
-        db.from('gateways').select('id,display_name,provider,environment,status').order('priority', { ascending: true }),
+        db.from('gateways').select('id,display_name,provider,environment,status').order('created_at', { ascending: true }),
       ])
       if (productError) throw productError
       if (gatewayError) throw gatewayError
       setProducts((productRows ?? []) as Product[])
       setGateways(((gatewayRows ?? []) as Gateway[]).filter((gateway) => ['connected', 'degraded'].includes(String(gateway.status ?? '').toLowerCase())))
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Não foi possível carregar produtos e gateways.')
+      setError(cause instanceof Error ? cause.message : 'Não foi possível carregar produtos e gateways.'); console.warn('[funnel-commercial]', cause)
     } finally { setLoading(false) }
   }
 
