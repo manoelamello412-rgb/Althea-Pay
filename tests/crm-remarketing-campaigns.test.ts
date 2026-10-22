@@ -93,3 +93,15 @@ describe('triggers and screen', () => {
     for (const fn of ['crm_campaign_save', 'crm_template_save', 'crm_segment_save', 'crm_campaign_set_status', 'crm_campaign_metrics']) expect(page).toContain(`'${fn}'`)
   })
 })
+
+describe('migration regexes', () => {
+  it('keep repetition counts within the Postgres limit of 255', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs')
+    const dir = 'supabase/migrations'
+    const latest = new Map<string, string>()
+    for (const file of readdirSync(dir).sort()) {
+      for (const [, name, re] of readFileSync(`${dir}/${file}`, 'utf8').matchAll(/(\w+) ~ '([^']*)'/g)) latest.set(name, re)
+    }
+    for (const [name, re] of latest) for (const [, a, b] of re.matchAll(/\{(\d+)(?:,(\d+))?\}/g)) expect(Number(b ?? a), name).toBeLessThanOrEqual(255)
+  })
+})
