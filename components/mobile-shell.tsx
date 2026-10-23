@@ -152,7 +152,7 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
   }
 
   return (
-    <div className="althea-ds min-h-screen bg-[var(--althea-bg)] text-white antialiased">
+    <div className="min-h-screen bg-[var(--althea-bg)] text-white antialiased">
       <header className="fixed inset-x-0 top-0 z-[100] h-14 border-b border-white/[0.05] bg-[rgba(2,2,3,0.94)] px-4 backdrop-blur-xl sm:px-5">
         <div className="mx-auto flex h-full w-full max-w-[1440px] items-center justify-between gap-3">
           <button type="button" onClick={() => selectTab('dashboard')} aria-label="Ir para o Dashboard" className="flex min-w-0 items-center gap-2.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
