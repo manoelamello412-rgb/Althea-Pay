@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import MobileShell, { type MobileShellTab } from '@/components/mobile-shell'
+import MobileShell, { attendantAllows, type MobileShellTab } from '@/components/mobile-shell'
 import { ConnectionStatus } from '@/components/connection-status'
 
 const routes: Record<MobileShellTab, string> = { dashboard: '/dashboard', vendas: '/dashboard/vendas', chat: '/dashboard/crm', ia: '/dashboard/ia', funil: '/dashboard/funil' }
@@ -19,15 +19,27 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const activeTab = tabFromPath(pathname)
+  // The database already denies attendants everything outside customer service; this keeps them off those screens.
+  const [attendant, setAttendant] = useState(false)
+  useEffect(() => {
+    let active = true
+    import('@/lib/supabase/client').then(async ({ createSupabaseBrowserClient }) => {
+      const db = createSupabaseBrowserClient()
+      const { data } = db ? await db.rpc('organization_my_access_v1', { p_organization_id: null }) : { data: null }
+      if (active) setAttendant((data as { role?: string } | null)?.role === 'attendant')
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [])
+  useEffect(() => { if (attendant && !attendantAllows(pathname)) router.replace('/dashboard/crm') }, [attendant, pathname, router])
   const selectTab = useCallback((tab: MobileShellTab) => {
     const route = routes[tab]
     if (route !== pathname) router.push(route)
   }, [pathname, router])
 
   return (
-    <MobileShell activeTab={activeTab} onTabChange={selectTab}>
+    <MobileShell activeTab={activeTab} onTabChange={selectTab} attendant={attendant}>
       <ConnectionStatus />
-      <div className="althea-page-content">{children}</div>
+      <div className="althea-page-content">{attendant && !attendantAllows(pathname) ? null : children}</div>
 
     </MobileShell>
   )

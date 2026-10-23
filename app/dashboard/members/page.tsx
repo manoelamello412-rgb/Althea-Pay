@@ -5,13 +5,13 @@ import { RefreshCw, ShieldCheck, Trash2, UserPlus, UsersRound } from 'lucide-rea
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-type MemberRole = 'owner' | 'admin' | 'manager' | 'operator' | 'supervisor' | 'viewer'
+type MemberRole = 'owner' | 'admin' | 'manager' | 'operator' | 'supervisor' | 'viewer' | 'attendant'
 type Membership = { organization_id: string; user_id: string; role: MemberRole; created_at: string }
 type Organization = { id: string; name: string; slug: string }
 type Profile = { id: string; display_name: string | null; avatar_url: string | null; email?: string | null }
 type Access = { organization_id: string; role: MemberRole; capabilities: Record<string, boolean> }
 
-const assignableRoles: MemberRole[] = ['admin', 'manager', 'operator', 'supervisor', 'viewer']
+const assignableRoles: MemberRole[] = ['admin', 'manager', 'operator', 'supervisor', 'viewer', 'attendant']
 const errorLabel: Record<string, string> = {
   EMAIL_ALREADY_REGISTERED: 'Este e-mail já tem conta na Althea.',
   PASSWORD_TOO_SHORT: 'A senha precisa de pelo menos 8 caracteres.',
@@ -33,6 +33,11 @@ const roleLabel: Record<MemberRole, string> = {
   operator: 'Operador',
   supervisor: 'Supervisor',
   viewer: 'Visualizador',
+  attendant: 'Atendente',
+}
+
+const roleHint: Partial<Record<MemberRole, string>> = {
+  attendant: 'Atendente: só Clientes, Chat e atendimento. Vê os contatos, lê e responde conversas; sem pagamentos, valores, campanhas ou configurações.',
 }
 
 export default function MembersPage() {
@@ -231,6 +236,7 @@ export default function MembersPage() {
               </select>
               <button type="submit" disabled={saving} className="h-11 rounded-xl bg-white px-5 text-sm font-medium text-black transition hover:bg-white/90 disabled:opacity-50">{saving ? 'Criando...' : 'Criar'}</button>
             </div>
+            {roleHint[form.role] && <p className="mt-2 text-xs text-white/50">{roleHint[form.role]}</p>}
           </form>
         )}
 

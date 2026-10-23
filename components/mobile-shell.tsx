@@ -56,9 +56,12 @@ const menuSections: MenuSection[] = [
   ] },
 ]
 
-const searchItems = [
-  ...menuSections.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title }))),
-]
+// Attendants (customer service accounts) only get the client list, the chat and the service screens.
+const attendantPaths = ['/dashboard/clientes', '/dashboard/atendimento', '/dashboard/tarefas', '/dashboard/kanban', '/dashboard/help', '/dashboard/settings/perfil']
+export function attendantAllows(pathname: string): boolean {
+  return pathname === '/dashboard/crm' || attendantPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`))
+}
+const attendantSections = menuSections.map((section) => ({ ...section, items: section.items.filter((item) => attendantAllows(item.href)) })).filter((section) => section.items.length)
 
 function normalizeSearch(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR')
@@ -91,7 +94,10 @@ function tabIsActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-export default function MobileShell({ activeTab: _activeTab, onTabChange, children }: { activeTab: MobileShellTab; onTabChange: (tab: MobileShellTab) => void; children: ReactNode }) {
+export default function MobileShell({ activeTab: _activeTab, onTabChange, attendant = false, children }: { activeTab: MobileShellTab; onTabChange: (tab: MobileShellTab) => void; attendant?: boolean; children: ReactNode }) {
+  const sections = attendant ? attendantSections : menuSections
+  const tabs = attendant ? bottomTabs.filter((tab) => attendantAllows(tab.href)) : bottomTabs
+  const searchItems = sections.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title })))
   const router = useRouter()
   const pathname = usePathname()
   const [searchOpen, setSearchOpen] = useState(false)
@@ -155,7 +161,7 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
     <div className="min-h-screen bg-[var(--althea-bg)] text-white antialiased">
       <header className="fixed inset-x-0 top-0 z-[100] h-14 border-b border-white/[0.05] bg-[rgba(2,2,3,0.94)] px-4 backdrop-blur-xl sm:px-5">
         <div className="mx-auto flex h-full w-full max-w-[1440px] items-center justify-between gap-3">
-          <button type="button" onClick={() => selectTab('dashboard')} aria-label="Ir para o Dashboard" className="flex min-w-0 items-center gap-2.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
+          <button type="button" onClick={() => attendant ? router.push('/dashboard/crm') : selectTab('dashboard')} aria-label="Ir para o início" className="flex min-w-0 items-center gap-2.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40">
             <img src="/althea-mark.png" alt="Althea Pay" className="h-6 w-6 shrink-0 object-contain" />
             <span className="h-4 w-px bg-white/[0.08]" />
             <span className="truncate text-[12px] font-semibold tracking-tight text-zinc-100">ALTHEA PAY <span className="text-zinc-600">//</span> {sectionLabel(pathname)}</span>
@@ -171,18 +177,18 @@ export default function MobileShell({ activeTab: _activeTab, onTabChange, childr
 
       <AnimatePresence>{menuOpen && <><motion.button aria-label="Fechar menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMenuOpen(false)} className="fixed inset-0 z-[110] bg-black/70 backdrop-blur-sm" /><motion.aside initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', stiffness: 320, damping: 32 }} className="fixed right-0 top-0 z-[120] flex h-full w-[min(400px,94vw)] flex-col border-l border-white/[0.08] bg-[rgba(7,12,10,0.985)] shadow-[-30px_0_80px_rgba(0,0,0,0.65)]">
           <div className="flex items-center gap-3 border-b border-white/[0.06] px-5 py-5"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#1DBB54]/20 bg-[#1DBB54]/[0.07] text-sm font-semibold text-[#63e08a]">{user.name.slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-white">{user.name}</p><p className="truncate text-xs text-[var(--althea-muted)]">{user.email}</p></div><button type="button" aria-label="Fechar menu" onClick={() => setMenuOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl text-[var(--althea-muted)] hover:bg-white/[0.04] hover:text-white"><X size={20} /></button></div>
-          <div className="flex-1 overflow-y-auto px-4 py-5 pb-8"><div className="mb-6 rounded-2xl border border-[#1DBB54]/10 bg-[#1DBB54]/[0.035] px-4 py-3"><p className="text-[10px] font-bold tracking-[0.22em] text-[var(--althea-brand)]">CONFIGURAÇÃO</p><p className="mt-1 text-xs leading-5 text-[#7f8b85]">Conecte, configure e ajuste os módulos da sua operação.</p></div><MenuList pathname={pathname} onNavigate={navigateMenuItem} /></div>
+          <div className="flex-1 overflow-y-auto px-4 py-5 pb-8"><div className="mb-6 rounded-2xl border border-[#1DBB54]/10 bg-[#1DBB54]/[0.035] px-4 py-3"><p className="text-[10px] font-bold tracking-[0.22em] text-[var(--althea-brand)]">CONFIGURAÇÃO</p><p className="mt-1 text-xs leading-5 text-[#7f8b85]">Conecte, configure e ajuste os módulos da sua operação.</p></div><MenuList sections={sections} pathname={pathname} onNavigate={navigateMenuItem} /></div>
           <div className="shrink-0 border-t border-white/[0.06] p-4"><button type="button" onClick={handleSignOut} disabled={signingOut} className="flex w-full items-center gap-3 rounded-xl border border-red-400/10 bg-red-400/[0.045] px-3 py-3 text-left text-sm font-medium text-red-300 transition hover:border-red-400/20 hover:bg-red-400/[0.08] disabled:cursor-wait disabled:opacity-60"><LogOut size={17} strokeWidth={1.8} /><span className="flex-1">{signingOut ? 'Saindo...' : 'Sair'}</span></button></div>
         </motion.aside></>}</AnimatePresence>
 
       <aside id="althea-sidebar" aria-label="Menu principal" className={`fixed bottom-0 left-0 top-14 z-[90] hidden flex-col border-r border-white/[0.06] bg-[rgba(7,12,10,0.985)] transition-[width] duration-200 lg:flex ${collapsed ? 'w-[72px]' : 'w-64'}`}>
         <div className={`flex items-center gap-3 border-b border-white/[0.06] py-4 ${collapsed ? 'justify-center px-2' : 'px-4'}`} title={collapsed ? `${user.name} · ${user.email}` : undefined}><div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[#1DBB54]/20 bg-[#1DBB54]/[0.07] text-sm font-semibold text-[#63e08a]">{user.name.slice(0, 1).toUpperCase()}</div>{!collapsed && <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-white">{user.name}</p><p className="truncate text-xs text-[var(--althea-muted)]">{user.email}</p></div>}</div>
-        <nav className={`flex-1 overflow-y-auto py-4 ${collapsed ? 'px-2' : 'px-3'}`}><MenuList pathname={pathname} onNavigate={navigateMenuItem} collapsed={collapsed} /></nav>
+        <nav className={`flex-1 overflow-y-auto py-4 ${collapsed ? 'px-2' : 'px-3'}`}><MenuList sections={sections} pathname={pathname} onNavigate={navigateMenuItem} collapsed={collapsed} /></nav>
         <div className={`shrink-0 border-t border-white/[0.06] ${collapsed ? 'p-2' : 'p-3'}`}><button type="button" onClick={handleSignOut} disabled={signingOut} aria-label="Sair" title={collapsed ? 'Sair' : undefined} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-red-300 transition hover:bg-red-400/[0.08] disabled:cursor-wait disabled:opacity-60 ${collapsed ? 'justify-center' : ''}`}><LogOut size={17} strokeWidth={1.8} />{!collapsed && <span className="flex-1">{signingOut ? 'Saindo...' : 'Sair'}</span>}</button></div>
       </aside>
 
       <main className={`min-w-0 pt-14 pb-[128px] transition-[padding] duration-200 lg:pb-10 ${collapsed ? 'lg:pl-[72px]' : 'lg:pl-64'}`}><div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-5 lg:px-8">{children}</div></main>
-      <nav className="fixed inset-x-0 bottom-0 z-[100] px-3 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 lg:hidden" aria-label="Navegação operacional"><div className="mx-auto grid h-[76px] w-full max-w-[760px] grid-cols-5 items-stretch gap-1 rounded-[38px] border border-white/[0.075] bg-[rgba(8,18,14,0.95)] p-1.5 shadow-[0_32px_64px_rgba(0,0,0,0.72)] backdrop-blur-2xl">{bottomTabs.map(({ id, label, icon: Icon, href }) => <Nav key={id} id={id} label={label} icon={Icon} active={tabIsActive(pathname, href)} onClick={selectTab} mobile />)}</div></nav>
+      <nav className="fixed inset-x-0 bottom-0 z-[100] px-3 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 lg:hidden" aria-label="Navegação operacional"><div className="mx-auto grid h-[76px] w-full max-w-[760px] items-stretch gap-1 rounded-[38px] border border-white/[0.075] bg-[rgba(8,18,14,0.95)] p-1.5 shadow-[0_32px_64px_rgba(0,0,0,0.72)] backdrop-blur-2xl" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>{tabs.map(({ id, label, icon: Icon, href }) => <Nav key={id} id={id} label={label} icon={Icon} active={tabIsActive(pathname, href)} onClick={selectTab} mobile />)}</div></nav>
     </div>
   )
 }
@@ -191,6 +197,6 @@ function Nav({ id, label, icon: Icon, active, onClick, mobile = false }: { id: M
   return <motion.button type="button" aria-current={active ? 'page' : undefined} aria-label={label} onClick={() => onClick(id)} whileTap={{ scale: 0.97 }} className={`group relative flex min-w-0 items-center justify-center rounded-[30px] transition-all duration-200 ${mobile ? 'h-full flex-col gap-1.5 px-1' : 'w-full justify-start gap-2 px-3 py-3'} ${active ? 'text-[var(--althea-brand)]' : 'text-[var(--althea-muted)] hover:text-white'}`}><span aria-hidden="true" className={`absolute rounded-[30px] border transition-colors ${active ? 'inset-0 border-[rgba(29,184,84,0.22)] bg-[rgba(29,184,84,0.10)] shadow-[0_0_24px_rgba(29,184,84,0.06)]' : 'inset-0 border-transparent group-hover:bg-white/[0.02]'}`} /><Icon className="relative z-10 shrink-0" size={mobile ? 24 : 19} strokeWidth={active ? 2 : 1.8} /><span className={`relative z-10 max-w-full truncate leading-none ${mobile ? 'px-1 text-[10px] font-medium' : 'text-sm'}`}>{label}</span></motion.button>
 }
 
-function MenuList({ pathname, onNavigate, collapsed = false }: { pathname: string; onNavigate: (item: MenuItem) => void; collapsed?: boolean }) {
-  return <>{menuSections.map((section) => <section key={section.title} className={collapsed ? 'mb-3 border-b border-white/[0.04] pb-3 last:border-0' : 'mb-5'}>{!collapsed && <h2 className="mb-2 px-2 text-[10px] font-bold tracking-[0.18em] text-[var(--althea-muted)]">{section.title}</h2>}<div className="space-y-1">{section.items.map((item) => { const Icon = item.icon; const active = tabIsActive(pathname, item.href); return <button key={`${section.title}-${item.label}`} type="button" onClick={() => onNavigate(item)} aria-current={active ? 'page' : undefined} aria-label={collapsed ? item.label : undefined} title={collapsed ? item.label : undefined} className={`flex w-full items-center gap-3 rounded-xl border text-left text-sm transition ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'} ${active ? 'border-[#1DBB54]/20 bg-[#1DBB54]/[0.075] text-[#62df89]' : 'border-transparent text-white/80 hover:border-white/[0.05] hover:bg-white/[0.035] hover:text-white'}`}>{Icon ? <Icon size={17} strokeWidth={1.7} className="shrink-0" /> : <span className="h-[17px] w-[17px]" />}{!collapsed && <span className="flex-1 truncate">{item.label}</span>}{!collapsed && active && <span className="h-1.5 w-1.5 rounded-full bg-[#1DBB54]" />}</button> })}</div></section>)}</>
+function MenuList({ sections, pathname, onNavigate, collapsed = false }: { sections: MenuSection[]; pathname: string; onNavigate: (item: MenuItem) => void; collapsed?: boolean }) {
+  return <>{sections.map((section) => <section key={section.title} className={collapsed ? 'mb-3 border-b border-white/[0.04] pb-3 last:border-0' : 'mb-5'}>{!collapsed && <h2 className="mb-2 px-2 text-[10px] font-bold tracking-[0.18em] text-[var(--althea-muted)]">{section.title}</h2>}<div className="space-y-1">{section.items.map((item) => { const Icon = item.icon; const active = tabIsActive(pathname, item.href); return <button key={`${section.title}-${item.label}`} type="button" onClick={() => onNavigate(item)} aria-current={active ? 'page' : undefined} aria-label={collapsed ? item.label : undefined} title={collapsed ? item.label : undefined} className={`flex w-full items-center gap-3 rounded-xl border text-left text-sm transition ${collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'} ${active ? 'border-[#1DBB54]/20 bg-[#1DBB54]/[0.075] text-[#62df89]' : 'border-transparent text-white/80 hover:border-white/[0.05] hover:bg-white/[0.035] hover:text-white'}`}>{Icon ? <Icon size={17} strokeWidth={1.7} className="shrink-0" /> : <span className="h-[17px] w-[17px]" />}{!collapsed && <span className="flex-1 truncate">{item.label}</span>}{!collapsed && active && <span className="h-1.5 w-1.5 rounded-full bg-[#1DBB54]" />}</button> })}</div></section>)}</>
 }

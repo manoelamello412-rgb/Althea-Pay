@@ -5,7 +5,7 @@ import { createSupabaseAdminClient } from '@/lib/supabase/admin'
 // Owner/admin creates members directly (email + password, no invite email), changes their role or removes them.
 // Scope is always the actor's current organization (organization_my_access_v1). The auth trigger
 // triggers (bootstrap_user_tenant / join_member_org_from_app_metadata) put the new user in that org via app_metadata.
-const ASSIGNABLE = ['admin', 'manager', 'operator', 'supervisor', 'viewer']
+const ASSIGNABLE = ['admin', 'manager', 'operator', 'supervisor', 'viewer', 'attendant']
 const UUID = /^[0-9a-f-]{36}$/i
 
 type Access = { organization_id: string; user_id: string; role: string; capabilities: Record<string, boolean> }

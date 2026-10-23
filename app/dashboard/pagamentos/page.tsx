@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, CheckCircle2, Clock3, CreditCard, Link2, Loader2, MessageCircle, RefreshCw, Search, Unlink, UserRound, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock3, CreditCard, Link2, Loader2, MessageCircle, RefreshCw, Search, Trash2, Unlink, UserRound, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { loadOrganizationAccess } from '@/lib/auth/organization-access'
@@ -51,6 +51,7 @@ export default function PagamentosPage() {
   const [detail, setDetail] = useState<Detail | null>(null)
   const [detailError, setDetailError] = useState('')
   const [linking, setLinking] = useState('')
+  const [canDelete, setCanDelete] = useState(false)
   const request = useRef(0)
 
   const fetchPage = useCallback((before: Page['next_cursor']) => db.rpc('transactions_list_v1', {
@@ -98,9 +99,20 @@ export default function PagamentosPage() {
     if (selectedId) await loadDetail(selectedId)
   }
 
+  // Test records go to the bin (transaction_delete): they leave this list and the dashboard figures.
+  async function deleteTransaction(id: string) {
+    if (!window.confirm('Excluir este pagamento? Use só para registros de teste: ele sai desta lista e dos números do Dashboard.')) return
+    const result = await db.rpc('transaction_delete', { p_transaction_id: id })
+    if (result.error) { setDetailError(result.error.message === 'FORBIDDEN' ? 'Só proprietário ou administrador pode excluir pagamentos.' : 'Não foi possível excluir o pagamento.'); return }
+    setSelectedId(null)
+    setPayments(current => current.filter(item => item.id !== id))
+    void load()
+  }
+
   // the search box only hits the server after the operator stops typing
   useEffect(() => { const timer = setTimeout(() => setSearch(query.trim()), 350); return () => clearTimeout(timer) }, [query])
   useEffect(() => { void load() }, [load])
+  useEffect(() => { void loadOrganizationAccess(db).then(access => setCanDelete(['owner', 'admin'].includes(access.role))).catch(() => undefined) }, [db])
   useEffect(() => { const id = new URLSearchParams(window.location.search).get('transaction')?.trim(); if (id) setSelectedId(id) }, [])
   useEffect(() => { setDetail(null); if (selectedId) void loadDetail(selectedId) }, [selectedId, loadDetail])
   useEffect(() => {
@@ -143,7 +155,7 @@ export default function PagamentosPage() {
   {selectedId && <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm md:items-center md:p-6" role="dialog" aria-modal="true" aria-label="Detalhes da transação" onClick={(event) => { if (event.currentTarget === event.target) setSelectedId(null) }}>
     <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-3xl border border-white/10 bg-[#0c0f10] p-6 shadow-2xl md:rounded-3xl">
       <div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="text-xs uppercase tracking-wider text-white/35">Transação</p><h2 className="mt-1 truncate text-xl font-semibold">{detail ? customerText(detail.transaction) : 'Carregando...'}</h2>{detail?.transaction.customer_email && <p className="truncate text-xs text-white/40">{detail.transaction.customer_email}{detail.transaction.customer_phone ? ` · ${detail.transaction.customer_phone}` : ''}</p>}</div>
-        <div className="flex items-center gap-1">{detail?.conversation_id && <><a href={`/dashboard/crm?conversation=${detail.conversation_id}`} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-xs text-white/70 hover:bg-white/5"><MessageCircle size={13} /> Conversa</a><a href={`/dashboard/crm/customer-360?conversation=${detail.conversation_id}`} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-xs text-white/70 hover:bg-white/5"><UserRound size={13} /> 360°</a></>}<button type="button" aria-label="Fechar" onClick={() => setSelectedId(null)} className="rounded-lg p-2 text-white/50 hover:bg-white/5"><XCircle size={19} /></button></div></div>
+        <div className="flex items-center gap-1">{detail?.conversation_id && <><a href={`/dashboard/crm?conversation=${detail.conversation_id}`} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-xs text-white/70 hover:bg-white/5"><MessageCircle size={13} /> Conversa</a><a href={`/dashboard/crm/customer-360?conversation=${detail.conversation_id}`} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1.5 text-xs text-white/70 hover:bg-white/5"><UserRound size={13} /> 360°</a></>}{canDelete && detail && <button type="button" onClick={() => void deleteTransaction(detail.transaction.id)} className="inline-flex items-center gap-1 rounded-lg border border-red-400/20 px-2 py-1.5 text-xs text-red-300 hover:bg-red-400/10"><Trash2 size={13} /> Excluir</button>}<button type="button" aria-label="Fechar" onClick={() => setSelectedId(null)} className="rounded-lg p-2 text-white/50 hover:bg-white/5"><XCircle size={19} /></button></div></div>
       {detailError && <div role="alert" className="mt-4 rounded-xl border border-red-400/20 bg-red-400/5 px-4 py-3 text-sm text-red-200">{detailError}</div>}
       {!detail && !detailError && <div className="flex min-h-40 items-center justify-center"><Loader2 size={18} className="animate-spin text-emerald-300" /></div>}
       {detail && <>
