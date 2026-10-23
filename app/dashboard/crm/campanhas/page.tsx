@@ -16,7 +16,7 @@ type Account = { id: string; channel: string; provider: string; display_name: st
 type Tag = { id: string; name: string }
 type Tab = 'campaigns' | 'links' | 'templates' | 'segments'
 type CheckoutLink = { id: string; funnel_id: string; name: string; price: number; currency: string; status: string; created_at: string }
-type Funnel = { id: string; nome: string }
+type Funnel = { id: string; nome: string; url: string | null }
 type WaButton = { type: keyof typeof WA_BUTTONS; parameter: string }
 // Infobip send API (templateData): header types and send-time buttons; the value hint says what each one takes.
 const WA_HEADERS: Record<string, [string, string]> = { IMAGE: ['Imagem', 'https://... (jpg/png)'], VIDEO: ['Vídeo', 'https://... (mp4)'], DOCUMENT: ['Documento', 'https://... (pdf)'], GIF: ['GIF', 'https://... (mp4)'], TEXT: ['Texto', 'Valor do {{1}} do cabeçalho'], LOCATION: ['Localização', 'latitude,longitude'] }
@@ -48,7 +48,12 @@ const label = 'text-[10px] font-bold uppercase tracking-widest text-slate-500'
 const toggle = (list: string[], value: string) => list.includes(value) ? list.filter(item => item !== value) : [...list, value]
 // "1.234,56" and "47,90" (pt-BR) or "47.90"
 const priceOf = (value: string) => Number(value.includes(',') ? value.replace(/\./g, '').replace(',', '.') : value)
-const checkoutUrl = (link: CheckoutLink) => `${typeof window === 'undefined' ? '' : window.location.origin}/checkout/${encodeURIComponent(link.funnel_id)}?offer=${link.id}`
+// The funnel page (its "Link da Página") opens straight on payment with ?oferta=; without one, the Althea checkout.
+const checkoutUrl = (link: CheckoutLink, funnels: Funnel[]) => {
+  const page = funnels.find(funnel => funnel.id === link.funnel_id)?.url?.trim()
+  if (page) try { const url = new URL(page); url.searchParams.set('oferta', link.id); return url.href } catch { /* invalid page link: Althea checkout */ }
+  return `${typeof window === 'undefined' ? '' : window.location.origin}/checkout/${encodeURIComponent(link.funnel_id)}?offer=${link.id}`
+}
 const localNow = () => { const d = new Date(Date.now() + 10 * 60_000); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16) }
 
 export default function CrmCampanhasPage() {
@@ -91,7 +96,7 @@ export default function CrmCampanhasPage() {
         db.from('crm_tags').select('id,name').eq('organization_id', org).eq('active', true).order('name'),
         db.from('crm_contact_lists').select('id,name').eq('organization_id', org).order('name'),
         db.from('funnel_offers').select('id,funnel_id,name,price,currency,status,created_at').eq('organization_id', org).eq('offer_type', 'remarketing').order('created_at', { ascending: false }),
-        db.from('funnels').select('id,nome').eq('organization_id', org).is('deleted_at', null).order('nome'),
+        db.from('funnels').select('id,nome,url').eq('organization_id', org).is('deleted_at', null).order('nome'),
       ])
       for (const result of [campaignResult, templateResult, segmentResult, accountResult, tagResult, listResult, linkResult, funnelResult]) if (result.error) throw result.error
       setLinks((linkResult.data ?? []) as CheckoutLink[])
@@ -179,7 +184,7 @@ export default function CrmCampanhasPage() {
     if (!active && !window.confirm(`Pausar o link "${link.name}"? Quem abrir o link verá o checkout indisponível.`)) return
     void run(db.rpc('crm_checkout_link_set_active', { p_offer_id: link.id, p_active: active }))
   }
-  const copyLink = (link: CheckoutLink) => { void navigator.clipboard?.writeText(checkoutUrl(link)).then(() => { setCopied(link.id); setTimeout(() => setCopied(''), 1500) }) }
+  const copyLink = (link: CheckoutLink) => { void navigator.clipboard?.writeText(checkoutUrl(link, funnels)).then(() => { setCopied(link.id); setTimeout(() => setCopied(''), 1500) }) }
 
   const nameOf = <T extends { id: string; name: string }>(list: T[], id: string) => list.find(item => item.id === id)?.name ?? '—'
   const accountName = (account?: Account) => account ? account.display_name || `${CHANNELS[account.channel] ?? account.channel} · ${account.provider}` : '—'
@@ -231,7 +236,7 @@ export default function CrmCampanhasPage() {
           }) : empty('Nenhuma campanha. Monte uma lista em Clientes (ou um segmento) e crie a campanha com a sua mensagem.'))
           : tab === 'links' ? (links.length ? links.map(link => <div key={link.id} className="flex flex-wrap items-center gap-3 border-b border-white/[.06] px-4 py-3 last:border-0">
               <div className="min-w-0 flex-1"><b className="text-sm">{link.name}</b><span className="ml-2 text-sm font-bold text-emerald-300">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: link.currency || 'BRL' }).format(Number(link.price))}</span>{link.status !== 'active' && <span className="ml-2 rounded-full bg-white/[.06] px-2 py-0.5 text-[10px] text-slate-500">pausado</span>}
-                <p className="truncate text-xs text-slate-500">{funnels.find(funnel => funnel.id === link.funnel_id)?.nome ?? link.funnel_id} · {checkoutUrl(link)}</p></div>
+                <p className="truncate text-xs text-slate-500">{funnels.find(funnel => funnel.id === link.funnel_id)?.nome ?? link.funnel_id} · {checkoutUrl(link, funnels)}</p></div>
               <button type="button" className={`${small} inline-flex items-center gap-1`} onClick={() => copyLink(link)}><Copy size={12} /> {copied === link.id ? 'Copiado' : 'Copiar link'}</button>
               {canManage && <button type="button" className={small} disabled={saving} onClick={() => setLinkActive(link, link.status !== 'active')}>{link.status === 'active' ? 'Pausar' : 'Ativar'}</button>}
             </div>) : empty('Nenhum link. Gere um link de checkout com o valor da condição comercial e use-o na mensagem da campanha.'))
@@ -249,7 +254,7 @@ export default function CrmCampanhasPage() {
             <label className="block space-y-1"><span className={label}>Conta de envio</span><select value={editor.accountId} onChange={event => setEditor({ ...editor, accountId: event.target.value, templateId: '' })} className={`${input} bg-[#0b100e]`}><option value="">Selecione</option>{accounts.filter(account => account.status === 'active').map(account => <option key={account.id} value={account.id}>{accountName(account)}</option>)}</select></label>
             <label className="block space-y-1"><span className={label}>Mensagem da campanha</span><textarea value={editor.message} maxLength={4000} rows={5} placeholder="Oi {primeiro_nome}! Liberamos uma condição especial pra você: {link}" onChange={event => setEditor({ ...editor, message: event.target.value })} className="w-full rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-sm outline-none focus:border-emerald-500/40" /></label>
             <div className="flex flex-wrap gap-1.5">{MESSAGE_VARIABLES.map(key => <button key={key} type="button" onClick={() => setEditor({ ...editor, message: `${editor.message}{${key}}` })} className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-slate-400 hover:border-emerald-500/40">{`{${key}}`}</button>)}
-              {links.some(link => link.status === 'active') && <select value="" onChange={event => { const link = links.find(item => item.id === event.target.value); if (link) setEditor({ ...editor, message: `${editor.message}${editor.message && !/\s$/.test(editor.message) ? ' ' : ''}${checkoutUrl(link)}` }) }} className="rounded-full border border-emerald-500/30 bg-[#0b100e] px-2.5 py-1 text-xs text-emerald-200"><option value="">+ Link de checkout</option>{links.filter(link => link.status === 'active').map(link => <option key={link.id} value={link.id}>{link.name} · {Number(link.price).toFixed(2).replace('.', ',')}</option>)}</select>}</div>
+              {links.some(link => link.status === 'active') && <select value="" onChange={event => { const link = links.find(item => item.id === event.target.value); if (link) setEditor({ ...editor, message: `${editor.message}${editor.message && !/\s$/.test(editor.message) ? ' ' : ''}${checkoutUrl(link, funnels)}` }) }} className="rounded-full border border-emerald-500/30 bg-[#0b100e] px-2.5 py-1 text-xs text-emerald-200"><option value="">+ Link de checkout</option>{links.filter(link => link.status === 'active').map(link => <option key={link.id} value={link.id}>{link.name} · {Number(link.price).toFixed(2).replace('.', ',')}</option>)}</select>}</div>
             <p className="text-[11px] text-slate-500">Cada contato recebe o texto com os dados dele. {'{link}'}, {'{valor}'} e {'{produto}'} vêm do último checkout do contato; para um valor fixo, insira um link de checkout.</p>
             <label className="block space-y-1"><span className={label}>{campaignChannel === 'whatsapp' ? 'Template aprovado do WhatsApp (quando a Meta exigir)' : 'Template (opcional)'}</span><select value={editor.templateId} disabled={!campaignChannel} onChange={event => setEditor({ ...editor, templateId: event.target.value })} className={`${input} bg-[#0b100e]`}><option value="">{editor.message.trim() ? 'Nenhum: enviar a mensagem da campanha' : 'Selecione'}</option>{templates.filter(template => template.active && template.channel === campaignChannel).map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
             {campaignAccount?.provider === 'infobip' && <p className="text-[11px] leading-5 text-amber-300">API oficial (Infobip): a Meta só entrega fora da janela de 24h com template aprovado. Com template escolhido, sai o template aprovado (a mensagem acima fica só como registro); sem template, a mensagem chega apenas a quem falou com você nas últimas 24h.</p>}
@@ -302,7 +307,7 @@ export default function CrmCampanhasPage() {
             <label className="block space-y-1"><span className={label}>Funil</span><select value={editor.funnelId} onChange={event => setEditor({ ...editor, funnelId: event.target.value })} className={`${input} bg-[#0b100e]`}><option value="">Selecione</option>{funnels.map(funnel => <option key={funnel.id} value={funnel.id}>{funnel.nome}</option>)}</select></label>
             <label className="block space-y-1"><span className={label}>Valor (R$)</span><input value={editor.price} inputMode="decimal" placeholder="47,90" onChange={event => setEditor({ ...editor, price: event.target.value.replace(/[^\d.,]/g, '') })} className={input} /></label>
             <label className="block space-y-1"><span className={label}>Nome (opcional)</span><input value={editor.name} maxLength={120} placeholder="Ex.: Remarketing outubro 47,90" onChange={event => setEditor({ ...editor, name: event.target.value })} className={input} /></label>
-            <p className="text-xs text-slate-500">O link abre o checkout do funil com este valor, cobrado pelo servidor: o cliente não consegue alterar o preço. Pause o link para encerrar a condição.</p>
+            <p className="text-xs text-slate-500">O link abre a página do funil direto no pagamento, já com este valor: o cliente preenche nome, e-mail, WhatsApp e CPF e recebe o PIX (QR Code e copia e cola). O valor é cobrado pelo servidor, então não dá para alterar pela URL. Pause o link para encerrar a condição.</p>
           </>}
           {editor.kind === 'schedule' && <>
             <label className="block space-y-1"><span className={label}>Disparar em</span><input type="datetime-local" value={editor.at} onChange={event => setEditor({ ...editor, at: event.target.value })} className={input} /></label>
