@@ -1,0 +1,291 @@
+name: Vercel Admin Bridge
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Vercel action
+        required: true
+        type: choice
+        options:
+          - audit-preview
+          - sync-preview
+          - redeploy-preview
+      preview_url:
+        description: Existing Althea Vercel preview URL (required for redeploy-preview)
+        required: false
+        type: string
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: vercel-admin-bridge
+  cancel-in-progress: false
+
+jobs:
+  vercel-admin:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        github.event.comment.user.login == github.repository_owner &&
+        startsWith(github.event.comment.body, '/vercel-admin ')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_uMsZnVhnN3tfSdykBkqQL7bk
+      VERCEL_PROJECT_ID: prj_FSq90Db9KXn6kOqtJYcT3CTAoG5t
+      VERCEL_PROJECT_NAME: althea-pay-nr6e
+
+    steps:
+      - name: Resolve requested action
+        id: request
+        shell: bash
+        env:
+          DISPATCH_ACTION: ${{ github.event_name == 'workflow_dispatch' && inputs.action || '' }}
+          DISPATCH_PREVIEW_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.preview_url || '' }}
+          COMMENT_BODY: ${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}
+        run: |
+          set -euo pipefail
+
+          action="$DISPATCH_ACTION"
+          preview_url="$DISPATCH_PREVIEW_URL"
+
+          if [[ "$GITHUB_EVENT_NAME" == "issue_comment" ]]; then
+            case "$COMMENT_BODY" in
+              "/vercel-admin audit-preview")
+                action="audit-preview"
+                preview_url=""
+                ;;
+              "/vercel-admin sync-preview")
+                action="sync-preview"
+                preview_url=""
+                ;;
+              "/vercel-admin redeploy-preview "*)
+                action="redeploy-preview"
+                preview_url="${COMMENT_BODY#"/vercel-admin redeploy-preview "}"
+                ;;
+              *)
+                echo "::error::Unsupported Vercel admin command."
+                exit 1
+                ;;
+            esac
+          fi
+
+          case "$action" in
+            audit-preview|sync-preview|redeploy-preview) ;;
+            *)
+              echo "::error::Unsupported action: $action"
+              exit 1
+              ;;
+          esac
+
+          if [[ "$preview_url" == *$'\n'* || "$preview_url" == *$'\r'* ]]; then
+            echo "::error::preview_url contains invalid characters."
+            exit 1
+          fi
+
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+          echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Vercel token is configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${VERCEL_TOKEN:-}" ]]; then
+            echo "::error::GitHub Actions secret VERCEL_TOKEN is not configured."
+            exit 1
+          fi
+
+      - name: Verify token can access the Althea Vercel project
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_TEAM_ID")"
+          project_id="$(jq -r '.id // empty' <<<"$response")"
+          project_name="$(jq -r '.name // empty' <<<"$response")"
+          if [[ "$project_id" != "$VERCEL_PROJECT_ID" || "$project_name" != "$VERCEL_PROJECT_NAME" ]]; then
+            echo "::error::VERCEL_TOKEN does not resolve the expected Althea project."
+            exit 1
+          fi
+          echo "Vercel project access verified."
+
+      - name: Audit Preview Supabase public configuration
+        if: steps.request.outputs.action == 'audit-preview'
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID")"
+
+          jq '
+            (if type == "array" then . else (.envs // []) end)
+            | map(
+                select(
+                  .key == "NEXT_PUBLIC_SUPABASE_URL" or
+                  .key == "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" or
+                  .key == "NEXT_PUBLIC_SUPABASE_ANON_KEY"
+                )
+                | {
+                    key,
+                    target,
+                    gitBranch,
+                    type,
+                    id
+                  }
+              )
+          ' <<<"$response"
+
+      - name: Sync canonical public Supabase config from Production to Preview
+        if: steps.request.outputs.action == 'sync-preview'
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+
+          metadata="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID")"
+
+          envs="$(jq -c 'if type == "array" then . else (.envs // []) end' <<<"$metadata")"
+
+          production_id() {
+            local key="$1"
+            jq -r --arg key "$key" '
+              [
+                .[]
+                | select(.key == $key)
+                | select((.target // []) | index("production"))
+                | select((.gitBranch // null) == null or .gitBranch == "main")
+              ]
+              | sort_by(.updatedAt // .createdAt // 0)
+              | reverse
+              | .[0].id // empty
+            ' <<<"$envs"
+          }
+
+          read_value() {
+            local id="$1"
+            curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/env/$id?teamId=$VERCEL_TEAM_ID" \
+              | jq -r '.value // empty'
+          }
+
+          upsert_preview() {
+            local key="$1"
+            local value="$2"
+            local payload
+            payload="$(jq -n --arg key "$key" --arg value "$value" '{
+              key: $key,
+              value: $value,
+              type: "encrypted",
+              target: ["preview"]
+            }')"
+
+            curl --fail-with-body --silent --show-error \
+              -X POST \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data "$payload" \
+              "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?upsert=true&teamId=$VERCEL_TEAM_ID" \
+              >/dev/null
+          }
+
+          url_id="$(production_id NEXT_PUBLIC_SUPABASE_URL)"
+          publishable_id="$(production_id NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)"
+          source_key="NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+
+          if [[ -z "$publishable_id" ]]; then
+            publishable_id="$(production_id NEXT_PUBLIC_SUPABASE_ANON_KEY)"
+            source_key="NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          fi
+
+          if [[ -z "$url_id" || -z "$publishable_id" ]]; then
+            echo "::error::Canonical public Supabase variables were not found in Production metadata."
+            exit 1
+          fi
+
+          supabase_url="$(read_value "$url_id")"
+          publishable_key="$(read_value "$publishable_id")"
+
+          if [[ -z "$supabase_url" || -z "$publishable_key" ]]; then
+            echo "::error::Unable to read one of the two canonical public Supabase values."
+            exit 1
+          fi
+
+          if [[ "$supabase_url" != https://*.supabase.co ]]; then
+            echo "::error::Production NEXT_PUBLIC_SUPABASE_URL does not match the expected Supabase HTTPS host."
+            exit 1
+          fi
+
+          upsert_preview NEXT_PUBLIC_SUPABASE_URL "$supabase_url"
+          upsert_preview NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY "$publishable_key"
+
+          unset supabase_url publishable_key
+          echo "Preview Supabase public configuration synchronized from Production ($source_key source)."
+
+      - name: Validate and redeploy Preview only
+        if: steps.request.outputs.action == 'redeploy-preview'
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.request.outputs.preview_url }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$PREVIEW_URL" ]]; then
+            echo "::error::preview_url is required for redeploy-preview."
+            exit 1
+          fi
+
+          host="${PREVIEW_URL#https://}"
+          host="${host#http://}"
+          host="${host%%/*}"
+
+          if [[ "$host" != *.vercel.app ]]; then
+            echo "::error::Only vercel.app deployment URLs are accepted."
+            exit 1
+          fi
+
+          deployment="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_TEAM_ID")"
+
+          deployment_id="$(jq -r '.id // .uid // empty' <<<"$deployment")"
+          project_id="$(jq -r '.projectId // .project.id // empty' <<<"$deployment")"
+          target="$(jq -r '.target // empty' <<<"$deployment")"
+
+          if [[ -z "$deployment_id" || "$project_id" != "$VERCEL_PROJECT_ID" ]]; then
+            echo "::error::The supplied deployment does not belong to the Althea Vercel project."
+            exit 1
+          fi
+
+          if [[ "$target" == "production" ]]; then
+            echo "::error::Production deployments cannot be redeployed through this bridge."
+            exit 1
+          fi
+
+          payload="$(jq -n \
+            --arg name "$VERCEL_PROJECT_NAME" \
+            --arg deploymentId "$deployment_id" \
+            '{name:$name, deploymentId:$deploymentId, target:"preview"}')"
+
+          result="$(curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            "https://api.vercel.com/v13/deployments?teamId=$VERCEL_TEAM_ID")"
+
+          jq '{id, url, readyState, target}' <<<"$result"
