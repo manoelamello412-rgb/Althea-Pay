@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { audioMimetype, bridgeSendRequest, whatsappNumber } from "../_shared/whatsapp.ts";
-import { infobipMessageId, infobipRequest, infobipTemplatesUrl, parseHeader, parseTemplate, templateButtons } from "../_shared/infobip.ts";
+import { configuredButtons, infobipMessageId, infobipRequest, infobipTemplatesUrl, parseHeader, parseTemplate, templateButtons } from "../_shared/infobip.ts";
 import { signUnsubscribe } from "../_shared/remarketing.ts";
 
 type Json = Record<string, unknown>;
@@ -163,15 +163,18 @@ async function sendInfobip(account: Account, identity: Identity, row: Outbox): P
     ? supabaseUrl.replace(/\/$/, "") + "/functions/v1/crm-channel-infobip-webhook?account=" + account.id + "&token=" + encodeURIComponent(webhookToken)
     : null;
   const template = parseTemplate(row.metadata);
-  if (template?.name && !template.header) {
-    // Header media lives on the org's template row, so every producer (campaigns, recovery, automations) gets it.
-    const found = await db.from("crm_message_templates").select("whatsapp_header_type,whatsapp_header_url")
-      .eq("organization_id", row.organization_id).eq("whatsapp_template_name", template.name).not("whatsapp_header_type", "is", null).limit(1).maybeSingle();
-    if (found.error) throw found.error;
-    template.header = parseHeader(found.data?.whatsapp_header_type, found.data?.whatsapp_header_url);
-  }
   const from = String(meta(account, "from_number", account.external_account_id || ""));
-  if (template?.name) template.buttons = await infobipTemplateButtons(baseUrl, apiKey, from, template.name, template.language);
+  if (template?.name) {
+    // Header media and buttons live on the org's template row, so every producer (campaigns, recovery, automations)
+    // gets them. Configured rows win; otherwise the quick replies come from the approved template on Infobip.
+    const found = await db.from("crm_message_templates").select("whatsapp_header_type,whatsapp_header_url,whatsapp_buttons")
+      .eq("organization_id", row.organization_id).eq("whatsapp_template_name", template.name)
+      .order("whatsapp_buttons", { ascending: true, nullsFirst: false }).order("whatsapp_header_type", { ascending: true, nullsFirst: false })
+      .limit(1).maybeSingle();
+    if (found.error) throw found.error;
+    template.header ??= parseHeader(found.data?.whatsapp_header_type, found.data?.whatsapp_header_url);
+    template.buttons = configuredButtons(found.data?.whatsapp_buttons) ?? await infobipTemplateButtons(baseUrl, apiKey, from, template.name, template.language);
+  }
   const { url, init } = infobipRequest({
     baseUrl,
     apiKey,

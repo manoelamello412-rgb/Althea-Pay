@@ -104,6 +104,13 @@ export function templateButtons(payload: unknown, name: string, language: string
     .map((b) => ({ type: "QUICK_REPLY", parameter: str(b.text) }));
 }
 
+// Buttons configured on the Althea template (crm_message_templates.whatsapp_buttons); null when not configured.
+export function configuredButtons(value: unknown): InfobipButton[] | null {
+  if (!Array.isArray(value) || !value.length) return null;
+  return value.filter(isObject).map((b) => ({ type: str(b.type).toUpperCase(), parameter: str(b.parameter) }))
+    .filter((b) => b.type === "QUICK_REPLY" || b.type === "URL");
+}
+
 export function infobipMessageId(payload: unknown): string {
   if (!isObject(payload)) return "";
   const first = Array.isArray(payload.messages) && isObject(payload.messages[0]) ? payload.messages[0] : payload;

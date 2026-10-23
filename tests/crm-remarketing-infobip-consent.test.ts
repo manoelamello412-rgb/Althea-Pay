@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { infobipMessageId, infobipRequest, parseHeader, parseInfobipWebhook, parseTemplate, templateButtons } from '../supabase/functions/_shared/infobip'
+import { configuredButtons, infobipMessageId, infobipRequest, parseHeader, parseInfobipWebhook, parseTemplate, templateButtons } from '../supabase/functions/_shared/infobip'
 
 const migration = readFileSync('supabase/migrations/20261013190000_crm_channel_consents_v1.sql', 'utf8')
 const dispatcher = readFileSync('supabase/functions/crm-channel-outbox-dispatcher/index.ts', 'utf8')
@@ -48,6 +48,14 @@ describe('Infobip WhatsApp adapter', () => {
       templateData: { body: { placeholders: [] }, buttons: [{ type: 'QUICK_REPLY', parameter: 'Bloquear Contato' }] },
     })
     expect(templateButtons(null, 'x', 'pt_BR')).toEqual([])
+  })
+
+  it('per-template configured buttons win over the Infobip definition', () => {
+    expect(configuredButtons([{ type: 'QUICK_REPLY', parameter: ' sair ' }, { type: 'url', parameter: 'abc123' }, { type: 'CALL', parameter: 'x' }]))
+      .toEqual([{ type: 'QUICK_REPLY', parameter: 'sair' }, { type: 'URL', parameter: 'abc123' }])
+    expect(configuredButtons(null)).toBeNull()
+    expect(configuredButtons([])).toBeNull()
+    expect(dispatcher).toContain('configuredButtons(found.data?.whatsapp_buttons) ?? await infobipTemplateButtons')
   })
 
   it('refuses base URLs outside Infobip (credential exfiltration)', () => {
@@ -104,5 +112,12 @@ describe('consent migration', () => {
     expect(migration).toContain("when (new.direction = 'inbound' and new.channel in ('whatsapp', 'sms'))")
     expect(migration).toContain("'SAIR', 'PARAR', 'STOP'")
     expect(migration).toContain("'VOLTAR', 'START'")
+  })
+})
+
+describe('CRM metadata redaction', () => {
+  it('does not clash with the plpgsql variable named value when metadata has arrays', () => {
+    const fix = readFileSync('supabase/migrations/20261022235900_fix_redact_crm_metadata_ambiguous_value_v1.sql', 'utf8')
+    expect(fix).toContain('for item in select e from jsonb_array_elements(input) as e')
   })
 })
