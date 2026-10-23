@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { infobipMessageId, infobipRequest, parseInfobipWebhook, parseTemplate } from '../supabase/functions/_shared/infobip'
+import { infobipMessageId, infobipRequest, parseHeader, parseInfobipWebhook, parseTemplate } from '../supabase/functions/_shared/infobip'
 
 const migration = readFileSync('supabase/migrations/20261013190000_crm_channel_consents_v1.sql', 'utf8')
 const dispatcher = readFileSync('supabase/functions/crm-channel-outbox-dispatcher/index.ts', 'utf8')
@@ -24,6 +24,17 @@ describe('Infobip WhatsApp adapter', () => {
     expect(message.content).toEqual({ templateName: 'carrinho_abandonado', templateData: { body: { placeholders: ['Ana', '42'] } }, language: 'pt_BR' })
     expect(message.notifyUrl).toBe('https://x/hook')
     expect(infobipMessageId({ messages: [{ messageId: 'outbox-1' }] })).toBe('outbox-1')
+  })
+
+  it('sends the header media of MEDIA_TEMPLATEs (otherwise Infobip 7008)', () => {
+    const image = { ...parseTemplate({ whatsapp_template: { name: 'confronto_perfeito_elton' } })!, header: parseHeader('image', 'https://cdn.x/banner.jpg') }
+    expect(JSON.parse(String(infobipRequest({ ...send, template: image }).init.body)).messages[0].content.templateData)
+      .toEqual({ body: { placeholders: [] }, header: { type: 'IMAGE', mediaUrl: 'https://cdn.x/banner.jpg' } })
+    const doc = { ...image, header: parseHeader('DOCUMENT', 'https://cdn.x/files/Guia%20Final.pdf') }
+    expect(JSON.parse(String(infobipRequest({ ...send, template: doc }).init.body)).messages[0].content.templateData.header)
+      .toEqual({ type: 'DOCUMENT', mediaUrl: 'https://cdn.x/files/Guia%20Final.pdf', filename: 'Guia Final.pdf' })
+    expect(parseHeader('IMAGE', 'http://insecure/x.jpg')).toBeNull()
+    expect(dispatcher).toContain('whatsapp_header_type,whatsapp_header_url')
   })
 
   it('refuses base URLs outside Infobip (credential exfiltration)', () => {

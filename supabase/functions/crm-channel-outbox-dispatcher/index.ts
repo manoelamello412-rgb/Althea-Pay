@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { audioMimetype, bridgeSendRequest, whatsappNumber } from "../_shared/whatsapp.ts";
-import { infobipMessageId, infobipRequest, parseTemplate } from "../_shared/infobip.ts";
+import { infobipMessageId, infobipRequest, parseHeader, parseTemplate } from "../_shared/infobip.ts";
 import { signUnsubscribe } from "../_shared/remarketing.ts";
 
 type Json = Record<string, unknown>;
@@ -147,6 +147,14 @@ async function sendInfobip(account: Account, identity: Identity, row: Outbox): P
   const notifyUrl = webhookToken
     ? supabaseUrl.replace(/\/$/, "") + "/functions/v1/crm-channel-infobip-webhook?account=" + account.id + "&token=" + encodeURIComponent(webhookToken)
     : null;
+  const template = parseTemplate(row.metadata);
+  if (template?.name && !template.header) {
+    // Header media lives on the org's template row, so every producer (campaigns, recovery, automations) gets it.
+    const found = await db.from("crm_message_templates").select("whatsapp_header_type,whatsapp_header_url")
+      .eq("organization_id", row.organization_id).eq("whatsapp_template_name", template.name).not("whatsapp_header_type", "is", null).limit(1).maybeSingle();
+    if (found.error) throw found.error;
+    template.header = parseHeader(found.data?.whatsapp_header_type, found.data?.whatsapp_header_url);
+  }
   const { url, init } = infobipRequest({
     baseUrl,
     apiKey,
@@ -154,7 +162,7 @@ async function sendInfobip(account: Account, identity: Identity, row: Outbox): P
     to: whatsappNumber(identity.phone_e164 || identity.external_user_id || ""),
     messageId: row.id,
     body: row.body,
-    template: parseTemplate(row.metadata),
+    template,
     notifyUrl,
   });
   const payload = await responseJson(await fetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(30_000) }));

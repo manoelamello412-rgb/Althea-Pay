@@ -2,7 +2,22 @@
 
 type Json = Record<string, unknown>;
 
-export type InfobipTemplate = { name: string; language: string; placeholders?: string[] };
+export type InfobipHeader = { type: "IMAGE" | "VIDEO" | "DOCUMENT"; url: string };
+export type InfobipTemplate = { name: string; language: string; placeholders?: string[]; header?: InfobipHeader | null };
+
+const HEADER_TYPES = ["IMAGE", "VIDEO", "DOCUMENT"];
+export function parseHeader(type: unknown, url: unknown): InfobipHeader | null {
+  const kind = str(type).toUpperCase();
+  const mediaUrl = str(url);
+  return HEADER_TYPES.includes(kind) && mediaUrl.startsWith("https://") ? { type: kind as InfobipHeader["type"], url: mediaUrl } : null;
+}
+
+// MEDIA_TEMPLATE headers must be sent with the media or Infobip answers 7008 (template parameters mismatch).
+function headerData(header: InfobipHeader | null | undefined) {
+  if (!header) return {};
+  const filename = header.type === "DOCUMENT" ? { filename: decodeURIComponent(new URL(header.url).pathname.split("/").pop() || "documento") } : {};
+  return { header: { type: header.type, mediaUrl: header.url, ...filename } };
+}
 
 export type InfobipSend = {
   baseUrl: string;
@@ -41,7 +56,7 @@ export function infobipRequest(input: InfobipSend): { url: string; init: Request
   const notify = input.notifyUrl ? { notifyUrl: input.notifyUrl } : {};
 
   if (input.template) {
-    const { name, language, placeholders = [] } = input.template;
+    const { name, language, placeholders = [], header } = input.template;
     if (!name || !language) throw new Error("whatsapp_template_invalid");
     return {
       url: base + "/whatsapp/1/message/template",
@@ -53,7 +68,7 @@ export function infobipRequest(input: InfobipSend): { url: string; init: Request
             from,
             to,
             messageId: input.messageId,
-            content: { templateName: name, templateData: { body: { placeholders: placeholders.map(String) } }, language },
+            content: { templateName: name, templateData: { body: { placeholders: placeholders.map(String) }, ...headerData(header) }, language },
             ...notify,
           }],
         }),
@@ -81,7 +96,8 @@ export function parseTemplate(metadata: unknown): InfobipTemplate | null {
   const raw = isObject(metadata) ? metadata.whatsapp_template : null;
   if (!isObject(raw)) return null;
   const placeholders = Array.isArray(raw.placeholders) ? raw.placeholders.map(str) : [];
-  return { name: str(raw.name), language: str(raw.language) || "pt_BR", placeholders };
+  const header = isObject(raw.header) ? parseHeader(raw.header.type, raw.header.url) : null;
+  return { name: str(raw.name), language: str(raw.language) || "pt_BR", placeholders, header };
 }
 
 const statusByGroup: Record<string, "sent" | "delivered" | "failed"> = {
