@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { configuredButtons, infobipMessageId, infobipRequest, parseHeader, parseInfobipWebhook, parseTemplate, templateButtons } from '../supabase/functions/_shared/infobip'
+import { buildTemplateData, configuredTemplateData, findTemplate, infobipMessageId, infobipRequest, parseInfobipWebhook, parseTemplate } from '../supabase/functions/_shared/infobip'
 
 const migration = readFileSync('supabase/migrations/20261013190000_crm_channel_consents_v1.sql', 'utf8')
 const dispatcher = readFileSync('supabase/functions/crm-channel-outbox-dispatcher/index.ts', 'utf8')
@@ -26,36 +26,63 @@ describe('Infobip WhatsApp adapter', () => {
     expect(infobipMessageId({ messages: [{ messageId: 'outbox-1' }] })).toBe('outbox-1')
   })
 
-  it('sends the header media of MEDIA_TEMPLATEs (otherwise Infobip 7008)', () => {
-    const image = { ...parseTemplate({ whatsapp_template: { name: 'confronto_perfeito_elton' } })!, header: parseHeader('image', 'https://cdn.x/banner.jpg') }
-    expect(JSON.parse(String(infobipRequest({ ...send, template: image }).init.body)).messages[0].content.templateData)
-      .toEqual({ body: { placeholders: [] }, header: { type: 'IMAGE', mediaUrl: 'https://cdn.x/banner.jpg' } })
-    const doc = { ...image, header: parseHeader('DOCUMENT', 'https://cdn.x/files/Guia%20Final.pdf') }
-    expect(JSON.parse(String(infobipRequest({ ...send, template: doc }).init.body)).messages[0].content.templateData.header)
-      .toEqual({ type: 'DOCUMENT', mediaUrl: 'https://cdn.x/files/Guia%20Final.pdf', filename: 'Guia Final.pdf' })
-    expect(parseHeader('IMAGE', 'http://insecure/x.jpg')).toBeNull()
-    expect(dispatcher).toContain('whatsapp_header_type,whatsapp_header_url')
+  // Approved structures shaped like Infobip's GET /whatsapp/2/senders/{sender}/templates (WhatsApp*ApiData).
+  const approved = (structure: Record<string, unknown>, category = 'MARKETING') => ({ templates: [{ name: 't', language: 'pt_BR', category, structure }] })
+  const build = (structure: Record<string, unknown>, configured = {}, placeholders: string[] = [], category?: string) =>
+    buildTemplateData(findTemplate(approved(structure, category), 't', 'pt_BR'), configured, placeholders, new Date('2026-10-23T00:00:00Z'))
+
+  it('confronto_perfeito_elton: quick reply gets an entry, static URL button does not (Infobip sample JSON)', () => {
+    expect(build({ body: { text: 'Olá, aliado.' }, buttons: [{ type: 'URL', text: 'Quebrar o Ciclo', url: 'https://x.com/quiz' }, { type: 'QUICK_REPLY', text: 'Bloquear Contato' }] }))
+      .toEqual({ buttons: [{ type: 'QUICK_REPLY', parameter: 'Bloquear Contato' }] })
   })
 
-  it('sends the quick-reply buttons of the approved template (otherwise Infobip 7008)', () => {
-    const definition = { templates: [{ name: 'confronto_perfeito_elton', language: 'pt_BR', structure: { body: { text: 'Olá, aliado.' }, buttons: [
-      { type: 'URL', text: 'Quebrar o Ciclo', url: 'https://x.com/quiz' }, { type: 'QUICK_REPLY', text: 'Bloquear Contato' }] } }] }
-    const buttons = templateButtons(definition, 'confronto_perfeito_elton', 'pt_BR')
-    expect(buttons).toEqual([{ type: 'QUICK_REPLY', parameter: 'Bloquear Contato' }])
-    const template = { ...parseTemplate({ whatsapp_template: { name: 'confronto_perfeito_elton' } })!, buttons }
+  it('fills every header type and send-time button from the approved examples', () => {
+    expect(build({ header: { format: 'IMAGE', example: 'https://cdn/x.jpg' } })).toEqual({ header: { type: 'IMAGE', mediaUrl: 'https://cdn/x.jpg' } })
+    expect(build({ header: { format: 'DOCUMENT', example: 'https://cdn/Guia%20Final.pdf' } }).header).toEqual({ type: 'DOCUMENT', mediaUrl: 'https://cdn/Guia%20Final.pdf', filename: 'Guia Final.pdf' })
+    expect(build({ header: { format: 'VIDEO', example: 'https://cdn/v.mp4' } }).header).toEqual({ type: 'VIDEO', mediaUrl: 'https://cdn/v.mp4' })
+    expect(build({ header: { format: 'TEXT', text: 'Oi {{1}}', example: 'Ana' } }).header).toEqual({ type: 'TEXT', placeholder: 'Ana' })
+    expect(build({ header: { format: 'TEXT', text: 'Oferta' } })).toEqual({})
+    expect(build({ buttons: [
+      { type: 'URL', text: 'Pagar', url: 'https://pay.x/{{1}}', example: 'abc' }, { type: 'COPY_CODE', text: 'Copiar', example: 'CUPOM10' },
+      { type: 'FLOW', text: 'Abrir', flowId: 1 }, { type: 'PHONE_NUMBER', text: 'Ligar', phoneNumber: '+55' }, { type: 'VOICE_CALL', text: 'Chamar' },
+    ] }).buttons).toEqual([{ type: 'URL', parameter: 'abc' }, { type: 'COPY_CODE', parameter: 'CUPOM10' }, { type: 'FLOW' }, { type: 'VOICE_CALL' }])
+  })
+
+  it('covers carousel, limited-time offer and authentication templates', () => {
+    expect(build({ body: { text: 'x' }, carousel: { cards: [
+      { header: { format: 'IMAGE', example: 'https://cdn/1.jpg' }, body: { text: 'c' }, buttons: [{ type: 'QUICK_REPLY', text: 'Quero' }] },
+      { header: { format: 'VIDEO', example: 'https://cdn/2.mp4' }, body: { text: 'd {{1}}', examples: ['10'] }, buttons: [{ type: 'URL', text: 'Ver', url: 'https://x/{{1}}', example: 'p2' }] },
+    ] } }).carousel).toEqual({ cards: [
+      { body: { placeholders: [] }, header: { type: 'IMAGE', mediaUrl: 'https://cdn/1.jpg' }, buttons: [{ type: 'QUICK_REPLY', parameter: 'Quero' }] },
+      { body: { placeholders: ['10'] }, header: { type: 'VIDEO', mediaUrl: 'https://cdn/2.mp4' }, buttons: [{ type: 'URL', parameter: 'p2' }] },
+    ] })
+    expect(build({ limitedTimeOffer: { hasExpiration: true, text: 'Só hoje' } }).limitedTimeOffer).toEqual({ expirationTime: '2026-10-24T00:00:00.000Z' })
+    expect(build({ body: { text: '{{1}} é seu código' } }, {}, ['123456'], 'AUTHENTICATION')).toEqual({ buttons: [{ type: 'URL', parameter: '123456' }] })
+  })
+
+  it('configured values win and may use the template variables ({{n}})', () => {
+    const configured = configuredTemplateData({
+      whatsapp_header_type: 'LOCATION', whatsapp_header_url: '-23.5, -46.6',
+      whatsapp_buttons: [{ type: 'url', parameter: '{{2}}' }, { type: 'FLOW', parameter: 'tok' }, { type: 'QUICK_REPLY', parameter: '' }],
+      whatsapp_template_data: { limitedTimeOffer: { expirationTime: '2026-12-31T23:59:00Z' } },
+    })
+    expect(build({ header: { format: 'LOCATION' }, buttons: [{ type: 'QUICK_REPLY', text: 'auto' }] }, configured, ['Ana', 'chk_42'])).toEqual({
+      header: { type: 'LOCATION', latitude: -23.5, longitude: -46.6 },
+      buttons: [{ type: 'URL', parameter: 'chk_42' }, { type: 'FLOW', flowToken: 'tok' }, { type: 'QUICK_REPLY' }],
+      limitedTimeOffer: { expirationTime: '2026-12-31T23:59:00Z' },
+    })
+    expect(configuredTemplateData({ whatsapp_header_type: 'IMAGE', whatsapp_header_url: '{{1}}' })).toEqual({ header: { type: 'IMAGE', mediaUrl: '{{1}}' } })
+    expect(build({}, {}, [])).toEqual({})
+    expect(findTemplate(null, 't', 'pt_BR')).toBeNull()
+  })
+
+  it('sends templateData verbatim next to the body placeholders', () => {
+    const template = { ...parseTemplate({ whatsapp_template: { name: 'confronto_perfeito_elton' } })!, data: { buttons: [{ type: 'QUICK_REPLY', parameter: 'Bloquear Contato' }] } }
     expect(JSON.parse(String(infobipRequest({ ...send, template }).init.body)).messages[0].content).toEqual({
       templateName: 'confronto_perfeito_elton', language: 'pt_BR',
       templateData: { body: { placeholders: [] }, buttons: [{ type: 'QUICK_REPLY', parameter: 'Bloquear Contato' }] },
     })
-    expect(templateButtons(null, 'x', 'pt_BR')).toEqual([])
-  })
-
-  it('per-template configured buttons win over the Infobip definition', () => {
-    expect(configuredButtons([{ type: 'QUICK_REPLY', parameter: ' sair ' }, { type: 'url', parameter: 'abc123' }, { type: 'CALL', parameter: 'x' }]))
-      .toEqual([{ type: 'QUICK_REPLY', parameter: 'sair' }, { type: 'URL', parameter: 'abc123' }])
-    expect(configuredButtons(null)).toBeNull()
-    expect(configuredButtons([])).toBeNull()
-    expect(dispatcher).toContain('configuredButtons(found.data?.whatsapp_buttons) ?? await infobipTemplateButtons')
+    expect(dispatcher).toContain('buildTemplateData(approved, configuredTemplateData(found.data), template.placeholders ?? [])')
   })
 
   it('refuses base URLs outside Infobip (credential exfiltration)', () => {

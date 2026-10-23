@@ -2,23 +2,8 @@
 
 type Json = Record<string, unknown>;
 
-export type InfobipHeader = { type: "IMAGE" | "VIDEO" | "DOCUMENT"; url: string };
-export type InfobipButton = { type: string; parameter: string };
-export type InfobipTemplate = { name: string; language: string; placeholders?: string[]; header?: InfobipHeader | null; buttons?: InfobipButton[] };
-
-const HEADER_TYPES = ["IMAGE", "VIDEO", "DOCUMENT"];
-export function parseHeader(type: unknown, url: unknown): InfobipHeader | null {
-  const kind = str(type).toUpperCase();
-  const mediaUrl = str(url);
-  return HEADER_TYPES.includes(kind) && mediaUrl.startsWith("https://") ? { type: kind as InfobipHeader["type"], url: mediaUrl } : null;
-}
-
-// MEDIA_TEMPLATE headers must be sent with the media or Infobip answers 7008 (template parameters mismatch).
-function headerData(header: InfobipHeader | null | undefined) {
-  if (!header) return {};
-  const filename = header.type === "DOCUMENT" ? { filename: decodeURIComponent(new URL(header.url).pathname.split("/").pop() || "documento") } : {};
-  return { header: { type: header.type, mediaUrl: header.url, ...filename } };
-}
+// templateData without body: header, buttons, carousel, limitedTimeOffer… exactly as Infobip's send API takes them.
+export type InfobipTemplate = { name: string; language: string; placeholders?: string[]; data?: Json };
 
 export type InfobipSend = {
   baseUrl: string;
@@ -57,7 +42,7 @@ export function infobipRequest(input: InfobipSend): { url: string; init: Request
   const notify = input.notifyUrl ? { notifyUrl: input.notifyUrl } : {};
 
   if (input.template) {
-    const { name, language, placeholders = [], header, buttons = [] } = input.template;
+    const { name, language, placeholders = [], data = {} } = input.template;
     if (!name || !language) throw new Error("whatsapp_template_invalid");
     return {
       url: base + "/whatsapp/1/message/template",
@@ -69,7 +54,7 @@ export function infobipRequest(input: InfobipSend): { url: string; init: Request
             from,
             to,
             messageId: input.messageId,
-            content: { templateName: name, templateData: { body: { placeholders: placeholders.map(String) }, ...headerData(header), ...(buttons.length ? { buttons } : {}) }, language },
+            content: { templateName: name, templateData: { body: { placeholders: placeholders.map(String) }, ...data }, language },
             ...notify,
           }],
         }),
@@ -87,28 +72,114 @@ export function infobipRequest(input: InfobipSend): { url: string; init: Request
   };
 }
 
-// Approved template definition (GET /whatsapp/2/senders/{sender}/templates) -> the buttons the send must carry.
-// Quick replies always need an entry (parameter = payload echoed back on tap); static URL buttons need none.
-// ponytail: dynamic URL buttons ({{1}} in the url) have no value source yet, so they are left out and still fail with 7008.
+// ---- Approved template -> send payload -------------------------------------------------------------------
+// Infobip rejects a template send whose parameters don't match the approved structure (7008). The structure
+// (GET /whatsapp/2/senders/{sender}/templates) carries an approved example for every variable part, so a complete,
+// valid templateData can be built for any template; values configured on the Althea template override it.
+// Field names follow Infobip's OpenAPI (infobip-api-java-client WhatsAppTemplate*Content / WhatsApp*ApiData).
 export function infobipTemplatesUrl(baseUrl: string, sender: string): string {
   return infobipBaseUrl(baseUrl) + "/whatsapp/2/senders/" + digits(sender) + "/templates";
 }
 
-export function templateButtons(payload: unknown, name: string, language: string): InfobipButton[] {
-  const templates = isObject(payload) && Array.isArray(payload.templates) ? payload.templates : [];
-  const match = templates.find((t) => isObject(t) && str(t.name) === name && str(t.language) === language)
-    ?? templates.find((t) => isObject(t) && str(t.name) === name);
-  const structure = isObject(match) && isObject(match.structure) ? match.structure : null;
-  const buttons = structure && Array.isArray(structure.buttons) ? structure.buttons : [];
-  return buttons.filter(isObject).filter((b) => str(b.type).toUpperCase() === "QUICK_REPLY")
-    .map((b) => ({ type: "QUICK_REPLY", parameter: str(b.text) }));
+export function findTemplate(payload: unknown, name: string, language: string): Json | null {
+  const templates = isObject(payload) && Array.isArray(payload.templates) ? payload.templates.filter(isObject) : [];
+  return templates.find((t) => str(t.name) === name && str(t.language) === language) ?? templates.find((t) => str(t.name) === name) ?? null;
 }
 
-// Buttons configured on the Althea template (crm_message_templates.whatsapp_buttons); null when not configured.
-export function configuredButtons(value: unknown): InfobipButton[] | null {
-  if (!Array.isArray(value) || !value.length) return null;
-  return value.filter(isObject).map((b) => ({ type: str(b.type).toUpperCase(), parameter: str(b.parameter) }))
-    .filter((b) => b.type === "QUICK_REPLY" || b.type === "URL");
+const MEDIA = ["IMAGE", "VIDEO", "DOCUMENT", "GIF"];
+const fileName = (url: string) => {
+  try { return decodeURIComponent(new URL(url).pathname.split("/").pop() || "") || "documento"; } catch { return "documento"; }
+};
+const media = (type: string, url: string) => (type === "DOCUMENT" ? { type, mediaUrl: url, filename: fileName(url) } : { type, mediaUrl: url });
+
+function headerFromStructure(header: unknown): Json | null {
+  if (!isObject(header)) return null;
+  const format = str(header.format).toUpperCase();
+  if (MEDIA.includes(format) && str(header.example)) return media(format, str(header.example));
+  if (format === "TEXT" && /\{\{\s*1\s*\}\}/.test(str(header.text))) return { type: "TEXT", placeholder: str(header.example) };
+  return null; // static text header needs nothing; LOCATION has no example and must be configured
+}
+
+// Only buttons with a send-time part get an entry, in template order (PHONE_NUMBER and static URLs have none).
+function buttonsFromStructure(buttons: unknown): Json[] {
+  return (Array.isArray(buttons) ? buttons.filter(isObject) : []).flatMap((b): Json[] => {
+    const type = str(b.type).toUpperCase();
+    if (type === "QUICK_REPLY") return [{ type, parameter: str(b.text) }];
+    if (type === "URL") return /\{\{\s*1\s*\}\}/.test(str(b.url)) ? [{ type, parameter: str(b.example) }] : [];
+    if (type === "COPY_CODE") return [{ type, parameter: str(b.example) }];
+    if (type === "FLOW" || type === "VOICE_CALL" || type === "CATALOG" || type === "MULTI_PRODUCT") return [{ type }];
+    return [];
+  });
+}
+
+export function templateDataFromStructure(template: Json | null, placeholders: string[], now = new Date()): Json {
+  const structure = template && isObject(template.structure) ? template.structure : null;
+  if (!structure) return {};
+  // Authentication: the code goes in the body and again as the URL button parameter (Infobip API convention).
+  if (str(template?.category).toUpperCase() === "AUTHENTICATION") return { buttons: [{ type: "URL", parameter: placeholders[0] ?? "" }] };
+  const data: Json = {};
+  const header = headerFromStructure(structure.header);
+  if (header) data.header = header;
+  const buttons = buttonsFromStructure(structure.buttons);
+  if (buttons.length) data.buttons = buttons;
+  const cards = isObject(structure.carousel) && Array.isArray(structure.carousel.cards) ? structure.carousel.cards.filter(isObject) : [];
+  if (cards.length) {
+    data.carousel = {
+      cards: cards.map((card) => {
+        const examples = isObject(card.body) && Array.isArray(card.body.examples) ? card.body.examples.map(str) : [];
+        const out: Json = { body: { placeholders: examples } };
+        const cardHeader = headerFromStructure(card.header);
+        if (cardHeader) out.header = cardHeader;
+        const cardButtons = buttonsFromStructure(card.buttons);
+        if (cardButtons.length) out.buttons = cardButtons;
+        return out;
+      }),
+    };
+  }
+  // ponytail: offers with expiration default to 24h from send; configure limitedTimeOffer.expirationTime to change it.
+  if (isObject(structure.limitedTimeOffer) && structure.limitedTimeOffer.hasExpiration) {
+    data.limitedTimeOffer = { expirationTime: new Date(now.getTime() + 86_400_000).toISOString() };
+  }
+  return data;
+}
+
+// Values configured on the Althea template (crm_message_templates): header type/value, ordered buttons and a
+// free-form templateData JSON for anything else (carousel, limitedTimeOffer, orderStatus…). null fields = automatic.
+const BUTTON_FIELD: Record<string, string> = { FLOW: "flowToken", CATALOG: "thumbnailProductRetailerId", MULTI_PRODUCT: "thumbnailProductRetailerId", VOICE_CALL: "callContextPayload" };
+export function configuredTemplateData(row: { whatsapp_header_type?: unknown; whatsapp_header_url?: unknown; whatsapp_buttons?: unknown; whatsapp_template_data?: unknown } | null): Json {
+  if (!row) return {};
+  const data: Json = isObject(row.whatsapp_template_data) ? { ...row.whatsapp_template_data } : {};
+  const type = str(row.whatsapp_header_type).toUpperCase();
+  const value = str(row.whatsapp_header_url);
+  if (type && value && !data.header) {
+    if (MEDIA.includes(type)) data.header = media(type, value);
+    else if (type === "TEXT") data.header = { type, placeholder: value };
+    else if (type === "LOCATION") {
+      const [latitude, longitude] = value.split(",").map((n) => Number(n.trim()));
+      if (Number.isFinite(latitude) && Number.isFinite(longitude)) data.header = { type, latitude, longitude };
+    }
+  }
+  if (Array.isArray(row.whatsapp_buttons) && row.whatsapp_buttons.length && !data.buttons) {
+    data.buttons = row.whatsapp_buttons.filter(isObject).map((b) => {
+      const kind = str(b.type).toUpperCase();
+      const parameter = str(b.parameter);
+      const field = BUTTON_FIELD[kind] ?? "parameter";
+      return parameter ? { type: kind, [field]: parameter } : { type: kind };
+    });
+  }
+  return data;
+}
+
+// "{{n}}" anywhere in configured/auto values -> the template's n-th variable (nome, link do checkout…).
+export function resolvePlaceholders<T>(value: T, placeholders: string[]): T {
+  if (typeof value === "string") return value.replace(/\{\{\s*(\d+)\s*\}\}/g, (_, n) => placeholders[Number(n) - 1] ?? "") as T;
+  if (Array.isArray(value)) return value.map((item) => resolvePlaceholders(item, placeholders)) as T;
+  if (isObject(value)) return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolvePlaceholders(v, placeholders)])) as T;
+  return value;
+}
+
+export function buildTemplateData(approved: Json | null, configured: Json, placeholders: string[], now = new Date()): Json {
+  return resolvePlaceholders({ ...templateDataFromStructure(approved, placeholders, now), ...configured }, placeholders);
 }
 
 export function infobipMessageId(payload: unknown): string {
@@ -121,8 +192,7 @@ export function parseTemplate(metadata: unknown): InfobipTemplate | null {
   const raw = isObject(metadata) ? metadata.whatsapp_template : null;
   if (!isObject(raw)) return null;
   const placeholders = Array.isArray(raw.placeholders) ? raw.placeholders.map(str) : [];
-  const header = isObject(raw.header) ? parseHeader(raw.header.type, raw.header.url) : null;
-  return { name: str(raw.name), language: str(raw.language) || "pt_BR", placeholders, header };
+  return { name: str(raw.name), language: str(raw.language) || "pt_BR", placeholders };
 }
 
 const statusByGroup: Record<string, "sent" | "delivered" | "failed"> = {

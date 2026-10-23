@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { audioMimetype, bridgeSendRequest, whatsappNumber } from "../_shared/whatsapp.ts";
-import { configuredButtons, infobipMessageId, infobipRequest, infobipTemplatesUrl, parseHeader, parseTemplate, templateButtons } from "../_shared/infobip.ts";
+import { buildTemplateData, configuredTemplateData, findTemplate, infobipMessageId, infobipRequest, infobipTemplatesUrl, parseTemplate } from "../_shared/infobip.ts";
 import { signUnsubscribe } from "../_shared/remarketing.ts";
 
 type Json = Record<string, unknown>;
@@ -137,7 +137,7 @@ async function sendWhatsapp(account: Account, identity: Identity, row: Outbox): 
 
 // Approved template definitions per sender, cached for this worker instance (templates rarely change).
 const infobipTemplates = new Map<string, Promise<unknown>>();
-async function infobipTemplateButtons(baseUrl: string, apiKey: string, from: string, name: string, language: string) {
+async function infobipApprovedTemplate(baseUrl: string, apiKey: string, from: string, name: string, language: string) {
   const url = infobipTemplatesUrl(baseUrl, from);
   if (!infobipTemplates.has(url)) {
     infobipTemplates.set(url, fetch(url, { headers: { authorization: "App " + apiKey, accept: "application/json" }, redirect: "error", signal: AbortSignal.timeout(15_000) })
@@ -145,9 +145,9 @@ async function infobipTemplateButtons(baseUrl: string, apiKey: string, from: str
       .catch(() => null));
   }
   const payload = await infobipTemplates.get(url);
-  // Lookup failure: forget it so the next message retries, and send without buttons (as before).
+  // Lookup failure: forget it so the next message retries, and send with the configured values only.
   if (!payload) infobipTemplates.delete(url);
-  return templateButtons(payload, name, language);
+  return findTemplate(payload, name, language);
 }
 
 // Infobip (official API). Outside the 24h window WhatsApp only accepts approved templates.
@@ -165,15 +165,15 @@ async function sendInfobip(account: Account, identity: Identity, row: Outbox): P
   const template = parseTemplate(row.metadata);
   const from = String(meta(account, "from_number", account.external_account_id || ""));
   if (template?.name) {
-    // Header media and buttons live on the org's template row, so every producer (campaigns, recovery, automations)
-    // gets them. Configured rows win; otherwise the quick replies come from the approved template on Infobip.
-    const found = await db.from("crm_message_templates").select("whatsapp_header_type,whatsapp_header_url,whatsapp_buttons")
+    // Configuration lives on the org's template row, so every producer (campaigns, recovery, automations) gets it.
+    // The approved structure on Infobip fills everything not configured (see buildTemplateData).
+    const found = await db.from("crm_message_templates").select("whatsapp_header_type,whatsapp_header_url,whatsapp_buttons,whatsapp_template_data")
       .eq("organization_id", row.organization_id).eq("whatsapp_template_name", template.name)
-      .order("whatsapp_buttons", { ascending: true, nullsFirst: false }).order("whatsapp_header_type", { ascending: true, nullsFirst: false })
-      .limit(1).maybeSingle();
+      .order("whatsapp_template_data", { ascending: true, nullsFirst: false }).order("whatsapp_buttons", { ascending: true, nullsFirst: false })
+      .order("whatsapp_header_type", { ascending: true, nullsFirst: false }).limit(1).maybeSingle();
     if (found.error) throw found.error;
-    template.header ??= parseHeader(found.data?.whatsapp_header_type, found.data?.whatsapp_header_url);
-    template.buttons = configuredButtons(found.data?.whatsapp_buttons) ?? await infobipTemplateButtons(baseUrl, apiKey, from, template.name, template.language);
+    const approved = await infobipApprovedTemplate(baseUrl, apiKey, from, template.name, template.language);
+    template.data = buildTemplateData(approved, configuredTemplateData(found.data), template.placeholders ?? []);
   }
   const { url, init } = infobipRequest({
     baseUrl,
