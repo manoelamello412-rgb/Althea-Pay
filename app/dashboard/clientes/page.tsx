@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ListPlus, Loader2, RefreshCw, Search, Users, X } from 'lucide-react'
+import { ListPlus, Loader2, RefreshCw, Search, Trash2, Users, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 
@@ -75,6 +75,20 @@ export default function ClientesPage() {
     setListDialog({ listId: saved.id, name: '', saving: false, result: `${saved.added} cliente(s) adicionado(s) à lista "${saved.name}". Use-a em CRM › Campanhas.` })
   }
 
+  // Permanent (clients have no bin): identities, Kanban cards and list memberships go with it (client_delete RPC).
+  async function deleteClient(client: Client) {
+    if (!window.confirm(`Excluir "${nameOf(client)}" de vez? Sai do Kanban e das listas; não dá para desfazer.`)) return
+    const { error: deleteError } = await db.rpc('client_delete', { p_client_id: client.id })
+    if (deleteError) {
+      const reason: Record<string, string> = { FORBIDDEN: 'Só proprietário, administrador ou gestor pode excluir clientes.', CLIENT_HAS_SUBSCRIPTIONS: 'Este cliente tem assinatura e não pode ser excluído.' }
+      window.alert(reason[deleteError.message] ?? deleteError.message)
+      return
+    }
+    setSelected(null)
+    setClients(current => current.filter(item => item.id !== client.id))
+    setChecked(current => { const next = new Set(current); next.delete(client.id); return next })
+  }
+
   const nameOf = (client: Client) => pick(obj(client.data), ['name', 'full_name', 'nome', 'customer_name']) || 'Cliente sem nome'
   const emailOf = (client: Client) => pick(obj(client.data), ['email', 'buyer_email', 'customer_email'])
   const phoneOf = (client: Client) => pick(obj(client.data), ['phone', 'whatsapp', 'mobile'])
@@ -97,6 +111,6 @@ export default function ClientesPage() {
         <button type="button" onClick={() => void addToList()} disabled={listDialog.saving || (!listDialog.listId && !listDialog.name.trim())} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-bold text-black hover:bg-emerald-400 disabled:opacity-40">{listDialog.saving && <Loader2 size={15} className="animate-spin" />} Adicionar</button>
       </>}
     </div></div>}
-    {selected && <div role="dialog" aria-modal="true" aria-label="Detalhes do cliente" className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm md:items-center md:p-6" onClick={event => { if (event.currentTarget === event.target) setSelected(null) }}><div className="w-full max-w-xl rounded-t-3xl border border-white/10 bg-[#0b100e] p-6 shadow-2xl md:rounded-3xl"><div className="mb-6 flex items-center justify-between"><div><span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Customer 360</span><h2 className="mt-1 text-xl font-black">{nameOf(selected)}</h2></div><button type="button" onClick={() => setSelected(null)} aria-label="Fechar" className="rounded-lg p-2 text-slate-500 hover:bg-white/5"><X size={18} /></button></div><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-white/10 p-4"><span className="text-[10px] uppercase tracking-widest text-slate-600">E-mail</span><b className="mt-2 block break-all text-sm">{emailOf(selected) || 'Não informado'}</b></div><div className="rounded-xl border border-white/10 p-4"><span className="text-[10px] uppercase tracking-widest text-slate-600">Telefone</span><b className="mt-2 block text-sm">{phoneOf(selected) || 'Não informado'}</b></div><div className="rounded-xl border border-white/10 p-4"><span className="text-[10px] uppercase tracking-widest text-slate-600">CPF</span><b className="mt-2 block text-sm tabular-nums">{cpf(documentOf(selected)) || 'Não informado'}</b></div><div className="rounded-xl border border-white/10 p-4 sm:col-span-2"><span className="text-[10px] uppercase tracking-widest text-slate-600">ID do cliente</span><b className="mt-2 block break-all font-mono text-xs">{selected.id}</b></div></div><div className="mt-4 rounded-xl border border-white/10 p-4"><span className="text-[10px] uppercase tracking-widest text-slate-600">Cadastro</span><b className="mt-2 block text-sm">{date(selected.created_at)}</b></div></div></div>}
+    {selected && <div role="dialog" aria-modal="true" aria-label="Detalhes do cliente" className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm md:items-center md:p-6" onClick={event => { if (event.currentTarget === event.target) setSelected(null) }}><div className="w-full max-w-xl rounded-t-3xl border border-white/10 bg-[#0b100e] p-6 shadow-2xl md:rounded-3xl"><div className="mb-6 flex items-center justify-between"><div><span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Customer 360</span><h2 className="mt-1 text-xl font-black">{nameOf(selected)}</h2></div><button type="button" onClick={() => setSelected(null)} aria-label="Fechar" className="rounded-lg p-2 text-slate-500 hover:bg-white/5"><X size={18} /></button></div><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-white/10 p-4"><span className="text-[10px] uppercase tracking-widest text-slate-600">E-mail</span><b className="mt-2 block break-all text-sm">{emailOf(selected) || 'Não informado'}</b></div><div className="rounded-xl border border-white/10 p-4"><span className="text-[10px] uppercase tracking-widest text-slate-600">Telefone</span><b className="mt-2 block text-sm">{phoneOf(selected) || 'Não informado'}</b></div><div className="rounded-xl border border-white/10 p-4"><span className="text-[10px] uppercase tracking-widest text-slate-600">CPF</span><b className="mt-2 block text-sm tabular-nums">{cpf(documentOf(selected)) || 'Não informado'}</b></div><div className="rounded-xl border border-white/10 p-4 sm:col-span-2"><span className="text-[10px] uppercase tracking-widest text-slate-600">ID do cliente</span><b className="mt-2 block break-all font-mono text-xs">{selected.id}</b></div></div><div className="mt-4 rounded-xl border border-white/10 p-4"><span className="text-[10px] uppercase tracking-widest text-slate-600">Cadastro</span><b className="mt-2 block text-sm">{date(selected.created_at)}</b></div><button type="button" onClick={() => void deleteClient(selected)} className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 px-4 py-2.5 text-xs font-bold text-red-300 transition hover:bg-red-500/10"><Trash2 size={14} /> Excluir cliente</button></div></div>}
   </main>
 }
