@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { audioMimetype, bridgeSendRequest, whatsappNumber } from "../_shared/whatsapp.ts";
-import { infobipMessageId, infobipRequest, parseHeader, parseTemplate } from "../_shared/infobip.ts";
+import { infobipMessageId, infobipRequest, infobipTemplatesUrl, parseHeader, parseTemplate, templateButtons } from "../_shared/infobip.ts";
 import { signUnsubscribe } from "../_shared/remarketing.ts";
 
 type Json = Record<string, unknown>;
@@ -135,6 +135,21 @@ async function sendWhatsapp(account: Account, identity: Identity, row: Outbox): 
   return { externalId: text(payload.id), provider: account.provider };
 }
 
+// Approved template definitions per sender, cached for this worker instance (templates rarely change).
+const infobipTemplates = new Map<string, Promise<unknown>>();
+async function infobipTemplateButtons(baseUrl: string, apiKey: string, from: string, name: string, language: string) {
+  const url = infobipTemplatesUrl(baseUrl, from);
+  if (!infobipTemplates.has(url)) {
+    infobipTemplates.set(url, fetch(url, { headers: { authorization: "App " + apiKey, accept: "application/json" }, redirect: "error", signal: AbortSignal.timeout(15_000) })
+      .then((response) => response.ok ? response.json() : null)
+      .catch(() => null));
+  }
+  const payload = await infobipTemplates.get(url);
+  // Lookup failure: forget it so the next message retries, and send without buttons (as before).
+  if (!payload) infobipTemplates.delete(url);
+  return templateButtons(payload, name, language);
+}
+
 // Infobip (official API). Outside the 24h window WhatsApp only accepts approved templates.
 async function sendInfobip(account: Account, identity: Identity, row: Outbox): Promise<DeliveryResult> {
   // Outside the 24h window Infobip only takes approved templates, so campaign audio is Baileys-only.
@@ -155,10 +170,12 @@ async function sendInfobip(account: Account, identity: Identity, row: Outbox): P
     if (found.error) throw found.error;
     template.header = parseHeader(found.data?.whatsapp_header_type, found.data?.whatsapp_header_url);
   }
+  const from = String(meta(account, "from_number", account.external_account_id || ""));
+  if (template?.name) template.buttons = await infobipTemplateButtons(baseUrl, apiKey, from, template.name, template.language);
   const { url, init } = infobipRequest({
     baseUrl,
     apiKey,
-    from: String(meta(account, "from_number", account.external_account_id || "")),
+    from,
     to: whatsappNumber(identity.phone_e164 || identity.external_user_id || ""),
     messageId: row.id,
     body: row.body,

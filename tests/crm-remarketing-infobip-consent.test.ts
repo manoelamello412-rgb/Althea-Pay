@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { infobipMessageId, infobipRequest, parseHeader, parseInfobipWebhook, parseTemplate } from '../supabase/functions/_shared/infobip'
+import { infobipMessageId, infobipRequest, parseHeader, parseInfobipWebhook, parseTemplate, templateButtons } from '../supabase/functions/_shared/infobip'
 
 const migration = readFileSync('supabase/migrations/20261013190000_crm_channel_consents_v1.sql', 'utf8')
 const dispatcher = readFileSync('supabase/functions/crm-channel-outbox-dispatcher/index.ts', 'utf8')
@@ -35,6 +35,19 @@ describe('Infobip WhatsApp adapter', () => {
       .toEqual({ type: 'DOCUMENT', mediaUrl: 'https://cdn.x/files/Guia%20Final.pdf', filename: 'Guia Final.pdf' })
     expect(parseHeader('IMAGE', 'http://insecure/x.jpg')).toBeNull()
     expect(dispatcher).toContain('whatsapp_header_type,whatsapp_header_url')
+  })
+
+  it('sends the quick-reply buttons of the approved template (otherwise Infobip 7008)', () => {
+    const definition = { templates: [{ name: 'confronto_perfeito_elton', language: 'pt_BR', structure: { body: { text: 'Olá, aliado.' }, buttons: [
+      { type: 'URL', text: 'Quebrar o Ciclo', url: 'https://x.com/quiz' }, { type: 'QUICK_REPLY', text: 'Bloquear Contato' }] } }] }
+    const buttons = templateButtons(definition, 'confronto_perfeito_elton', 'pt_BR')
+    expect(buttons).toEqual([{ type: 'QUICK_REPLY', parameter: 'Bloquear Contato' }])
+    const template = { ...parseTemplate({ whatsapp_template: { name: 'confronto_perfeito_elton' } })!, buttons }
+    expect(JSON.parse(String(infobipRequest({ ...send, template }).init.body)).messages[0].content).toEqual({
+      templateName: 'confronto_perfeito_elton', language: 'pt_BR',
+      templateData: { body: { placeholders: [] }, buttons: [{ type: 'QUICK_REPLY', parameter: 'Bloquear Contato' }] },
+    })
+    expect(templateButtons(null, 'x', 'pt_BR')).toEqual([])
   })
 
   it('refuses base URLs outside Infobip (credential exfiltration)', () => {

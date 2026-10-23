@@ -3,7 +3,8 @@
 type Json = Record<string, unknown>;
 
 export type InfobipHeader = { type: "IMAGE" | "VIDEO" | "DOCUMENT"; url: string };
-export type InfobipTemplate = { name: string; language: string; placeholders?: string[]; header?: InfobipHeader | null };
+export type InfobipButton = { type: string; parameter: string };
+export type InfobipTemplate = { name: string; language: string; placeholders?: string[]; header?: InfobipHeader | null; buttons?: InfobipButton[] };
 
 const HEADER_TYPES = ["IMAGE", "VIDEO", "DOCUMENT"];
 export function parseHeader(type: unknown, url: unknown): InfobipHeader | null {
@@ -56,7 +57,7 @@ export function infobipRequest(input: InfobipSend): { url: string; init: Request
   const notify = input.notifyUrl ? { notifyUrl: input.notifyUrl } : {};
 
   if (input.template) {
-    const { name, language, placeholders = [], header } = input.template;
+    const { name, language, placeholders = [], header, buttons = [] } = input.template;
     if (!name || !language) throw new Error("whatsapp_template_invalid");
     return {
       url: base + "/whatsapp/1/message/template",
@@ -68,7 +69,7 @@ export function infobipRequest(input: InfobipSend): { url: string; init: Request
             from,
             to,
             messageId: input.messageId,
-            content: { templateName: name, templateData: { body: { placeholders: placeholders.map(String) }, ...headerData(header) }, language },
+            content: { templateName: name, templateData: { body: { placeholders: placeholders.map(String) }, ...headerData(header), ...(buttons.length ? { buttons } : {}) }, language },
             ...notify,
           }],
         }),
@@ -84,6 +85,23 @@ export function infobipRequest(input: InfobipSend): { url: string; init: Request
       body: JSON.stringify({ from, to, messageId: input.messageId, content: { text: input.body }, ...notify }),
     },
   };
+}
+
+// Approved template definition (GET /whatsapp/2/senders/{sender}/templates) -> the buttons the send must carry.
+// Quick replies always need an entry (parameter = payload echoed back on tap); static URL buttons need none.
+// ponytail: dynamic URL buttons ({{1}} in the url) have no value source yet, so they are left out and still fail with 7008.
+export function infobipTemplatesUrl(baseUrl: string, sender: string): string {
+  return infobipBaseUrl(baseUrl) + "/whatsapp/2/senders/" + digits(sender) + "/templates";
+}
+
+export function templateButtons(payload: unknown, name: string, language: string): InfobipButton[] {
+  const templates = isObject(payload) && Array.isArray(payload.templates) ? payload.templates : [];
+  const match = templates.find((t) => isObject(t) && str(t.name) === name && str(t.language) === language)
+    ?? templates.find((t) => isObject(t) && str(t.name) === name);
+  const structure = isObject(match) && isObject(match.structure) ? match.structure : null;
+  const buttons = structure && Array.isArray(structure.buttons) ? structure.buttons : [];
+  return buttons.filter(isObject).filter((b) => str(b.type).toUpperCase() === "QUICK_REPLY")
+    .map((b) => ({ type: "QUICK_REPLY", parameter: str(b.text) }));
 }
 
 export function infobipMessageId(payload: unknown): string {
