@@ -117,6 +117,28 @@ describe('Infobip WhatsApp adapter', () => {
     ])
     expect(parseInfobipWebhook(null)).toEqual([])
   })
+    it('parses an inbound WhatsApp message in Messages API format', () => {
+    const events = parseInfobipWebhook({
+      results: [{
+        channel: 'WHATSAPP',
+        sender: '5511999990000',
+        destination: '551140000000',
+        messageId: 'test-inbound-1',
+        content: [{ type: 'TEXT', text: 'Olá, teste' }],
+        contact: { name: 'Pessoa de teste' },
+      }],
+    })
+
+    expect(events).toEqual([{
+      kind: 'message',
+      from: '5511999990000',
+      to: '551140000000',
+      messageId: 'test-inbound-1',
+      text: 'Olá, teste',
+      name: 'Pessoa de teste',
+      type: 'text',
+    }])
+  })
 })
 
 describe('dispatcher routing and consent', () => {
