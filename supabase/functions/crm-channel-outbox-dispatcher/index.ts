@@ -184,6 +184,7 @@ async function sendInfobip(account: Account, identity: Identity, row: Outbox): P
     body: row.body,
     template,
     notifyUrl,
+    applicationId: text(meta(account, "application_id")),
   });
   const payload = await responseJson(await fetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(30_000) }));
   return { externalId: infobipMessageId(payload), provider: account.provider };
