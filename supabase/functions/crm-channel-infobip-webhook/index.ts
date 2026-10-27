@@ -76,6 +76,12 @@ Deno.serve(async (req) => {
         root_type: Array.isArray(payload) ? "array" : typeof payload,
         has_results_array: Array.isArray(root?.results),
         results_count: entries.length,
+        item_fields: first ? Object.keys(first).slice(0, 30) : [],
+        content_fields: first?.content
+          && typeof first.content === "object"
+          && !Array.isArray(first.content)
+          ? Object.keys(first.content as Record<string, unknown>).slice(0, 30)
+          : [],
         has_sender: typeof first?.sender === "string",
         has_to: typeof first?.to === "string",
         has_text: typeof first?.text === "string",
