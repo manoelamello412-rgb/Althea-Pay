@@ -212,6 +212,27 @@ export function parseInfobipWebhook(payload: unknown): InfobipEvent[] {
     if (!isObject(item)) continue;
     const messageId = str(item.messageId);
     if (!messageId) continue;
+        // Formato de entrada da Infobip Messages API.
+    if (Array.isArray(item.content) && str(item.channel).toUpperCase() === "WHATSAPP") {
+      const from = digits(str(item.sender));
+      const to = digits(str(item.destination));
+      const textContent = item.content.find(
+        (part) => isObject(part) && typeof part.text === "string" && part.text.trim()
+      );
+
+      if (from && to && isObject(textContent)) {
+        events.push({
+          kind: "message",
+          from,
+          to,
+          messageId,
+          text: str(textContent.text),
+          name: str(isObject(item.contact) ? item.contact.name : "") || null,
+          type: str(textContent.type).toLowerCase() || "text",
+        });
+      }
+      continue;
+    }
 
     if (isObject(item.message)) {
       const message = item.message;
