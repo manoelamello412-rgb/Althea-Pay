@@ -14,6 +14,7 @@ export type InfobipSend = {
   body: string;
   template?: InfobipTemplate | null;
   notifyUrl?: string | null;
+  applicationId?: string | null;
 };
 
 export type InfobipEvent =
@@ -67,7 +68,7 @@ export function infobipRequest(input: InfobipSend): { url: string; init: Request
     init: {
       method: "POST",
       headers,
-      body: JSON.stringify({ from, to, messageId: input.messageId, content: { text: input.body }, ...notify }),
+      body: JSON.stringify({ from, to, messageId: input.messageId, content: { text: input.body }, ...notify, ...(input.applicationId?.trim() ? { applicationId: input.applicationId.trim() } : {}) }),
     },
   };
 }
