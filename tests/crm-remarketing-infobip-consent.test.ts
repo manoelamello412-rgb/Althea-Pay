@@ -16,6 +16,16 @@ describe('Infobip WhatsApp adapter', () => {
     expect(JSON.parse(String(init.body))).toEqual({ from: '551140000000', to: '5511999990000', messageId: 'outbox-1', content: { text: 'Oi' } })
   })
 
+  it('includes the configured application ID in a text message', () => {
+  const { init } = infobipRequest({
+    ...send,
+    applicationId: 'test-application',
+  })
+
+  const body = JSON.parse(String(init.body))
+  expect(body.applicationId).toBe('test-application')
+  })
+
   it('sends approved templates when the outbox row asks for one', () => {
     const template = parseTemplate({ whatsapp_template: { name: 'carrinho_abandonado', placeholders: ['Ana', 42] } })
     const { url, init } = infobipRequest({ ...send, template, notifyUrl: 'https://x/hook' })
