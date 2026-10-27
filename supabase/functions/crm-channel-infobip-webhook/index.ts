@@ -57,7 +57,35 @@ Deno.serve(async (req) => {
     }
     if (account.status !== "active") return json({ ok: true, ignored: true, reason: "channel_account_inactive" });
 
-    const events = parseInfobipWebhook(await req.json().catch(() => null));
+        const payload: unknown = await req.json().catch(() => null);
+    const events = parseInfobipWebhook(payload);
+
+    if (accountId === "9d8218c3-0eee-440c-bd73-43f9ed8d8cf1" && events.length === 0) {
+      const root = payload && typeof payload === "object" && !Array.isArray(payload)
+        ? payload as Record<string, unknown>
+        : null;
+      const entries = Array.isArray(root?.results) ? root.results : [];
+      const first = entries[0] && typeof entries[0] === "object" && !Array.isArray(entries[0])
+        ? entries[0] as Record<string, unknown>
+        : null;
+      const message = first?.message && typeof first.message === "object" && !Array.isArray(first.message)
+        ? first.message as Record<string, unknown>
+        : null;
+
+      console.log("infobip_diagnostic", {
+        root_type: Array.isArray(payload) ? "array" : typeof payload,
+        has_results_array: Array.isArray(root?.results),
+        results_count: entries.length,
+        has_message_id: typeof first?.messageId === "string",
+        has_from: typeof first?.from === "string",
+        has_message_object: !!message,
+        has_message_text: typeof message?.text === "string",
+        has_message_caption: typeof message?.caption === "string",
+        has_status_object: !!first?.status && typeof first.status === "object",
+        has_seen_at: !!first?.seenAt,
+        recognized_events: events.length,
+      });
+    }
     const results: unknown[] = [];
     for (const event of events) {
       if (event.kind === "message") {
