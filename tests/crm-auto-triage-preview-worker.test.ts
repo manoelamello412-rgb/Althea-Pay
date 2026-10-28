@@ -16,6 +16,12 @@ describe('CRM automatic triage preview worker', () => {
 
   it('requires internal authentication and an explicit conversation', () => {
     expect(worker).toContain('x-althea-internal-secret')
+    expect(worker).toContain(
+      'CRM_AUTO_TRIAGE_PREVIEW_SECRET',
+    )
+    expect(worker).not.toContain(
+      'Deno.env.get("ALTHEA_INTERNAL_SECRET")',
+    )
     expect(worker).toContain('conversation_id_required')
   })
 
