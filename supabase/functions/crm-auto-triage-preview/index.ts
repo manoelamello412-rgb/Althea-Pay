@@ -8,7 +8,7 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? ""
 const serviceRoleKey =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 const internalSecret =
-  Deno.env.get("ALTHEA_INTERNAL_SECRET") ?? ""
+  Deno.env.get("CRM_AUTO_TRIAGE_PREVIEW_SECRET") ?? ""
 
 const targetOrganizationId =
   Deno.env.get("CRM_AUTO_TRIAGE_TARGET_ORGANIZATION_ID") ?? ""
