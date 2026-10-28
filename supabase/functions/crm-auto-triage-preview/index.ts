@@ -1,6 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { withSupabase } from "npm:@supabase/server@1"
-import { decideAutoTriage } from "../_shared/crm-auto-triage.ts"
+import "npm:pg@8"
+
+import { pipeline } from "npm:@supabase/middleware@1"
+import {
+  withPostgresAdminClient,
+} from "npm:@supabase/server@1/middleware/postgres-admin"
+
+import {
+  decideAutoTriage,
+} from "../_shared/crm-auto-triage.ts"
 
 type Row = Record<string, unknown>
 
@@ -8,17 +16,25 @@ const internalSecret =
   Deno.env.get("CRM_AUTO_TRIAGE_PREVIEW_SECRET") ?? ""
 
 const targetOrganizationId =
-  Deno.env.get("CRM_AUTO_TRIAGE_TARGET_ORGANIZATION_ID") ?? ""
+  Deno.env.get(
+    "CRM_AUTO_TRIAGE_TARGET_ORGANIZATION_ID",
+  ) ?? ""
 
 const targetFunnelIds = new Set(
-  (Deno.env.get("CRM_AUTO_TRIAGE_TARGET_FUNNEL_IDS") ?? "")
+  (
+    Deno.env.get(
+      "CRM_AUTO_TRIAGE_TARGET_FUNNEL_IDS",
+    ) ?? ""
+  )
     .split(",")
     .map(value => value.trim())
     .filter(Boolean),
 )
 
 function text(value: unknown): string {
-  return typeof value === "string" ? value.trim() : ""
+  return typeof value === "string"
+    ? value.trim()
+    : ""
 }
 
 function isUuid(value: unknown): boolean {
@@ -26,7 +42,10 @@ function isUuid(value: unknown): boolean {
     .test(text(value))
 }
 
-function json(value: unknown, status = 200): Response {
+function json(
+  value: unknown,
+  status = 200,
+): Response {
   return new Response(
     JSON.stringify(value),
     {
@@ -39,9 +58,34 @@ function json(value: unknown, status = 200): Response {
   )
 }
 
+function blocked(
+  conversationId: string,
+  reason: string,
+): Response {
+  return json({
+    ok: true,
+    dry_run: true,
+    wrote_to_database: false,
+    queued_message: false,
+    action: "blocked",
+    reason,
+    conversation_id: conversationId,
+  })
+}
+
 Deno.serve(
-  withSupabase(
-    { auth: "none" },
+  pipeline(
+    [
+      withPostgresAdminClient({
+        pool: {
+          max: 1,
+          checkoutTimeoutMs: 5000,
+        },
+        errors: {
+          detailed: false,
+        },
+      }),
+    ],
     async (request, context) => {
       if (request.method === "OPTIONS") {
         return json({ ok: true })
@@ -49,20 +93,28 @@ Deno.serve(
 
       if (request.method !== "POST") {
         return json(
-          { ok: false, error: "method_not_allowed" },
+          {
+            ok: false,
+            error: "method_not_allowed",
+          },
           405,
         )
       }
 
       const suppliedSecret =
-        request.headers.get("x-althea-internal-secret") ?? ""
+        request.headers.get(
+          "x-althea-internal-secret",
+        ) ?? ""
 
       if (
         !internalSecret ||
         suppliedSecret !== internalSecret
       ) {
         return json(
-          { ok: false, error: "forbidden" },
+          {
+            ok: false,
+            error: "forbidden",
+          },
           403,
         )
       }
@@ -97,260 +149,243 @@ Deno.serve(
         )
       }
 
-      const db = context.supabaseAdmin
+      const db = context.postgresAdmin
 
-      const conversationResult = await db
-        .from("crm_conversations")
-        .select(
-          [
-            "id",
-            "user_id",
-            "organization_id",
-            "funnel_id",
-            "status",
-            "primary_channel",
-            "channel_account_id",
-            "buyer_name",
-          ].join(","),
-        )
-        .eq("id", conversationId)
-        .maybeSingle()
+      try {
+        const conversationRows = (
+          await db.query`
+            select
+              id,
+              user_id,
+              organization_id,
+              funnel_id,
+              status,
+              primary_channel,
+              channel_account_id,
+              buyer_name,
+              buyer_email,
+              customer_whatsapp
+            from public.crm_conversations
+            where id = ${conversationId}::uuid
+              and organization_id =
+                ${targetOrganizationId}::uuid
+            limit 1
+          `
+        ) as Row[]
 
-      if (conversationResult.error) {
-        return json(
-          {
-            ok: false,
-            error: "conversation_lookup_failed",
-          },
-          500,
-        )
-      }
+        const conversation =
+          conversationRows[0]
 
-      if (!conversationResult.data) {
-        return json(
-          {
-            ok: false,
-            error: "conversation_not_found",
-          },
-          404,
-        )
-      }
+        if (!conversation) {
+          return json(
+            {
+              ok: false,
+              error: "conversation_not_found",
+            },
+            404,
+          )
+        }
 
-      const conversation =
-        conversationResult.data as Row
+        const messageRows = (
+          await db.query`
+            select
+              id,
+              body,
+              channel,
+              created_at
+            from public.crm_messages
+            where conversation_id =
+              ${conversationId}::uuid
+              and organization_id =
+                ${targetOrganizationId}::uuid
+              and direction = 'inbound'
+            order by created_at desc
+            limit 1
+          `
+        ) as Row[]
 
-      if (
-        text(conversation.organization_id) !==
-          targetOrganizationId
-      ) {
-        return json(
-          {
-            ok: false,
-            error: "conversation_outside_preview_scope",
-          },
-          403,
-        )
-      }
+        const latestMessage =
+          messageRows[0]
 
-      const latestMessageResult = await db
-        .from("crm_messages")
-        .select("id,body,channel,created_at")
-        .eq("conversation_id", conversationId)
-        .eq(
-          "organization_id",
-          targetOrganizationId,
-        )
-        .eq("direction", "inbound")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
+        if (!latestMessage) {
+          return json(
+            {
+              ok: false,
+              error: "inbound_message_not_found",
+            },
+            404,
+          )
+        }
 
-      if (latestMessageResult.error) {
-        return json(
-          {
-            ok: false,
-            error: "inbound_message_lookup_failed",
-          },
-          500,
-        )
-      }
+        const channel =
+          text(
+            latestMessage.channel,
+          ).toLowerCase() ||
+          text(
+            conversation.primary_channel,
+          ).toLowerCase()
 
-      if (!latestMessageResult.data) {
-        return json(
-          {
-            ok: false,
-            error: "inbound_message_not_found",
-          },
-          404,
-        )
-      }
+        const identityRows = (
+          await db.query`
+            select
+              phone_e164,
+              email,
+              external_user_id,
+              updated_at
+            from public.crm_channel_identities
+            where conversation_id =
+              ${conversationId}::uuid
+              and channel = ${channel}
+            order by updated_at desc
+            limit 1
+          `
+        ) as Row[]
 
-      const latestMessage =
-        latestMessageResult.data as Row
+        const identity =
+          identityRows[0] ?? {}
 
-      const channel =
-        text(latestMessage.channel).toLowerCase()
+        const address =
+          channel === "email"
+            ? text(identity.email) ||
+              text(conversation.buyer_email)
+            : text(identity.phone_e164) ||
+              text(identity.external_user_id) ||
+              text(
+                conversation.customer_whatsapp,
+              )
 
-      const identityResult = await db
-        .from("crm_channel_identities")
-        .select(
-          "phone_e164,email,external_user_id,updated_at",
-        )
-        .eq("conversation_id", conversationId)
-        .eq("channel", channel)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle()
+        if (
+          ["whatsapp", "sms", "email"].includes(
+            channel,
+          ) &&
+          !address
+        ) {
+          return blocked(
+            conversationId,
+            "recipient_address_missing",
+          )
+        }
 
-      if (identityResult.error) {
-        return json(
-          {
-            ok: false,
-            error: "contact_identity_lookup_failed",
-          },
-          500,
-        )
-      }
+        let recipientOptedOut = false
 
-      const identity =
-        (identityResult.data ?? {}) as Row
+        if (
+          ["whatsapp", "sms", "email"].includes(
+            channel,
+          )
+        ) {
+          try {
+            const consentRows = (
+              await db.query`
+                select
+                  public.crm_channel_recipient_opted_out(
+                    ${targetOrganizationId}::uuid,
+                    ${channel},
+                    ${address}
+                  ) as opted_out
+              `
+            ) as Row[]
 
-      const address = channel === "email"
-        ? text(identity.email)
-        : text(identity.phone_e164) ||
-          text(identity.external_user_id)
+            recipientOptedOut =
+              consentRows[0]?.opted_out === true
+          } catch {
+            return blocked(
+              conversationId,
+              "consent_check_failed",
+            )
+          }
 
-      if (
-        ["whatsapp", "sms", "email"].includes(channel) &&
-        !address
-      ) {
+          if (recipientOptedOut) {
+            return blocked(
+              conversationId,
+              "recipient_opted_out",
+            )
+          }
+        }
+
+        const agentRows = (
+          await db.query`
+            select exists (
+              select 1
+              from public.crm_agents
+              where organization_id =
+                ${targetOrganizationId}::uuid
+                and status = 'available'
+            ) as human_available
+          `
+        ) as Row[]
+
+        const humanAvailable =
+          agentRows[0]?.human_available === true
+
+        const belongsToTargetFunnel =
+          targetFunnelIds.has(
+            text(conversation.funnel_id),
+          )
+
+        const decision = decideAutoTriage({
+          humanAvailable,
+          belongsToTargetFunnel,
+          message: text(latestMessage.body),
+        })
+
+        let quickReplyFound = false
+
+        if ("replyTitle" in decision) {
+          const quickReplyRows = (
+            await db.query`
+              select id
+              from public.crm_quick_replies
+              where organization_id =
+                ${targetOrganizationId}::uuid
+                and title =
+                  ${decision.replyTitle}
+                and active is true
+              limit 1
+            `
+          ) as Row[]
+
+          quickReplyFound =
+            quickReplyRows.length > 0
+        }
+
         return json({
           ok: true,
           dry_run: true,
           wrote_to_database: false,
           queued_message: false,
-          action: "blocked",
-          reason: "recipient_address_missing",
           conversation_id: conversationId,
+          organization_id:
+            targetOrganizationId,
+          channel,
+          recipient_opted_out:
+            recipientOptedOut,
+          human_available:
+            humanAvailable,
+          belongs_to_target_funnel:
+            belongsToTargetFunnel,
+          latest_message:
+            text(latestMessage.body),
+          decision,
+          quick_reply_found:
+            quickReplyFound,
         })
-      }
-
-      if (
-        ["whatsapp", "sms", "email"].includes(channel)
-      ) {
-        const consentResult = await db.rpc(
-          "crm_channel_recipient_opted_out",
-          {
-            p_organization_id: targetOrganizationId,
-            p_channel: channel,
-            p_address: address,
-          },
+      } catch (error) {
+        console.error(
+          "crm-auto-triage-preview query failed",
+          error instanceof Error
+            ? error.message
+            : "unknown_error",
         )
 
-        if (consentResult.error) {
-          return json({
-            ok: true,
-            dry_run: true,
-            wrote_to_database: false,
-            queued_message: false,
-            action: "blocked",
-            reason: "consent_check_failed",
-            conversation_id: conversationId,
-          })
-        }
-
-        if (consentResult.data === true) {
-          return json({
-            ok: true,
-            dry_run: true,
-            wrote_to_database: false,
-            queued_message: false,
-            action: "blocked",
-            reason: "recipient_opted_out",
-            conversation_id: conversationId,
-          })
-        }
-      }
-
-      const agentsResult = await db
-        .from("crm_agents")
-        .select("id,name,status,member_user_id")
-        .eq(
-          "organization_id",
-          targetOrganizationId,
-        )
-        .eq("status", "available")
-        .limit(1)
-
-      if (agentsResult.error) {
         return json(
           {
             ok: false,
-            error: "agent_lookup_failed",
+            error:
+              "preview_database_query_failed",
           },
           500,
         )
       }
-
-      const humanAvailable =
-        (agentsResult.data ?? []).length > 0
-
-      const belongsToTargetFunnel =
-        targetFunnelIds.has(
-          text(conversation.funnel_id),
-        )
-
-      const decision = decideAutoTriage({
-        humanAvailable,
-        belongsToTargetFunnel,
-        message: text(latestMessage.body),
-      })
-
-      let quickReplyFound = false
-
-      if ("replyTitle" in decision) {
-        const replyResult = await db
-          .from("crm_quick_replies")
-          .select("id,title,active")
-          .eq(
-            "organization_id",
-            targetOrganizationId,
-          )
-          .eq("title", decision.replyTitle)
-          .eq("active", true)
-          .maybeSingle()
-
-        if (replyResult.error) {
-          return json(
-            {
-              ok: false,
-              error: "quick_reply_lookup_failed",
-            },
-            500,
-          )
-        }
-
-        quickReplyFound =
-          Boolean(replyResult.data)
-      }
-
-      return json({
-        ok: true,
-        dry_run: true,
-        wrote_to_database: false,
-        queued_message: false,
-        conversation_id: conversationId,
-        organization_id: targetOrganizationId,
-        channel,
-        recipient_opted_out: false,
-        human_available: humanAvailable,
-        belongs_to_target_funnel:
-          belongsToTargetFunnel,
-        latest_message:
-          text(latestMessage.body),
-        decision,
-        quick_reply_found: quickReplyFound,
-      })
     },
   ),
 )
