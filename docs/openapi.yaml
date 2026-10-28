@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: Unified control-plane API for funnels, products, sales and gateway transactions. Althea Pay does not hold customer funds.
 servers:
-  - url: https://eifkrhjbtxxylzqcujab.supabase.co/functions/v1/althea-public-api
+  - url: https://dswowdmewadcohjyfxgc.supabase.co/functions/v1/althea-public-api
 security:
   - AltheaApiKey: []
 paths:
@@ -53,7 +53,7 @@ paths:
         '429': {description: Rate limit exceeded}
   /funnel-client-token:
     servers:
-      - url: https://eifkrhjbtxxylzqcujab.supabase.co/functions/v1
+      - url: https://dswowdmewadcohjyfxgc.supabase.co/functions/v1
     post:
       summary: Issue a short-lived browser token (events:write, up to 10 minutes)
       description: |
@@ -94,7 +94,7 @@ paths:
         '429': {description: Rate limit exceeded}
   /funnel-events:
     servers:
-      - url: https://eifkrhjbtxxylzqcujab.supabase.co/functions/v1
+      - url: https://dswowdmewadcohjyfxgc.supabase.co/functions/v1
     post:
       summary: Ingest a funnel event directly from a page or server
       description: Accepts x-funnel-client-token (or Authorization Bearer alt_fct_...) from funnel-client-token, x-funnel-event-token, or an ALTHEA API key. The token's funnel must match funnel_id.

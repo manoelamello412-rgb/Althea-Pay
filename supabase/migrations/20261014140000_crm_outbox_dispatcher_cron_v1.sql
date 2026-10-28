@@ -15,7 +15,7 @@ select cron.schedule(
   '* * * * *',
   $$
   select net.http_post(
-    url := 'https://eifkrhjbtxxylzqcujab.supabase.co/functions/v1/crm-channel-outbox-dispatcher',
+    url := 'https://dswowdmewadcohjyfxgc.supabase.co/functions/v1/crm-channel-outbox-dispatcher',
     headers := jsonb_build_object(
       'Content-Type','application/json',
       'x-internal-secret',coalesce((select decrypted_secret from vault.decrypted_secrets where name='ALTHEA_INTERNAL_SECRET' limit 1),'')
