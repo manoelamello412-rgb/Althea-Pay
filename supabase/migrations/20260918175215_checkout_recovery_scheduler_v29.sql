@@ -21,7 +21,7 @@ select cron.schedule(
   '* * * * *',
   $command$
   select net.http_post(
-    url := 'https://hkraryqoziravulvqkid.supabase.co/functions/v1/checkout-recovery-worker',
+    url := 'https://eifkrhjbtxxylzqcujab.supabase.co/functions/v1/checkout-recovery-worker',
     headers := jsonb_build_object(
       'Content-Type','application/json',
       'x-internal-secret',(select decrypted_secret from vault.decrypted_secrets where name='ALTHEA_INTERNAL_SECRET' limit 1)

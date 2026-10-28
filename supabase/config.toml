@@ -1,5 +1,5 @@
 # Canonical Edge Function inventory; retired slugs are pruned by the main deployment workflow.
-project_id = "hkraryqoziravulvqkid"
+project_id = "eifkrhjbtxxylzqcujab"
 
 [functions.althea-api]
 verify_jwt = true
