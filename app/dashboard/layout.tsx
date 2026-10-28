@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import MobileShell, { attendantAllows, type MobileShellTab } from '@/components/mobile-shell'
 import { ConnectionStatus } from '@/components/connection-status'
+import { CrmAgentStatus } from '@/components/crm-agent-status'
 
 const routes: Record<MobileShellTab, string> = { dashboard: '/dashboard', vendas: '/dashboard/vendas', chat: '/dashboard/crm', ia: '/dashboard/ia', funil: '/dashboard/funil' }
 
@@ -39,6 +40,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <MobileShell activeTab={activeTab} onTabChange={selectTab} attendant={attendant}>
       <ConnectionStatus />
+      {pathname.startsWith('/dashboard/crm') && <CrmAgentStatus />}
       <div className="althea-page-content">{attendant && !attendantAllows(pathname) ? null : children}</div>
 
     </MobileShell>
