@@ -1,11 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Check, Globe2, ShieldCheck, Sparkles } from 'lucide-react'
+import { Check, Sparkles } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-const SECURITY_BOUNDARY = 'A Iara não recebe autorização para executar código, alterar arquivos de desenvolvimento, modificar infraestrutura, editar .env, rotas, configurações de build ou estruturas de banco de dados.'
 
 type IaraSettings = {
   name: string
@@ -95,12 +94,6 @@ export default function IaraSettingsPage() {
           <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Contexto da operação</span><textarea rows={5} maxLength={4000} value={settings.context} onChange={(event) => setSettings((current) => ({ ...current, context: event.target.value }))} className="w-full resize-none rounded-xl border border-zinc-900 bg-[#060608] p-3 text-xs leading-relaxed text-white outline-none focus:border-[#1DB854]/40" /></label>
           <label className="block space-y-1.5"><span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Tom de voz</span><select value={settings.tone} onChange={(event) => setSettings((current) => ({ ...current, tone: event.target.value }))} className="w-full rounded-xl border border-zinc-900 bg-[#060608] p-3 text-xs text-white outline-none focus:border-[#1DB854]/40"><option value="prestativo">Amigável e Prestativo</option><option value="analitico">Analítico e Focado em Métricas</option><option value="agressivo-vendas">Persuasivo e Focado em Conversão</option></select></label>
           <div className="rounded-xl border border-zinc-900 bg-[#060608] px-3 py-2.5 text-[10px] text-zinc-500">Tom selecionado: <span className="font-semibold text-zinc-300">{toneLabel}</span></div>
-        </section>
-
-        <section className="space-y-4 rounded-2xl border border-zinc-900 bg-[#0F1A16]/40 p-4">
-          <div><span className="text-[10px] font-bold uppercase tracking-wider text-red-500">Autonomia</span><p className="mt-1 text-[10px] text-zinc-500">Preferência persistida no banco. O runtime atual ainda não usa esta opção para habilitar navegação externa.</p></div>
-          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-zinc-900 bg-[#060608] p-3"><span className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0F1A16] text-[#1DB854]"><Globe2 size={15} /></span><span><span className="block text-xs font-bold text-zinc-200">Busca externa permitida</span><span className="block text-[10px] text-zinc-500">Registro de preferência somente; não habilita busca externa no motor atual.</span></span></span><input type="checkbox" className="h-4 w-4" checked={settings.allowWeb} onChange={(event) => setSettings((current) => ({ ...current, allowWeb: event.target.checked }))} /></label>
-          <div className="space-y-2 rounded-xl border border-red-900/40 bg-red-950/20 p-3"><div className="flex items-center gap-2"><ShieldCheck size={15} className="text-red-400" /><span className="text-xs font-bold text-red-400">Limite de infraestrutura</span></div><p className="text-[10px] leading-relaxed text-zinc-400">{SECURITY_BOUNDARY}</p></div>
         </section>
 
         <button type="submit" disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1DB854] py-3 text-xs font-bold text-black disabled:opacity-60">{saving ? 'Salvando no banco...' : saved ? 'Configurações salvas' : 'Salvar configurações'}{saved && <Check size={14} />}</button>

@@ -47,8 +47,9 @@ const nextConfig = {
               "img-src 'self' data: blob: https:",
               "font-src 'self' data: https:",
               "style-src 'self' 'unsafe-inline' https:",
-              `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''} https:`,
-              `connect-src 'self' https://*.supabase.co wss://*.supabase.co https:${localSupabase}`,
+              // No third-party scripts in the app; vercel.live is the toolbar on preview deployments.
+              `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''} https://vercel.live`,
+              `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://vercel.live${localSupabase}`,
               "frame-src 'self' https://*.supabase.co https:",
               "worker-src 'self' blob:",
             ].join('; '),

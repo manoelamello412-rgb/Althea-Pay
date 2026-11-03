@@ -20,6 +20,7 @@ export async function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
   const isLogin = pathname === '/login'
+  const isMfa = pathname === '/login/mfa'
   const isRecovery = pathname === '/forgot-password' || pathname === '/reset-password'
   const isPublicCheckout = pathname === '/checkout' || pathname.startsWith('/checkout/')
   let response = NextResponse.next({ request })
@@ -40,11 +41,26 @@ export async function proxy(request: NextRequest) {
   const isAuthenticated = Boolean(claimsData)
 
   if (!isAuthenticated && !isLogin && !isRecovery && !isPublicCheckout) {
+    if (isMfa) return NextResponse.redirect(new URL('/login', request.url))
     const target = request.nextUrl.clone()
     target.pathname = '/login'
     target.search = ''
     target.searchParams.set('next', pathname + request.nextUrl.search)
     return NextResponse.redirect(target)
+  }
+
+  // 2FA: whoever has a verified factor must reach aal2 before any page (except recovery and the public checkout).
+  if (isAuthenticated && !isRecovery && !isPublicCheckout) {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    const needsCode = aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2'
+    if (needsCode && !isMfa) {
+      const target = request.nextUrl.clone()
+      target.pathname = '/login/mfa'
+      target.search = ''
+      target.searchParams.set('next', isLogin ? safeNext(request.nextUrl.searchParams.get('next')) : pathname + request.nextUrl.search)
+      return NextResponse.redirect(target)
+    }
+    if (!needsCode && isMfa) return NextResponse.redirect(new URL(safeNext(request.nextUrl.searchParams.get('next')), request.url))
   }
 
   if (isAuthenticated && isLogin) return NextResponse.redirect(new URL(safeNext(request.nextUrl.searchParams.get('next')), request.url))

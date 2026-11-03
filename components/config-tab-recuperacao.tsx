@@ -1,98 +1,39 @@
 'use client'
 
-import { ChevronLeft, ExternalLink, Mail, Phone, RefreshCcw, ShieldAlert } from 'lucide-react'
+import { ChevronLeft, ExternalLink, Loader2, RefreshCcw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 
-type RecoverySettings = {
-  cartAutomation: boolean
-  pixAutomation: boolean
-  boletoAutomation: boolean
-  senderEmail: string
-  senderWhatsapp: string
-}
-
-const DEFAULTS: RecoverySettings = {
-  cartAutomation: false,
-  pixAutomation: false,
-  boletoAutomation: false,
-  senderEmail: '',
-  senderWhatsapp: '',
-}
-
-function ReadOnlyToggle({ checked, label }: { checked: boolean; label: string }) {
-  return (
-    <span
-      role="switch"
-      aria-checked={checked}
-      aria-readonly="true"
-      aria-label={label}
-      className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 ${checked ? 'justify-end bg-[#1DB854]' : 'justify-start border border-[#0D362D] bg-[#0B0B0D]'}`}
-    >
-      <span className="h-5 w-5 rounded-full bg-white shadow-md" />
-    </span>
-  )
-}
-
+// The cart switch is the real one read by enqueue_checkout_recovery_events. Texts, delays, channels and senders
+// live in the remarketing rules (CRM > Campanhas > Remarketing automático).
 export function ConfigTabRecuperacao({ onBack }: { onBack: () => void }) {
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
   const router = useRouter()
-  const [settings, setSettings] = useState<RecoverySettings>(DEFAULTS)
+  const [cart, setCart] = useState(false)
+  const [canEdit, setCanEdit] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
-    let mounted = true
-
-    async function load() {
-      setLoading(true)
-      setError('')
-      const { data: auth, error: authError } = await supabase.auth.getUser()
-      if (authError || !auth.user) {
-        if (mounted) {
-          setError('Sessão expirada.')
-          setLoading(false)
-        }
-        return
-      }
-
-      const { data, error: settingsError } = await supabase
-        .from('platform_settings')
-        .select('data')
-        .eq('user_id', auth.user.id)
-        .maybeSingle()
-
-      if (!mounted) return
-      if (settingsError) setError(settingsError.message)
-
-      const recovery = data?.data && typeof data.data === 'object'
-        ? (data.data as Record<string, unknown>).recovery
-        : null
-
-      if (recovery && typeof recovery === 'object') {
-        const value = recovery as Partial<RecoverySettings>
-        setSettings({
-          cartAutomation: value.cartAutomation === true,
-          pixAutomation: value.pixAutomation === true,
-          boletoAutomation: value.boletoAutomation === true,
-          senderEmail: typeof value.senderEmail === 'string' ? value.senderEmail : '',
-          senderWhatsapp: typeof value.senderWhatsapp === 'string' ? value.senderWhatsapp : '',
-        })
-      }
-
+    void supabase.rpc('recovery_settings_v1').then(({ data, error: loadError }: { data: { cart_automation?: boolean; can_edit?: boolean } | null; error: unknown }) => {
+      if (loadError) setError('Não foi possível carregar a configuração.')
+      else { setCart(data?.cart_automation === true); setCanEdit(data?.can_edit === true) }
       setLoading(false)
-    }
-
-    void load()
-    return () => { mounted = false }
+    })
   }, [supabase])
 
-  const automationRows = [
-    ['cartAutomation', 'Carrinho Abandonado', 'Disparos após 15 minutos de inatividade'],
-    ['pixAutomation', 'PIX Expirado', 'Lembrete após expiração do pagamento'],
-    ['boletoAutomation', 'Boleto sem Pagamento', 'Notificação antes do vencimento'],
-  ] as const
+  async function toggle() {
+    const next = !cart
+    setSaving(true); setMessage(''); setError('')
+    const { error: saveError } = await supabase.rpc('recovery_settings_set_v1', { p_cart_automation: next })
+    setSaving(false)
+    if (saveError) { setError(saveError.message === 'FORBIDDEN' ? 'Só quem gerencia automações pode alterar.' : 'Não foi possível salvar.'); return }
+    setCart(next)
+    setMessage(next ? 'Recuperação de carrinho ligada.' : 'Recuperação de carrinho desligada.')
+  }
 
   return (
     <div className="w-full space-y-4 pb-32 font-['Space_Grotesk'] text-white">
@@ -106,71 +47,37 @@ export function ConfigTabRecuperacao({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      {loading ? (
-        <div className="animate-pulse space-y-3">
-          <div className="h-5 w-48 rounded bg-[#0F1A16]" />
-          <div className="h-28 rounded-2xl bg-[#0F1A16]" />
-          <div className="h-32 rounded-2xl bg-[#0F1A16]" />
-        </div>
-      ) : (
-        <>
-          <section className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
-            <div className="flex items-start gap-3">
-              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
-              <div>
-                <h2 className="text-sm font-bold text-amber-100">Preferências antigas preservadas, mas não operacionais</h2>
-                <p className="mt-1 text-[11px] leading-5 text-amber-100/65">
-                  Estes valores existem em <code>platform_settings.recovery</code>, porém o motor real de automação não os consome atualmente. Para não simular uma automação inexistente, esta tela fica somente leitura até o contrato backend ser conectado.
-                </p>
-              </div>
+      {loading ? <div className="h-28 animate-pulse rounded-2xl bg-[#0F1A16]" /> : <>
+        <section className="rounded-2xl border border-[#0D362D] bg-[#0F1A16] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <span className="block text-xs font-bold text-white">Recuperação de carrinho abandonado</span>
+              <span className="mt-0.5 block text-[10px] leading-4 text-[#A6A6A6]">Mensagem padrão por e-mail/SMS para quem abandonou o checkout e aceitou contato. Se existir uma regra de checkout abandonado em Remarketing automático, ela substitui esta mensagem.</span>
             </div>
-          </section>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={cart}
+              aria-label="Recuperação de carrinho abandonado"
+              disabled={!canEdit || saving}
+              onClick={() => void toggle()}
+              className={`flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition disabled:opacity-50 ${cart ? 'justify-end bg-[#1DB854]' : 'justify-start border border-[#0D362D] bg-[#0B0B0D]'}`}
+            >
+              {saving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : <span className="h-5 w-5 rounded-full bg-white shadow-md" />}
+            </button>
+          </div>
+          {!canEdit && <p className="mt-3 text-[10px] text-amber-300/80">Somente leitura: alterar exige permissão de gerenciar automações.</p>}
+        </section>
 
-          <section className="space-y-2">
-            <span className="pl-1 text-[10px] font-bold uppercase tracking-wider text-[#A6A6A6]">Preferências registradas</span>
-            <div className="rounded-2xl border border-[#0D362D] bg-[#0F1A16] p-4">
-              {automationRows.map(([key, title, description], index) => {
-                const checked = settings[key]
-                return (
-                  <div key={key} className={`flex items-center justify-between gap-3 ${index ? 'mt-4 border-t border-[#0D362D]/40 pt-4' : ''}`}>
-                    <div>
-                      <span className="block text-xs font-bold text-white">{title}</span>
-                      <span className="mt-0.5 block text-[10px] text-[#A6A6A6]">{description}</span>
-                      <span className="mt-1 block text-[9px] font-semibold uppercase tracking-wider text-amber-300/80">
-                        {checked ? 'Registrado como ativo · sem efeito operacional' : 'Registrado como inativo'}
-                      </span>
-                    </div>
-                    <ReadOnlyToggle checked={checked} label={`${title}: somente leitura`} />
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-
-          <section className="space-y-2">
-            <span className="pl-1 text-[10px] font-bold uppercase tracking-wider text-[#A6A6A6]">Remetentes registrados</span>
-            <div className="space-y-4 rounded-2xl border border-[#0D362D] bg-[#0F1A16] p-4">
-              <div className="rounded-xl border border-[#0D362D] bg-[#0B0B0D] px-3 py-2.5">
-                <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300"><Mail className="h-3 w-3 text-[#1DB854]" />E-mail de disparo</span>
-                <p className="mt-1 break-all text-xs text-slate-400">{settings.senderEmail || 'Não configurado'}</p>
-              </div>
-              <div className="rounded-xl border border-[#0D362D] bg-[#0B0B0D] px-3 py-2.5">
-                <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300"><Phone className="h-3 w-3 text-[#1DB854]" />WhatsApp (API)</span>
-                <p className="mt-1 text-xs text-slate-400">{settings.senderWhatsapp || 'Não configurado'}</p>
-              </div>
-            </div>
-          </section>
-
-          <button
-            type="button"
-            onClick={() => router.push('/dashboard/crm/recovery')}
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#1DB854] px-4 text-xs font-bold text-black transition hover:brightness-110"
-          >
-            Abrir Central de Recuperação real <ExternalLink className="h-4 w-4" />
+        <section className="rounded-2xl border border-[#0D362D] bg-[#0F1A16] p-4 text-[11px] leading-5 text-[#A6A6A6]">
+          Pagamento pendente (PIX gerado e não pago), tempos de espera, texto, botão, remetente de e-mail e número de WhatsApp são configurados nas regras de remarketing.
+          <button type="button" onClick={() => router.push('/dashboard/crm/campanhas?tab=remarketing')} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#1DB854] px-4 text-xs font-bold text-black transition hover:brightness-110">
+            Abrir Remarketing automático <ExternalLink className="h-4 w-4" />
           </button>
-        </>
-      )}
+        </section>
+      </>}
 
+      {message && <div className="rounded-xl border border-[#1DB854]/20 bg-[#1DB854]/5 p-3 text-[10px] text-[#1DB854]" role="status">{message}</div>}
       {error && <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-3 text-[10px] text-red-300" role="alert">{error}</div>}
     </div>
   )

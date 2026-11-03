@@ -5,13 +5,9 @@ import { motion } from 'framer-motion'
 import { CheckCircle2, ChevronLeft, KeyRound, Shield, ShieldCheck, Smartphone, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { authErrorPt } from '@/lib/auth/errors'
 
-type SessionRow = { id: string; ip: string | null; device: string; location: string | null; active: boolean; last_seen_at: string; created_at: string }
 type Factor = { id: string; friendly_name: string | null; status: string }
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
-}
 
 export default function SecurityPage() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), [])
@@ -20,7 +16,7 @@ export default function SecurityPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [factors, setFactors] = useState<Factor[]>([])
-  const [sessions, setSessions] = useState<SessionRow[]>([])
+  const [signingOut, setSigningOut] = useState(false)
   const [enrolling, setEnrolling] = useState<{ id: string; qr: string; secret: string; challengeId: string } | null>(null)
   const [mfaCode, setMfaCode] = useState('')
   const [loading, setLoading] = useState(true)
@@ -35,14 +31,13 @@ export default function SecurityPage() {
     setLoading(true); setError('')
     const { data: auth, error: authError } = await supabase.auth.getUser()
     if (authError || !auth.user) { setError('Sessão expirada.'); setLoading(false); return }
-    const [factorResult, sessionResult] = await Promise.all([
-      supabase.auth.mfa.listFactors(),
-      supabase.from('frontend_device_sessions').select('id,ip,device,location,active,last_seen_at,created_at').eq('user_id', auth.user.id).order('last_seen_at', { ascending: false }).limit(20),
-    ])
-    if (factorResult.error) setError(factorResult.error.message)
-    else setFactors((factorResult.data.totp ?? []).map((factor) => ({ id: factor.id, friendly_name: factor.friendly_name ?? null, status: factor.status })))
-    if (sessionResult.error) setError((current) => current || sessionResult.error.message)
-    else setSessions((sessionResult.data ?? []) as SessionRow[])
+    const factorResult = await supabase.auth.mfa.listFactors()
+    if (factorResult.error) setError(authErrorPt(factorResult.error.message))
+    else {
+      // A setup abandoned before the code leaves an unverified factor that blocks a new one: clean it up.
+      await Promise.all(factorResult.data.all.filter((factor) => factor.status !== 'verified').map((factor) => supabase.auth.mfa.unenroll({ factorId: factor.id })))
+      setFactors((factorResult.data.totp ?? []).map((factor) => ({ id: factor.id, friendly_name: factor.friendly_name ?? null, status: factor.status })))
+    }
     setLoading(false)
   }
 
@@ -52,16 +47,16 @@ export default function SecurityPage() {
     event.preventDefault(); setSavingPassword(true); setMessage(''); setError('')
     try {
       if (!currentPassword || !newPassword) throw new Error('Informe a senha atual e a nova senha.')
-      if (newPassword.length < 6) throw new Error('A nova senha precisa ter pelo menos 6 caracteres.')
+      if (newPassword.length < 8) throw new Error('A nova senha precisa ter pelo menos 8 caracteres.')
       if (newPassword !== confirmPassword) throw new Error('A confirmação da nova senha não coincide.')
       const { data: auth, error: authError } = await supabase.auth.getUser()
       if (authError || !auth.user?.email) throw authError ?? new Error('Sessão expirada.')
       const reauth = await supabase.auth.signInWithPassword({ email: auth.user.email, password: currentPassword })
       if (reauth.error) throw new Error('A senha atual não pôde ser validada.')
       const update = await supabase.auth.updateUser({ password: newPassword })
-      if (update.error) throw update.error
+      if (update.error) throw new Error(authErrorPt(update.error.message))
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setMessage('Senha principal atualizada com sucesso.')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível alterar a senha.') }
+    } catch (cause) { setError(cause instanceof Error ? authErrorPt(cause.message) : 'Não foi possível alterar a senha.') }
     finally { setSavingPassword(false) }
   }
 
@@ -73,7 +68,7 @@ export default function SecurityPage() {
       const challenge = await supabase.auth.mfa.challenge({ factorId: result.data.id })
       if (challenge.error) throw challenge.error
       setEnrolling({ id: result.data.id, qr: result.data.totp.qr_code, secret: result.data.totp.secret, challengeId: challenge.data.id })
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível iniciar o MFA.') }
+    } catch (cause) { setError(cause instanceof Error ? authErrorPt(cause.message) : 'Não foi possível iniciar o MFA.') }
     finally { setSavingMfa(false) }
   }
 
@@ -85,7 +80,7 @@ export default function SecurityPage() {
       if (result.error) throw result.error
       setEnrolling(null); setMfaCode(''); setMessage('Autenticação em 2 etapas ativada.')
       await load()
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Código MFA inválido.') }
+    } catch (cause) { setError(cause instanceof Error ? authErrorPt(cause.message) : 'Código MFA inválido.') }
     finally { setSavingMfa(false) }
   }
 
@@ -95,8 +90,17 @@ export default function SecurityPage() {
       const result = await supabase.auth.mfa.unenroll({ factorId })
       if (result.error) throw result.error
       setFactors((current) => current.filter((factor) => factor.id !== factorId)); setMessage('Autenticação em 2 etapas desativada.')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível desativar o MFA.') }
+    } catch (cause) { setError(cause instanceof Error ? authErrorPt(cause.message) : 'Não foi possível desativar o MFA.') }
     finally { setSavingMfa(false) }
+  }
+
+  async function signOutOthers() {
+    if (!window.confirm('Sair de todos os outros dispositivos? Este continua conectado.')) return
+    setSigningOut(true); setMessage(''); setError('')
+    const result = await supabase.auth.signOut({ scope: 'others' })
+    setSigningOut(false)
+    if (result.error) setError(authErrorPt(result.error.message))
+    else setMessage('Os outros dispositivos foram desconectados.')
   }
 
   return (
@@ -124,9 +128,10 @@ export default function SecurityPage() {
       </section>
 
       <section className="space-y-2">
-        <div className="flex items-center gap-1.5 px-1"><ShieldCheck size={14} className="text-zinc-500"/><span className="text-[10px] font-bold uppercase tracking-wider text-[#A6A6A6]">Acessos e Sessões Registrados</span></div>
-        <div className="space-y-2">
-          {loading ? <div className="animate-pulse space-y-2"><div className="h-16 rounded-xl bg-[#0F1A16]"/><div className="h-16 rounded-xl bg-[#0F1A16]"/></div> : sessions.length === 0 ? <div className="rounded-xl border border-zinc-900 bg-[#0F1A16]/50 p-4 text-[10px] text-zinc-500">Nenhum acesso registrado nesta conta ainda.</div> : sessions.map((session) => <article key={session.id} className="flex items-center justify-between gap-3 rounded-xl border border-[#0D362D] bg-[#0F1A16] p-3"><div className="min-w-0"><p className="truncate font-mono text-xs font-bold text-slate-200">{session.ip || 'IP não registrado'}</p><p className="truncate text-[10px] text-[#A6A6A6]">{session.device}{session.location ? ` • ${session.location}` : ''}</p></div><div className="shrink-0 text-right"><span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${session.active ? 'bg-[#1DB854]/10 text-[#1DB854]' : 'bg-zinc-900 text-zinc-500'}`}>{session.active ? 'ATIVO' : 'ENCERRADO'}</span><p className="mt-1 text-[9px] text-zinc-600">{formatDate(session.last_seen_at)}</p></div></article>)}
+        <div className="flex items-center gap-1.5 px-1"><ShieldCheck size={14} className="text-zinc-500"/><span className="text-[10px] font-bold uppercase tracking-wider text-[#A6A6A6]">Dispositivos conectados</span></div>
+        <div className="rounded-2xl border border-[#0D362D] bg-[#0F1A16] p-4">
+          <p className="text-[11px] leading-relaxed text-zinc-400">Perdeu um aparelho ou entrou num computador que não é seu? Desconecte todos os outros acessos. Quem estiver lá precisará entrar de novo com senha{mfaActive ? ' e código' : ''}.</p>
+          <button type="button" onClick={() => void signOutOthers()} disabled={signingOut} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 py-2.5 text-xs font-bold text-red-300 disabled:opacity-50">{signingOut && <Loader2 size={14} className="animate-spin" />} Sair de todos os outros dispositivos</button>
         </div>
       </section>
 

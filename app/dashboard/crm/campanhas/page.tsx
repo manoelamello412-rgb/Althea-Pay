@@ -121,6 +121,7 @@ export default function CrmCampanhasPage() {
   }, [db])
 
   useEffect(() => { void load() }, [load])
+  useEffect(() => { const wanted = new URLSearchParams(window.location.search).get('tab'); if (wanted === 'remarketing' || wanted === 'links' || wanted === 'templates' || wanted === 'segments') setTab(wanted) }, [])
 
   const campaignChannel = editor?.kind === 'campaign' ? accounts.find(account => account.id === editor.accountId)?.channel : undefined
   const campaignAccount = editor?.kind === 'campaign' ? accounts.find(account => account.id === editor.accountId) : undefined

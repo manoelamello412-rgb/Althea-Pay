@@ -56,8 +56,6 @@ export async function POST(request: Request) {
     if (rawUrl && rawUrl.length > 2048) return json({ error: 'url is too long' }, 400)
     if (connectionType !== 'script' && connectionType !== 'webhook') return json({ error: 'invalid connection_type' }, 400)
     if (!FUNNEL_TYPES.has(funnelType)) return json({ error: 'invalid funnel_type' }, 400)
-    if (!productId) return json({ error: 'product_required' }, 400)
-    if (!gatewayId) return json({ error: 'gateway_required' }, 400)
 
     const url = normalizeUrl(rawUrl)
     if (url) {
@@ -78,8 +76,9 @@ export async function POST(request: Request) {
         p_connection_type: connectionType,
         p_funnel_type: funnelType,
         p_event_endpoint: eventEndpoint,
-        p_product_id: productId,
-        p_gateway_id: gatewayId,
+        // Optional: the funnel works without them (the checkout picks the gateway by route).
+        p_product_id: productId || null,
+        p_gateway_id: gatewayId || null,
       })
 
       data = result.data

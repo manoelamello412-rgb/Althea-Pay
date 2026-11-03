@@ -77,6 +77,14 @@ function InfobipForm({ db, account, onSaved }: { db: Db; account: WhatsappNumber
   const [form, setForm] = useState({ name: account?.display_name ?? '', baseUrl: account?.base_url ?? '', from: account?.from_number ?? '', apiKey: '' })
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
+  const [test, setTest] = useState<{ running: boolean; ok?: boolean; message?: string }>({ running: false })
+  async function runTest() {
+    if (!account) return
+    setTest({ running: true })
+    const response = await fetch(`/api/crm/whatsapp/test?account=${account.id}`, { method: 'POST', cache: 'no-store' }).catch(() => null)
+    const result = response ? await response.json().catch(() => ({})) as { ok?: boolean; message?: string } : {}
+    setTest({ running: false, ok: result.ok === true, message: result.message ?? 'Não foi possível testar agora.' })
+  }
   async function save() {
     setSaving(true); setNotice('')
     const { error } = await db.rpc('crm_whatsapp_configure', { p_provider: 'infobip', p_base_url: form.baseUrl, p_from_number: form.from, p_api_key: form.apiKey || null, p_account_id: account?.id ?? null, p_display_name: form.name || null })
@@ -88,13 +96,17 @@ function InfobipForm({ db, account, onSaved }: { db: Db; account: WhatsappNumber
     <ol className="list-decimal space-y-0.5 pl-4 text-xs text-slate-400">
       <li>No portal da Infobip, copie a <b>URL base</b> (ex.: xxxxx.api.infobip.com) e crie uma <b>API key</b> com permissão de WhatsApp.</li>
       <li>Preencha os campos abaixo e salve.</li>
-      <li>Copie o <b>webhook</b> que aparece depois de salvar e cole na Infobip em mensagens recebidas e relatórios de entrega deste número.</li>
+      <li>Copie o <b>webhook</b> que aparece depois de salvar.</li>
+      <li>No portal da Infobip, cole o webhook em <b>mensagens recebidas</b> e em <b>relatórios de entrega</b> deste número.</li>
+      <li>Clique em <b>Testar conexão</b> para conferir a chave e o número.</li>
     </ol>
     <label className="block space-y-1"><span className={label}>Nome do número (ex.: Suporte)</span><input value={form.name} maxLength={120} onChange={event => setForm({ ...form, name: event.target.value })} className={input} /></label>
     <label className="block space-y-1"><span className={label}>URL base da Infobip</span><input value={form.baseUrl} placeholder="xxxxx.api.infobip.com" onChange={event => setForm({ ...form, baseUrl: event.target.value })} className={input} /></label>
     <label className="block space-y-1"><span className={label}>Número do WhatsApp (remetente)</span><input value={form.from} inputMode="tel" placeholder="55 11 99999-0000" onChange={event => setForm({ ...form, from: event.target.value })} className={input} /></label>
     <label className="block space-y-1"><span className={label}>API key</span><input type="password" autoComplete="off" value={form.apiKey} placeholder={account?.has_api_key ? '•••••••• (mantida; preencha para trocar)' : ''} onChange={event => setForm({ ...form, apiKey: event.target.value })} className={input} /></label>
     <button type="button" disabled={saving || !form.baseUrl.trim() || !form.from.trim() || (!form.apiKey.trim() && !account?.has_api_key)} onClick={() => void save()} className="flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400 disabled:opacity-40">{saving && <Loader2 size={15} className="animate-spin" />} Salvar</button>
+    {account && <button type="button" disabled={test.running} onClick={() => void runTest()} className="flex h-10 items-center gap-2 rounded-xl border border-white/10 px-4 text-sm hover:bg-white/[.06] disabled:opacity-40">{test.running && <Loader2 size={14} className="animate-spin" />} Testar conexão</button>}
+    {test.message && <p role="status" className={`text-xs ${test.ok ? 'text-emerald-400' : 'text-red-400'}`}>{test.message}</p>}
     {notice && <p role="status" className="text-xs text-slate-400">{notice}</p>}
   </div>
 }

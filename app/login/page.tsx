@@ -4,17 +4,11 @@ import { FormEvent, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { authLink, nextFromSearch } from '@/lib/auth/navigation'
+import { authErrorPt } from '@/lib/auth/errors'
 import BrandLogo from '@/components/brand-logo'
 import { createSupabaseBrowserClient } from '../../lib/supabase/client'
 
-function friendlyAuthError(message: string) {
-  const text = message.toLowerCase()
-  if (text.includes('invalid login credentials')) return 'E-mail ou senha incorretos. Confira os dados e tente novamente.'
-  if (text.includes('email not confirmed')) return 'Seu e-mail ainda não foi confirmado. Confira sua caixa de entrada ou solicite um novo e-mail de confirmação.'
-  if (text.includes('rate limit') || text.includes('too many requests')) return 'Muitas tentativas foram feitas. Aguarde alguns minutos antes de tentar novamente.'
-  if (text.includes('password')) return 'A senha informada não é válida.'
-  return message
-}
+const friendlyAuthError = authErrorPt
 
 export default function LoginPage() {
   const router = useRouter()

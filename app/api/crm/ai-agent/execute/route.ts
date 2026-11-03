@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { limitUser } from '@/lib/security/user-rate-limit'
 import { IaraExecutionKernel, IaraKernelError } from '@/services/iara-agent/execution-kernel'
 
 export const dynamic = 'force-dynamic'
@@ -9,6 +10,8 @@ export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient()
   const { data: { user }, error: auth } = await supabase.auth.getUser()
   if (auth || !user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 })
+  const limited = await limitUser('ai-agent-execute', user.id, 30)
+  if (limited) return limited
 
   const body = await request.json().catch(() => null) as { action_id?: unknown } | null
   const actionId = typeof body?.action_id === 'string' ? body.action_id.trim() : ''

@@ -1,5 +1,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
+// Service-role client: server only. (No 'server-only' package in the deps; this fails fast if a client bundle ever imports it.)
+if (typeof window !== 'undefined') throw new Error('lib/supabase/admin must never run in the browser.')
+
 let client: SupabaseClient | null = null
 
 export function createSupabaseAdminClient(): SupabaseClient {

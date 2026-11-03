@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { proxy } from '@/proxy'
 
-const auth = vi.hoisted(() => ({ authenticated: false }))
+const auth = vi.hoisted(() => ({ authenticated: false, mfa: false }))
 vi.mock('@supabase/ssr', () => ({ createServerClient: () => ({
-  auth: { getClaims: async () => ({ data: auth.authenticated ? { claims: { sub:'user' } } : null, error:null }) },
+  auth: {
+    getClaims: async () => ({ data: auth.authenticated ? { claims: { sub:'user' } } : null, error:null }),
+    mfa: { getAuthenticatorAssuranceLevel: async () => ({ data: { currentLevel: 'aal1', nextLevel: auth.mfa ? 'aal2' : 'aal1' }, error: null }) },
+  },
 }) }))
 beforeEach(() => {
   auth.authenticated=false
+  auth.mfa=false
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL','https://example.supabase.co')
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY','public-test-key')
 })
@@ -30,5 +34,12 @@ describe('auth proxy regression', () => {
       const response=await proxy(new NextRequest(`https://pay.example/login?${new URLSearchParams({next})}`))
       expect(response.headers.get('location')).toBe(`https://pay.example${expected}`)
     }
+  })
+  it('sends an account with 2FA to the code step before the dashboard', async () => {
+    auth.authenticated=true; auth.mfa=true
+    const target=new URL((await proxy(new NextRequest('https://pay.example/dashboard/pagamentos'))).headers.get('location')!)
+    expect(target.pathname).toBe('/login/mfa')
+    expect(target.searchParams.get('next')).toBe('/dashboard/pagamentos')
+    expect((await proxy(new NextRequest('https://pay.example/login/mfa'))).headers.get('location')).toBeNull()
   })
 })

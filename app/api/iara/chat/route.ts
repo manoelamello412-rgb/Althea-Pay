@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { limitUser } from '@/lib/security/user-rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -8,6 +9,8 @@ export async function POST(request: NextRequest) {
     const supabase = await createSupabaseServerClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) return NextResponse.json({ error: 'Autenticação obrigatória.' }, { status: 401 })
+    const limited = await limitUser('iara-chat', user.id, 20)
+    if (limited) return limited
 
     const body = await request.json()
     const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''

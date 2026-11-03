@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { generateRevenueAgentDraft } from '@/lib/crm/ai/provider'
+import { limitUser } from '@/lib/security/user-rate-limit'
 
 export const dynamic='force-dynamic'
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i
@@ -18,12 +19,14 @@ async function buildAgent(supabase:Awaited<ReturnType<typeof createServerClient>
 
 export async function GET(request:Request){
  const supabase=await createServerClient();const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return NextResponse.json({error:'UNAUTHORIZED'},{status:401})
+ const limited=await limitUser('ai-agent',user.id,30);if(limited)return limited
  const id=new URL(request.url).searchParams.get('conversation')?.trim()??'';if(!UUID.test(id))return NextResponse.json({error:'INVALID_CONVERSATION'},{status:400})
  try{const agent=await buildAgent(supabase,id);if(!agent)return NextResponse.json({error:'NOT_FOUND'},{status:404});const {data:actions,error:actionsError}=await supabase.from('crm_ai_actions').select('id,action_type,score,rationale,status,payload,created_at,executed_at').eq('conversation_id',id).eq('user_id',user.id).order('created_at',{ascending:false}).limit(20);if(actionsError)return NextResponse.json({error:'AI_ACTION_LEDGER_FAILED'},{status:500});return NextResponse.json({...agent,actions:actions??[]},{headers:{'Cache-Control':'no-store'}})}catch(error){return NextResponse.json({error:'AI_AGENT_FAILED',detail:error instanceof Error?error.message:'unknown'},{status:500})}
 }
 
 export async function POST(request:Request){
  const supabase=await createServerClient();const {data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)return NextResponse.json({error:'UNAUTHORIZED'},{status:401})
+ const limited=await limitUser('ai-agent',user.id,30);if(limited)return limited
  const body=await request.json().catch(()=>null) as Json|null;const id=typeof body?.conversation_id==='string'?body.conversation_id.trim():'';const decision=typeof body?.decision==='string'?body.decision:'suggested';const headerKey=request.headers.get('idempotency-key')?.trim()??'';const bodyKey=typeof body?.idempotency_key==='string'?body.idempotency_key.trim():'';const idempotencyKey=headerKey||bodyKey
  if(!UUID.test(id))return NextResponse.json({error:'INVALID_CONVERSATION'},{status:400});if(!['suggested','accepted','dismissed'].includes(decision))return NextResponse.json({error:'INVALID_DECISION'},{status:400});if(idempotencyKey&&!IDEM.test(idempotencyKey))return NextResponse.json({error:'INVALID_IDEMPOTENCY_KEY'},{status:400})
  try{
