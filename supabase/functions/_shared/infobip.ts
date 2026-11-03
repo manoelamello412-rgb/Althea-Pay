@@ -17,7 +17,7 @@ export type InfobipSend = {
 };
 
 export type InfobipEvent =
-  | { kind: "message"; from: string; to: string; messageId: string; text: string; name: string | null; type: string }
+  | { kind: "message"; from: string; to: string; messageId: string; text: string; name: string | null; type: string; mediaUrl: string | null }
   | { kind: "status"; messageId: string; status: "sent" | "delivered" | "read" | "failed"; error: string | null };
 
 const isObject = (value: unknown): value is Json => !!value && typeof value === "object" && !Array.isArray(value);
@@ -204,6 +204,16 @@ const statusByGroup: Record<string, "sent" | "delivered" | "failed"> = {
 };
 
 // One webhook URL receives inbound messages, delivery reports and seen reports.
+const MEDIA_LABEL: Record<string, string> = {
+  image: "[Imagem recebida]",
+  document: "[Documento recebido]",
+  audio: "[Áudio recebido]",
+  voice: "[Áudio recebido]",
+  video: "[Vídeo recebido]",
+  sticker: "[Figurinha recebida]",
+  contact: "[Contato recebido]",
+};
+
 export function parseInfobipWebhook(payload: unknown): InfobipEvent[] {
   const results = isObject(payload) && Array.isArray(payload.results) ? payload.results : [];
   const events: InfobipEvent[] = [];
@@ -214,7 +224,13 @@ export function parseInfobipWebhook(payload: unknown): InfobipEvent[] {
 
     if (isObject(item.message)) {
       const message = item.message;
-      const text = str(message.text) || str(message.caption) || str(isObject(message.button) ? message.button.text : "");
+      const type = str(message.type).toLowerCase() || "text";
+      const mediaUrl = str(message.url) || null;
+      const location = type === "location" && message.latitude != null
+        ? `Localização: https://maps.google.com/?q=${str(message.latitude)},${str(message.longitude)}` : "";
+      // Media without a caption still arrives: the body names what was sent.
+      const text = str(message.text) || str(message.caption) || str(isObject(message.button) ? message.button.text : "")
+        || location || (MEDIA_LABEL[type] ?? (mediaUrl ? "[Arquivo recebido]" : ""));
       const from = digits(str(item.from));
       if (!text || !from) continue;
       events.push({
@@ -224,7 +240,8 @@ export function parseInfobipWebhook(payload: unknown): InfobipEvent[] {
         messageId,
         text,
         name: str(isObject(item.contact) ? item.contact.name : "") || null,
-        type: str(message.type).toLowerCase() || "text",
+        type,
+        mediaUrl,
       });
     } else if (item.seenAt) {
       events.push({ kind: "status", messageId, status: "read", error: null });

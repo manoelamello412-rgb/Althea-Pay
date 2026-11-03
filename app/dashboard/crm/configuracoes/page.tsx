@@ -8,7 +8,7 @@ import { hasOrganizationCapability, parseOrganizationAccess, type OrganizationAc
 type Tag = { id: string; name: string; description: string | null; active: boolean }
 type QuickReply = { id: string; title: string; body: string; channel: string; active: boolean }
 type ChannelAccount = { id: string; channel: string; provider: string; display_name: string | null; external_account_id: string | null; status: 'active' | 'inactive' | 'error'; credentials_ref: string | null; updated_at: string }
-type Tab = 'tags' | 'replies' | 'whatsapp' | 'channels'
+type Tab = 'tags' | 'replies' | 'funnelchat' | 'whatsapp' | 'channels'
 type Editor =
   | { kind: 'tag'; id: string | null; name: string; description: string; active: boolean }
   | { kind: 'reply'; id: string | null; title: string; body: string; channel: string; active: boolean }
@@ -21,100 +21,168 @@ const messageOf = (cause: unknown) => { const raw = cause && typeof cause === 'o
 const input = 'h-10 w-full rounded-xl border border-white/10 bg-white/[.03] px-3 text-sm outline-none focus:border-emerald-500/40'
 const label = 'text-[10px] font-bold uppercase tracking-widest text-slate-500'
 
-type WhatsappState = { status: 'connected' | 'connecting' | 'waiting_scan' | 'disconnected'; qr: string | null; code?: string | null; phone: string | null }
+type WhatsappState = { status: 'connected' | 'connecting' | 'waiting_scan' | 'disconnected'; qr: string | null; code?: string | null; phone: string | null; account_id?: string }
 
-// Pairs the organization's WhatsApp (Baileys bridge) like WhatsApp Web: QR code, or a pairing code sent to the phone number.
-function WhatsappConnect({ onConnected }: { onConnected: () => void }) {
+const bridgeError = (code: unknown) => code === 'WHATSAPP_BRIDGE_NOT_CONFIGURED' ? 'Servidor do WhatsApp (Baileys) não configurado. Peça ao administrador para definir WHATSAPP_BRIDGE_URL e WHATSAPP_BRIDGE_TOKEN.'
+  : code === 'WHATSAPP_BRIDGE_UNREACHABLE' ? 'Servidor do WhatsApp fora do ar. Tente de novo em alguns minutos.'
+  : code === 'INVALID_PHONE' ? 'Número inválido. Use DDD + número, ex. 11999999999.'
+  : code === 'FORBIDDEN' ? 'Seu acesso não permite conectar números.' : 'Servidor do WhatsApp indisponível.'
+
+// Pairs one Baileys number like WhatsApp Web: QR code, or a pairing code sent to the phone.
+// accountId null = new number; the account is created on the first "Conectar".
+function WhatsappConnect({ accountId, name, onChange }: { accountId: string | null; name?: string; onChange: () => void }) {
+  const [id, setId] = useState(accountId)
   const [state, setState] = useState<WhatsappState | null>(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState('')
   const [phone, setPhone] = useState('')
-  const call = useCallback(async (method: 'GET' | 'POST' | 'DELETE', payload?: { phone: string }) => {
-    const res = await fetch('/api/crm/whatsapp', { method, cache: 'no-store', ...(method === 'POST' && { headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload ?? {}) }) })
+  const call = useCallback(async (method: 'GET' | 'POST' | 'DELETE', payload?: { phone?: string; name?: string }) => {
+    const res = await fetch(`/api/crm/whatsapp${id ? `?account=${id}` : ''}`, { method, cache: 'no-store', ...(method === 'POST' && { headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload ?? {}) }) })
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) { setFailure(data.error === 'WHATSAPP_BRIDGE_NOT_CONFIGURED' ? 'Servidor do WhatsApp não configurado.' : data.error === 'INVALID_PHONE' ? 'Número inválido. Use DDD + número, ex. 11999999999.' : 'Servidor do WhatsApp indisponível.'); return }
+    if (!res.ok) { setFailure(bridgeError(data.error)); return }
     setFailure(''); setState(data as WhatsappState)
-    if (method === 'POST') onConnected()
-  }, [onConnected])
-  useEffect(() => { void call('GET') }, [call])
+    if (data.account_id && data.account_id !== id) setId(data.account_id)
+    if (method !== 'GET' || data.status === 'connected') onChange()
+  }, [id, onChange])
+  useEffect(() => { if (id) void call('GET') }, [id]) // só ao montar ou trocar de número
   const pairing = state?.status === 'connecting' || state?.status === 'waiting_scan'
   useEffect(() => {
     if (!pairing) return
     const timer = setInterval(() => void call('GET'), 3000)
     return () => clearInterval(timer)
   }, [pairing, call])
-  const act = async (method: 'POST' | 'DELETE', payload?: { phone: string }) => { setBusy(true); await call(method, payload); setBusy(false) }
+  const act = async (method: 'POST' | 'DELETE', payload?: { phone?: string; name?: string }) => { setBusy(true); await call(method, payload); setBusy(false) }
 
-  return <div className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center">
+  return <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
     <div className="min-w-0 flex-1">
-      <b className="text-sm">Baileys · QR Code ou código</b>
-      <span className={`ml-2 text-[11px] ${state?.status === 'connected' ? 'text-emerald-400' : 'text-slate-500'}`}>{state?.status === 'connected' ? `Conectado${state.phone ? ` · +${state.phone}` : ''}` : pairing ? (state.code || phone ? 'Aguardando o código no celular' : 'Aguardando leitura do QR') : 'Desconectado'}</span>
-      <p className="text-xs text-slate-500">Conecta um número comum de WhatsApp, como no WhatsApp Web.</p>
+      <span className={`text-[11px] ${state?.status === 'connected' ? 'text-emerald-400' : 'text-slate-500'}`}>{state?.status === 'connected' ? `Conectado${state.phone ? ` · +${state.phone}` : ''}` : pairing ? (state.code || phone ? 'Aguardando o código no celular' : 'Aguardando leitura do QR') : 'Desconectado'}</span>
       {failure && <p role="alert" className="mt-1 text-xs text-red-400">{failure}</p>}
-      {state?.status === 'waiting_scan' && <p className="mt-1 text-xs text-slate-400">No celular: WhatsApp › Aparelhos conectados › Conectar um aparelho{state.code ? ' › Conectar com número de telefone, e digite o código.' : '.'}</p>}
-      {!pairing && state?.status !== 'connected' && <div className="mt-3 flex max-w-sm gap-2"><input value={phone} onChange={e => setPhone(e.target.value)} inputMode="tel" placeholder="Número com DDD, ex. 11999999999" aria-label="Número do WhatsApp para conectar com código" className={input} /><button type="button" disabled={busy || !phone.replace(/\D/g, '')} onClick={() => void act('POST', { phone })} className="h-10 shrink-0 rounded-xl border border-white/10 px-3 text-sm text-slate-300 hover:bg-white/[.06] disabled:opacity-50">Conectar com código</button></div>}
+      {state?.status === 'waiting_scan' && <p className="mt-1 text-xs text-slate-400">No celular: WhatsApp › Aparelhos conectados › Conectar um aparelho{state.code ? ' › Conectar com número de telefone, e digite o código.' : ' e aponte para o QR Code.'}</p>}
+      {!pairing && state?.status !== 'connected' && <div className="mt-3 flex max-w-sm gap-2"><input value={phone} onChange={e => setPhone(e.target.value)} inputMode="tel" placeholder="Número com DDD, ex. 11999999999" aria-label="Número do WhatsApp para conectar com código" className={input} /><button type="button" disabled={busy || !phone.replace(/\D/g, '')} onClick={() => void act('POST', { phone, name })} className="h-10 shrink-0 rounded-xl border border-white/10 px-3 text-sm text-slate-300 hover:bg-white/[.06] disabled:opacity-50">Conectar com código</button></div>}
     </div>
     {state?.status === 'waiting_scan' && state.code && <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-center"><div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Código</div><b className="font-mono text-2xl tracking-[.2em] text-emerald-300">{state.code.slice(0, 4)}-{state.code.slice(4)}</b></div>}
     {state?.status === 'waiting_scan' && state.qr && <img src={state.qr} alt="QR Code para conectar o WhatsApp" className="h-44 w-44 rounded-xl bg-white p-2" />}
     {state?.status === 'connecting' && <Loader2 size={18} className="animate-spin text-emerald-400" />}
     {state?.status === 'connected'
       ? <button type="button" disabled={busy} onClick={() => void act('DELETE')} className="h-9 rounded-xl border border-white/10 px-3 text-sm text-slate-300 hover:bg-white/[.06] disabled:opacity-50">Desconectar</button>
-      : !pairing && <button type="button" disabled={busy || !state && !failure} onClick={() => void act('POST')} className="h-9 rounded-xl bg-emerald-500 px-3 text-sm font-bold text-black hover:bg-emerald-400 disabled:opacity-50">Conectar WhatsApp</button>}
+      : !pairing && <button type="button" disabled={busy} onClick={() => void act('POST', { name })} className="h-9 rounded-xl bg-emerald-500 px-3 text-sm font-bold text-black hover:bg-emerald-400 disabled:opacity-50">{busy && <Loader2 size={14} className="mr-1 inline animate-spin" />}Conectar por QR Code</button>}
   </div>
 }
 
-type WhatsappSettings = { id: string; provider: string; status: string; base_url: string | null; from_number: string | null; has_api_key: boolean; webhook_token: string | null }
+type WhatsappNumber = { id: string; provider: 'baileys' | 'infobip'; status: string; display_name: string | null; phone: string | null; base_url: string | null; from_number: string | null; has_api_key: boolean; webhook_token: string | null; last_inbound_at: string | null; last_error: string | null }
 type Db = ReturnType<typeof createSupabaseBrowserClient>
+const when = (iso: string | null) => iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'nunca'
 
-// The organization has one WhatsApp number, used by support (CRM chat) and by the automatic
-// pending-payment message. Here the admin picks which provider sends through it.
-function WhatsappPanel({ db }: { db: Db }) {
-  const [settings, setSettings] = useState<WhatsappSettings | null>(null)
-  const [provider, setProvider] = useState<'baileys' | 'infobip'>('baileys')
-  const [form, setForm] = useState({ baseUrl: '', from: '', apiKey: '' })
+function InfobipForm({ db, account, onSaved }: { db: Db; account: WhatsappNumber | null; onSaved: () => void }) {
+  const [form, setForm] = useState({ name: account?.display_name ?? '', baseUrl: account?.base_url ?? '', from: account?.from_number ?? '', apiKey: '' })
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
-  const apply = useCallback((data: WhatsappSettings | null) => {
-    setSettings(data)
-    if (data) { setProvider(data.provider === 'infobip' ? 'infobip' : 'baileys'); setForm({ baseUrl: data.base_url ?? '', from: data.from_number ?? '', apiKey: '' }) }
-  }, [])
-  const reload = useCallback(() => { void db.rpc('crm_whatsapp_settings').then(({ data }: { data: WhatsappSettings | null }) => apply(data)) }, [db, apply])
-  useEffect(reload, [reload])
-
-  async function saveInfobip() {
+  async function save() {
     setSaving(true); setNotice('')
-    const { data, error } = await db.rpc('crm_whatsapp_configure', { p_provider: 'infobip', p_base_url: form.baseUrl, p_from_number: form.from, p_api_key: form.apiKey || null })
+    const { error } = await db.rpc('crm_whatsapp_configure', { p_provider: 'infobip', p_base_url: form.baseUrl, p_from_number: form.from, p_api_key: form.apiKey || null, p_account_id: account?.id ?? null, p_display_name: form.name || null })
     setSaving(false)
     if (error) { setNotice(messageOf(error)); return }
-    apply(data as WhatsappSettings); setNotice('Infobip salva e em uso.')
+    setNotice('Salvo. Agora copie o webhook abaixo e cole no portal da Infobip.'); onSaved()
   }
+  return <div className="space-y-3">
+    <ol className="list-decimal space-y-0.5 pl-4 text-xs text-slate-400">
+      <li>No portal da Infobip, copie a <b>URL base</b> (ex.: xxxxx.api.infobip.com) e crie uma <b>API key</b> com permissão de WhatsApp.</li>
+      <li>Preencha os campos abaixo e salve.</li>
+      <li>Copie o <b>webhook</b> que aparece depois de salvar e cole na Infobip em mensagens recebidas e relatórios de entrega deste número.</li>
+    </ol>
+    <label className="block space-y-1"><span className={label}>Nome do número (ex.: Suporte)</span><input value={form.name} maxLength={120} onChange={event => setForm({ ...form, name: event.target.value })} className={input} /></label>
+    <label className="block space-y-1"><span className={label}>URL base da Infobip</span><input value={form.baseUrl} placeholder="xxxxx.api.infobip.com" onChange={event => setForm({ ...form, baseUrl: event.target.value })} className={input} /></label>
+    <label className="block space-y-1"><span className={label}>Número do WhatsApp (remetente)</span><input value={form.from} inputMode="tel" placeholder="55 11 99999-0000" onChange={event => setForm({ ...form, from: event.target.value })} className={input} /></label>
+    <label className="block space-y-1"><span className={label}>API key</span><input type="password" autoComplete="off" value={form.apiKey} placeholder={account?.has_api_key ? '•••••••• (mantida; preencha para trocar)' : ''} onChange={event => setForm({ ...form, apiKey: event.target.value })} className={input} /></label>
+    <button type="button" disabled={saving || !form.baseUrl.trim() || !form.from.trim() || (!form.apiKey.trim() && !account?.has_api_key)} onClick={() => void save()} className="flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400 disabled:opacity-40">{saving && <Loader2 size={15} className="animate-spin" />} Salvar</button>
+    {notice && <p role="status" className="text-xs text-slate-400">{notice}</p>}
+  </div>
+}
 
-  const inUse = settings?.provider === 'infobip' ? 'Infobip' : settings?.provider === 'baileys' ? 'Baileys' : null
-  const webhook = settings?.provider === 'infobip' && settings.webhook_token
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '')}/functions/v1/crm-channel-infobip-webhook?account=${settings.id}&token=${settings.webhook_token}` : ''
+// Every WhatsApp number of the organization. Each one is Baileys (QR Code) or Infobip (API);
+// conversations remember which number they came through and replies go out through it.
+function WhatsappPanel({ db }: { db: Db }) {
+  const [numbers, setNumbers] = useState<WhatsappNumber[]>([])
+  const [adding, setAdding] = useState<'baileys' | 'infobip' | null>(null)
+  const [open, setOpen] = useState<string | null>(null)
+  const reload = useCallback(() => { void db.rpc('crm_whatsapp_settings').then(({ data }: { data: WhatsappNumber[] | null }) => setNumbers(data ?? [])) }, [db])
+  useEffect(reload, [reload])
+  const webhookOf = (n: WhatsappNumber) => n.provider === 'infobip' && n.webhook_token ? `${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '')}/functions/v1/crm-channel-infobip-webhook?account=${n.id}&token=${n.webhook_token}` : ''
 
   return <div>
-    <div className="border-b border-white/[.06] px-4 py-4">
-      <p className="text-sm">Este número atende o <b>suporte</b> (chat do CRM) e envia a mensagem automática quando um <b>pagamento fica pendente por mais de 5 minutos</b>.</p>
-      <p className="mt-1 text-xs text-slate-500">Em uso: <span className={inUse ? 'text-emerald-400' : ''}>{inUse ?? 'nenhum provedor'}</span>. Trocar o provedor mantém as conversas do suporte.</p>
-      <div role="radiogroup" aria-label="Provedor do WhatsApp" className="mt-3 grid gap-2 sm:grid-cols-2">
-        {([['baileys', 'Baileys', 'Número comum, conectado por QR Code.'], ['infobip', 'Infobip', 'API oficial do WhatsApp Business.']] as const).map(([id, name, hint]) =>
-          <label key={id} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 ${provider === id ? 'border-emerald-500/40 bg-emerald-500/[.05]' : 'border-white/10'}`}>
-            <input type="radio" name="whatsapp-provider" checked={provider === id} onChange={() => { setProvider(id); setNotice('') }} className="mt-1 accent-emerald-500" />
-            <span className="text-sm">{name}{settings?.provider === id && <span className="ml-2 text-[10px] text-emerald-400">em uso</span>}<span className="block text-xs text-slate-500">{hint}</span></span>
-          </label>)}
-      </div>
+    <div className="flex flex-wrap items-center gap-2 border-b border-white/[.06] px-4 py-4">
+      <p className="min-w-0 flex-1 text-sm text-slate-400">Cada número recebe as conversas do suporte e pode ser escolhido como remetente no remarketing. No WhatsApp não há resposta automática: quem responde é a equipe.</p>
+      <button type="button" onClick={() => setAdding(adding === 'baileys' ? null : 'baileys')} className="inline-flex h-9 items-center gap-1 rounded-xl border border-white/10 px-3 text-sm hover:bg-white/[.06]"><Plus size={14} /> Número por QR Code</button>
+      <button type="button" onClick={() => setAdding(adding === 'infobip' ? null : 'infobip')} className="inline-flex h-9 items-center gap-1 rounded-xl border border-white/10 px-3 text-sm hover:bg-white/[.06]"><Plus size={14} /> Número Infobip</button>
     </div>
-    {provider === 'baileys'
-      ? <>{settings?.provider === 'infobip' && <p className="px-4 pt-3 text-xs text-amber-300">Ao conectar pelo QR Code, o WhatsApp deixa de usar a Infobip e passa a usar o Baileys.</p>}<WhatsappConnect key={settings?.provider} onConnected={reload} /></>
-      : <div className="space-y-3 px-4 py-4">
-        <label className="block space-y-1"><span className={label}>URL base da Infobip</span><input value={form.baseUrl} placeholder="xxxxx.api.infobip.com" onChange={event => setForm({ ...form, baseUrl: event.target.value })} className={input} /></label>
-        <label className="block space-y-1"><span className={label}>Número do WhatsApp (remetente)</span><input value={form.from} inputMode="tel" placeholder="55 11 99999-0000" onChange={event => setForm({ ...form, from: event.target.value })} className={input} /></label>
-        <label className="block space-y-1"><span className={label}>API key</span><input type="password" autoComplete="off" value={form.apiKey} placeholder={settings?.has_api_key ? '•••••••• (mantida; preencha para trocar)' : ''} onChange={event => setForm({ ...form, apiKey: event.target.value })} className={input} /></label>
-        {webhook && <label className="block space-y-1"><span className={label}>Webhook (cole na Infobip: mensagens recebidas e relatórios de entrega)</span><input readOnly value={webhook} onFocus={event => event.currentTarget.select()} className={`${input} text-xs text-slate-400`} /></label>}
-        <button type="button" disabled={saving || !form.baseUrl.trim() || !form.from.trim() || (!form.apiKey.trim() && !settings?.has_api_key)} onClick={() => void saveInfobip()} className="flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400 disabled:opacity-40">{saving && <Loader2 size={15} className="animate-spin" />} {settings?.provider === 'infobip' ? 'Salvar' : 'Salvar e usar Infobip'}</button>
-      </div>}
-    {notice && <p role="status" className="px-4 pb-4 text-xs text-slate-400">{notice}</p>}
+    {adding && <div className="border-b border-white/[.06] bg-white/[.02] px-4 py-4">
+      <b className="mb-3 block text-sm">{adding === 'baileys' ? 'Novo número por QR Code (Baileys)' : 'Novo número Infobip (API oficial)'}</b>
+      {adding === 'baileys' ? <WhatsappConnect accountId={null} onChange={reload} /> : <InfobipForm db={db} account={null} onSaved={() => { setAdding(null); reload() }} />}
+    </div>}
+    {numbers.length === 0 && !adding && <div className="p-10 text-center text-sm text-slate-600">Nenhum número conectado. Adicione um número por QR Code ou pela Infobip.</div>}
+    {numbers.map(n => {
+      const webhook = webhookOf(n)
+      const [statusLabel, tone] = STATUS[n.status as ChannelAccount['status']] ?? ['—', 'text-slate-500']
+      return <div key={n.id} className="border-b border-white/[.06] px-4 py-3 last:border-0">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <b className="text-sm">{n.display_name || 'WhatsApp'}</b>
+            <span className="ml-2 rounded-full bg-white/[.06] px-2 py-0.5 text-[10px] text-slate-400">{n.provider === 'infobip' ? 'Infobip' : 'QR Code'}</span>
+            <span className={`ml-2 text-[11px] ${tone}`}>{statusLabel}</span>
+            <p className="truncate text-xs text-slate-500">{n.phone || n.from_number ? `+${n.phone || n.from_number}` : 'sem número'} · última mensagem recebida: {when(n.last_inbound_at)}</p>
+            {n.last_error && <p className="truncate text-xs text-red-400">Último erro de envio: {n.last_error}</p>}
+          </div>
+          <button type="button" aria-expanded={open === n.id} onClick={() => setOpen(open === n.id ? null : n.id)} className="rounded-md p-1.5 text-slate-500 hover:bg-white/5 hover:text-white" aria-label={`Configurar ${n.display_name || 'número'}`}><Pencil size={14} /></button>
+        </div>
+        {open === n.id && <div className="mt-3 space-y-3">
+          {n.provider === 'baileys' ? <WhatsappConnect accountId={n.id} name={n.display_name ?? undefined} onChange={reload} /> : <InfobipForm db={db} account={n} onSaved={reload} />}
+          {webhook && <label className="block space-y-1"><span className={label}>Webhook deste número (cole na Infobip)</span><input readOnly value={webhook} onFocus={event => event.currentTarget.select()} className={`${input} text-xs text-slate-400`} /></label>}
+        </div>}
+      </div>
+    })}
+  </div>
+}
+
+const FLOW_FIELDS: [string, string, string][] = [
+  ['welcome', 'Boas-vindas (primeira mensagem do cliente)', 'Use {nome} e {funil}. Mostre as opções 1, 2 e 3.'],
+  ['status', 'Opção 1 · status do pagamento', '{status} vira: aprovado, aguardando pagamento, não aprovado…'],
+  ['receipt_prompt', 'Opção 2 · pedir comprovante', ''],
+  ['receipt_received', 'Comprovante recebido', 'Depois disso a conversa vai para a equipe.'],
+  ['human', 'Opção 3 · falar com atendente', 'Depois disso o automático para e a conversa fica Pendente.'],
+  ['fallback', 'Quando não entender a resposta', ''],
+]
+
+// Automatic replies of the funnel chat (never on WhatsApp). One default flow plus optional per-funnel overrides.
+// Empty fields fall back to the platform text.
+function FunnelChatFlowPanel({ db, organizationId, canEdit }: { db: Db; organizationId: string; canEdit: boolean }) {
+  const [funnels, setFunnels] = useState<{ id: string; nome: string }[]>([])
+  const [funnelId, setFunnelId] = useState('')
+  const [enabled, setEnabled] = useState(true)
+  const [texts, setTexts] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState('')
+  useEffect(() => { void db.from('funnels').select('id,nome').eq('organization_id', organizationId).is('deleted_at', null).order('nome').then(({ data }: { data: { id: string; nome: string }[] | null }) => setFunnels(data ?? [])) }, [db, organizationId])
+  useEffect(() => {
+    setNotice('')
+    let query = db.from('crm_funnel_chat_flows').select('enabled,texts').eq('organization_id', organizationId)
+    query = funnelId ? query.eq('funnel_id', funnelId) : query.is('funnel_id', null)
+    void query.maybeSingle().then(({ data }: { data: { enabled: boolean; texts: Record<string, string> } | null }) => { setEnabled(data?.enabled ?? true); setTexts(data?.texts ?? {}) })
+  }, [db, organizationId, funnelId])
+  async function save() {
+    setSaving(true); setNotice('')
+    const { error } = await db.rpc('crm_funnel_chat_flow_save', { p_funnel_id: funnelId || null, p_enabled: enabled, p_texts: texts })
+    setSaving(false)
+    setNotice(error ? (error.message === 'TEXT_TOO_LONG' ? 'Cada texto pode ter até 2000 caracteres.' : messageOf(error)) : 'Salvo. Vale para as próximas mensagens.')
+  }
+  return <div className="space-y-4 px-4 py-4">
+    <p className="text-sm text-slate-400">Quando o cliente escreve no <b>chat do funil</b>, o atendimento automático responde com um menu (1, 2, 3). Ao escolher <b>falar com atendente</b>, enviar comprovante, ou quando alguém da equipe responde, o automático para. As respostas automáticas aparecem no CRM com a etiqueta “Automática”. <b>No WhatsApp não há resposta automática.</b></p>
+    <div className="flex flex-wrap items-end gap-3">
+      <label className="block min-w-56 space-y-1"><span className={label}>Funil</span><select value={funnelId} onChange={event => setFunnelId(event.target.value)} className={`${input} bg-[#0b100e]`}><option value="">Padrão (todos os funis)</option>{funnels.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}</select></label>
+      <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" checked={enabled} disabled={!canEdit} onChange={event => setEnabled(event.target.checked)} className="accent-emerald-500" /> Respostas automáticas ligadas</label>
+    </div>
+    {FLOW_FIELDS.map(([key, title, hint]) => <label key={key} className="block space-y-1"><span className={label}>{title}</span><textarea value={texts[key] ?? ''} disabled={!canEdit} maxLength={2000} rows={key === 'welcome' || key === 'fallback' ? 5 : 2} placeholder="Texto padrão da plataforma" onChange={event => setTexts({ ...texts, [key]: event.target.value })} className="w-full rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-sm outline-none focus:border-emerald-500/40 disabled:opacity-60" />{hint && <span className="text-[11px] text-slate-500">{hint}</span>}</label>)}
+    {canEdit ? <button type="button" disabled={saving} onClick={() => void save()} className="flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400 disabled:opacity-40">{saving && <Loader2 size={15} className="animate-spin" />} Salvar</button> : <p className="text-xs text-slate-500">Somente leitura: alterar exige a permissão de gerenciar automações.</p>}
+    {notice && <p role="status" className="text-xs text-slate-400">{notice}</p>}
   </div>
 }
 
@@ -174,7 +242,7 @@ export default function CrmConfiguracoesPage() {
     await load()
   }
 
-  const tabs: [Tab, string, number][] = [['tags', 'Etiquetas', tags.length], ['replies', 'Respostas rápidas', replies.length], ...(canIntegrations ? [['whatsapp', 'WhatsApp', channels.filter(account => account.channel === 'whatsapp').length], ['channels', 'Outros canais', channels.filter(account => account.channel !== 'whatsapp').length]] as [Tab, string, number][] : [])]
+  const tabs: [Tab, string, number][] = [['tags', 'Etiquetas', tags.length], ['replies', 'Respostas rápidas', replies.length], ['funnelchat', 'Chat do funil', 0], ...(canIntegrations ? [['whatsapp', 'WhatsApp', channels.filter(account => account.channel === 'whatsapp').length], ['channels', 'Outros canais', channels.filter(account => account.channel !== 'whatsapp').length]] as [Tab, string, number][] : [])]
   const empty = (text: string) => <div className="p-10 text-center text-sm text-slate-600">{text}</div>
   const editButton = (name: string, onClick: () => void) => <button type="button" aria-label={`Editar ${name}`} onClick={onClick} className="rounded-md p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
   const inactive = (active: boolean) => !active && <span className="ml-2 rounded-full bg-white/[.06] px-2 py-0.5 text-[10px] text-slate-500">inativa</span>
@@ -190,7 +258,7 @@ export default function CrmConfiguracoesPage() {
         </div>
       </header>
 
-      <div role="tablist" aria-label="Seção" className="mb-4 flex flex-wrap gap-1">{tabs.map(([id, name, count]) => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`rounded-lg px-3 py-1.5 text-sm ${tab === id ? 'bg-white/[.08] text-white' : 'text-slate-500 hover:text-slate-300'}`}>{name} <span className="text-slate-600">{count}</span></button>)}</div>
+      <div role="tablist" aria-label="Seção" className="mb-4 flex flex-wrap gap-1">{tabs.map(([id, name, count]) => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`rounded-lg px-3 py-1.5 text-sm ${tab === id ? 'bg-white/[.08] text-white' : 'text-slate-500 hover:text-slate-300'}`}>{name} {id !== 'funnelchat' && <span className="text-slate-600">{count}</span>}</button>)}</div>
       {error && <div role="alert" className="mb-4 rounded-xl border border-red-500/20 bg-red-500/[.06] px-4 py-3 text-sm text-red-300">{error}</div>}
       {!canConfigure && (tab === 'tags' || tab === 'replies') && !loading && <p className="mb-4 text-xs text-slate-500">Somente leitura: alterar etiquetas e respostas exige a permissão de gerenciar automações.</p>}
 
@@ -198,6 +266,7 @@ export default function CrmConfiguracoesPage() {
         {loading ? <div className="flex min-h-40 items-center justify-center gap-2 text-slate-500"><Loader2 size={18} className="animate-spin text-emerald-400" /> Carregando</div>
           : tab === 'tags' ? (tags.length ? tags.map(tag => <div key={tag.id} className="flex items-center gap-3 border-b border-white/[.06] px-4 py-3 last:border-0"><div className="min-w-0 flex-1"><b className="text-sm">{tag.name}</b>{inactive(tag.active)}{tag.description && <p className="truncate text-xs text-slate-500">{tag.description}</p>}</div>{canConfigure && editButton(tag.name, () => setEditor({ kind: 'tag', id: tag.id, name: tag.name, description: tag.description ?? '', active: tag.active }))}</div>) : empty('Nenhuma etiqueta. Etiquetas organizam conversas por assunto ou perfil.'))
           : tab === 'replies' ? (replies.length ? replies.map(reply => <div key={reply.id} className="flex items-start gap-3 border-b border-white/[.06] px-4 py-3 last:border-0"><div className="min-w-0 flex-1"><b className="text-sm">{reply.title}</b>{inactive(reply.active)}<span className="ml-2 text-[11px] text-slate-500">{CHANNELS[reply.channel] ?? reply.channel}</span><p className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-xs text-slate-500">{reply.body}</p></div>{canConfigure && editButton(reply.title, () => setEditor({ kind: 'reply', id: reply.id, title: reply.title, body: reply.body, channel: reply.channel, active: reply.active }))}</div>) : empty('Nenhuma resposta rápida. Cadastre textos que a equipe envia com frequência.'))
+          : tab === 'funnelchat' ? (access ? <FunnelChatFlowPanel db={db} organizationId={access.organization_id} canEdit={canConfigure} /> : null)
           : tab === 'whatsapp' ? <WhatsappPanel db={db} />
           : channels.filter(account => account.channel !== 'whatsapp').length ? channels.filter(account => account.channel !== 'whatsapp').map(account => { const [statusLabel, tone] = STATUS[account.status]; const name = account.display_name || `${CHANNELS[account.channel] ?? account.channel} · ${account.provider}`; return <div key={account.id} className="flex items-center gap-3 border-b border-white/[.06] px-4 py-3 last:border-0"><div className="min-w-0 flex-1"><b className="text-sm">{name}</b><span className={`ml-2 text-[11px] ${tone}`}>{statusLabel}</span><p className="truncate text-xs text-slate-500">{CHANNELS[account.channel] ?? account.channel} · {account.provider}{account.external_account_id ? ` · ${account.external_account_id}` : ''} · {account.credentials_ref ? 'credencial configurada' : 'sem credencial'}</p></div>{editButton(name, () => setEditor({ kind: 'channel', id: account.id, displayName: account.display_name ?? '', status: account.status === 'active' ? 'active' : 'inactive', label: name }))}</div> }) : empty('Nenhum outro canal conectado. A conexão de e-mail e SMS é feita pela equipe Althea.')}
       </section>

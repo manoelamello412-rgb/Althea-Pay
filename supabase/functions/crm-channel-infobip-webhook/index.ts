@@ -8,24 +8,52 @@ import { parseInfobipWebhook } from "../_shared/infobip.ts";
 // or the legacy credentials_ref env JSON). Infobip does not sign
 // webhooks, so the per-account token in the URL is the authenticator.
 
-type Account = { id: string; user_id: string; provider: string; channel: string; status: string; credentials_ref: string | null };
+type Account = { id: string; user_id: string; organization_id: string; provider: string; channel: string; status: string; credentials_ref: string | null; metadata: Record<string, unknown> | null };
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
-async function webhookToken(account: Account): Promise<string> {
+async function credentials(account: Account): Promise<{ webhook_token?: string; api_key?: string }> {
   if (!account.credentials_ref) {
     const { data } = await db.rpc("crm_channel_account_credentials", { p_account_id: account.id });
-    return typeof data?.webhook_token === "string" ? data.webhook_token : "";
+    return data && typeof data === "object" ? data : {};
   }
   const raw = Deno.env.get(account.credentials_ref);
-  if (!raw) return "";
+  if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
-    return typeof parsed?.webhook_token === "string" ? parsed.webhook_token : "";
+    return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
-    return "";
+    return {};
+  }
+}
+
+const MEDIA_MAX_BYTES = 16 * 1024 * 1024;
+const EXTENSION: Record<string, string> = {
+  "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/pdf": "pdf",
+  "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac", "video/mp4": "mp4",
+};
+
+// Infobip media URLs need the API key, so the file is copied to the private chat-attachments bucket
+// (org folder, readable by the CRM). Failure keeps the message with its "[Imagem recebida]" body.
+async function storeMedia(account: Account, apiKey: string | undefined, mediaUrl: string, messageId: string) {
+  try {
+    const base = typeof account.metadata?.base_url === "string" ? new URL(account.metadata.base_url).hostname : "";
+    const url = new URL(mediaUrl);
+    if (!apiKey || url.protocol !== "https:" || !url.hostname.endsWith(".api.infobip.com") || (base && url.hostname !== base)) return null;
+    const res = await fetch(url, { headers: { authorization: `App ${apiKey}` }, signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) return null;
+    const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const ext = EXTENSION[mime];
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (!ext || bytes.byteLength === 0 || bytes.byteLength > MEDIA_MAX_BYTES) return null;
+    const path = `${account.organization_id}/whatsapp/${account.id}/${messageId.replace(/[^\w-]/g, "")}.${ext}`;
+    const up = await db.storage.from("chat-attachments").upload(path, bytes, { contentType: mime, upsert: true });
+    if (up.error) return null;
+    return { kind: "whatsapp_media", bucket: "chat-attachments", path, mime_type: mime, size_bytes: bytes.byteLength };
+  } catch {
+    return null;
   }
 }
 
@@ -47,11 +75,12 @@ Deno.serve(async (req) => {
   try {
     const { data: account, error } = await db
       .from("crm_channel_accounts")
-      .select("id,user_id,provider,channel,status,credentials_ref")
+      .select("id,user_id,organization_id,provider,channel,status,credentials_ref,metadata")
       .eq("id", accountId)
       .maybeSingle<Account>();
     if (error) throw error;
-    const expected = account ? await webhookToken(account) : "";
+    const secret = account ? await credentials(account) : {};
+    const expected = secret.webhook_token ?? "";
     if (!account || account.provider !== "infobip" || !expected || !safeEqual(token, expected)) {
       return json({ error: "unauthorized" }, 401);
     }
@@ -61,6 +90,7 @@ Deno.serve(async (req) => {
     const results: unknown[] = [];
     for (const event of events) {
       if (event.kind === "message") {
+        const attachment = event.mediaUrl ? await storeMedia(account, secret.api_key, event.mediaUrl, event.messageId) : null;
         const r = await db.rpc("crm_ingest_channel_message", {
           p_user_id: account.user_id,
           p_channel: "whatsapp",
@@ -71,7 +101,7 @@ Deno.serve(async (req) => {
           p_phone_e164: "+" + event.from,
           p_email: null,
           p_display_name: event.name,
-          p_metadata: { provider: "infobip", message_type: event.type, to: event.to },
+          p_metadata: { provider: "infobip", message_type: event.type, to: event.to, ...(attachment && { attachment }) },
         });
         if (r.error) throw r.error;
         results.push({ type: "message", data: r.data });

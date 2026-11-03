@@ -96,14 +96,19 @@ describe('Infobip WhatsApp adapter', () => {
       { messageId: 'outbox-1', status: { groupName: 'DELIVERED' }, error: { name: 'NO_ERROR' } },
       { messageId: 'outbox-2', status: { groupName: 'UNDELIVERABLE', name: 'UNDELIVERABLE_NOT_DELIVERED' }, error: { name: 'EC_ABSENT_SUBSCRIBER' } },
       { messageId: 'outbox-1', seenAt: '2026-10-13T00:00:00Z' },
-      { messageId: 'x', message: { type: 'IMAGE' }, from: '5511' },
+      { messageId: 'img-1', message: { type: 'IMAGE', url: 'https://abc.api.infobip.com/whatsapp/1/senders/x/media/1' }, from: '5511999990000' },
+      { messageId: 'loc-1', message: { type: 'LOCATION', latitude: -23.5, longitude: -46.6 }, from: '5511999990000' },
+      { messageId: 'x', message: { type: 'TEXT' }, from: '' },
       { status: { groupName: 'DELIVERED' } },
     ] })
     expect(events).toEqual([
-      { kind: 'message', from: '5511999990000', to: '551140000000', messageId: 'in-1', text: 'SAIR', name: 'Ana', type: 'text' },
+      { kind: 'message', from: '5511999990000', to: '551140000000', messageId: 'in-1', text: 'SAIR', name: 'Ana', type: 'text', mediaUrl: null },
       { kind: 'status', messageId: 'outbox-1', status: 'delivered', error: null },
       { kind: 'status', messageId: 'outbox-2', status: 'failed', error: 'EC_ABSENT_SUBSCRIBER' },
       { kind: 'status', messageId: 'outbox-1', status: 'read', error: null },
+      // Media without a caption is no longer dropped: the body names it and the URL is kept for download.
+      { kind: 'message', from: '5511999990000', to: '', messageId: 'img-1', text: '[Imagem recebida]', name: null, type: 'image', mediaUrl: 'https://abc.api.infobip.com/whatsapp/1/senders/x/media/1' },
+      { kind: 'message', from: '5511999990000', to: '', messageId: 'loc-1', text: 'Localização: https://maps.google.com/?q=-23.5,-46.6', name: null, type: 'location', mediaUrl: null },
     ])
     expect(parseInfobipWebhook(null)).toEqual([])
   })

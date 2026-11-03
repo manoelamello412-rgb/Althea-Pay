@@ -25,9 +25,17 @@ export async function context() {
   return user ? supabase : null
 }
 
-export async function accountId(supabase: NonNullable<Awaited<ReturnType<typeof context>>>) {
+// The org's Baileys number: the one asked for (?account=), else the first one. RLS hides other orgs' accounts.
+export async function accountId(supabase: NonNullable<Awaited<ReturnType<typeof context>>>, requested?: string | null) {
   const access = parseOrganizationAccess((await supabase.rpc('organization_my_access_v1', { p_organization_id: null })).data)
   if (!access) return undefined
-  const { data } = await supabase.from('crm_channel_accounts').select('id').eq('organization_id', access.organization_id).eq('channel', 'whatsapp').eq('provider', 'baileys').maybeSingle()
+  let query = supabase.from('crm_channel_accounts').select('id').eq('organization_id', access.organization_id).eq('channel', 'whatsapp').eq('provider', 'baileys')
+  if (requested) query = query.eq('id', requested)
+  const { data } = await query.order('created_at').limit(1).maybeSingle()
   return data?.id as string | undefined
+}
+
+export const requestedAccount = (request: Request) => {
+  const id = new URL(request.url).searchParams.get('account')
+  return id && /^[0-9a-f-]{36}$/i.test(id) ? id : null
 }

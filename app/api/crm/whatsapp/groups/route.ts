@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { accountId, bridge, context } from '@/lib/crm/whatsapp-bridge'
+import { accountId, bridge, context, requestedAccount } from '@/lib/crm/whatsapp-bridge'
 
 // Lists the connected WhatsApp's groups (GET) and imports a group's participants as leads (POST { group_id }).
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await context()
   if (!supabase) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 })
-  const id = await accountId(supabase)
+  const id = await accountId(supabase, requestedAccount(request))
   return id ? bridge(`/instances/${id}/groups`) : NextResponse.json({ error: 'WHATSAPP_NOT_CONNECTED' }, { status: 409 })
 }
 
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   if (!supabase) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 })
   const { group_id: groupId } = await request.json().catch(() => ({})) as { group_id?: unknown }
   if (typeof groupId !== 'string' || !/^[\d-]+@g\.us$/.test(groupId)) return NextResponse.json({ error: 'INVALID_GROUP' }, { status: 400 })
-  const id = await accountId(supabase)
+  const id = await accountId(supabase, requestedAccount(request))
   if (!id) return NextResponse.json({ error: 'WHATSAPP_NOT_CONNECTED' }, { status: 409 })
 
   const res = await bridge(`/instances/${id}/groups/${encodeURIComponent(groupId)}`)
