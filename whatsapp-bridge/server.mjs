@@ -168,18 +168,51 @@ function connected(id) {
   return sock
 }
 
+// Groups the number takes part in. A community is a parent group (isCommunity); its groups point to it in linkedParent.
 async function groups(id) {
   const all = await connected(id).groupFetchAllParticipating()
-  return Object.values(all).map(g => ({ id: g.id, name: g.subject, size: g.participants?.length ?? g.size ?? 0 })).sort((a, b) => a.name.localeCompare(b.name))
+  return Object.values(all).map(g => ({
+    id: g.id, name: g.subject, size: g.participants?.length ?? g.size ?? 0,
+    isCommunity: g.isCommunity === true, linkedParent: g.linkedParent ?? null,
+  })).sort((a, b) => a.name.localeCompare(b.name))
 }
 
 // Baileys 7 may list participants by LID; the phone then comes in phoneNumber. LID-only ones have no phone and are skipped.
-async function groupPhones(id, groupId) {
+// The name is the one the participant set (notify) when WhatsApp shares it.
+function members(sock, participants) {
+  const own = phoneOf(sock)
+  const byPhone = new Map()
+  for (const p of participants) {
+    const phone = jidPhone(p.phoneNumber) || jidPhone(p.id) || jidPhone(p.jid)
+    if (!phone || phone === own) continue
+    const name = (p.notify || p.name || p.verifiedName || '').trim().slice(0, 120) || null
+    if (!byPhone.has(phone) || (name && !byPhone.get(phone).name)) byPhone.set(phone, { phone, name })
+  }
+  return [...byPhone.values()]
+}
+
+async function groupMembers(id, groupId) {
   const sock = connected(id)
   const { subject, participants } = await sock.groupMetadata(groupId)
-  const own = phoneOf(sock)
-  const phones = [...new Set(participants.map(p => jidPhone(p.phoneNumber) || jidPhone(p.id) || jidPhone(p.jid)).filter(p => p && p !== own))]
-  return { name: subject, phones, skipped: participants.length - phones.length }
+  const list = members(sock, participants)
+  return { name: subject, members: list, phones: list.map(m => m.phone), skipped: participants.length - list.length }
+}
+
+// Everyone in the community's groups this number can see, without repeats.
+async function communityMembers(id, communityId) {
+  const sock = connected(id)
+  const all = Object.values(await sock.groupFetchAllParticipating())
+  const parent = all.find(g => g.id === communityId)
+  const linked = all.filter(g => g.linkedParent === communityId || g.id === communityId)
+  if (!linked.length) throw Object.assign(new Error('community_not_found'), { status: 404 })
+  const participants = []
+  for (const g of linked) participants.push(...(g.participants ?? (await sock.groupMetadata(g.id)).participants ?? []))
+  const list = members(sock, participants)
+  return {
+    name: parent?.subject ?? linked[0].subject,
+    groups: linked.map(g => ({ id: g.id, name: g.subject, size: g.participants?.length ?? 0 })),
+    members: list, phones: list.map(m => m.phone), skipped: 0,
+  }
 }
 
 function authorized(req) {
@@ -205,7 +238,8 @@ http.createServer(async (req, res) => {
     if (scope !== 'instances' || !ID.test(id ?? '')) return reply(res, 404, { error: 'not_found' })
     if (req.method === 'GET' && !action) return reply(res, 200, await status(id))
     if (req.method === 'GET' && action === 'groups' && !groupId) return reply(res, 200, { groups: await groups(id) })
-    if (req.method === 'GET' && action === 'groups' && /^[\d-]+@g\.us$/.test(groupId)) return reply(res, 200, await groupPhones(id, groupId))
+    if (req.method === 'GET' && action === 'groups' && /^[\d-]+@g\.us$/.test(groupId)) return reply(res, 200, await groupMembers(id, groupId))
+    if (req.method === 'GET' && action === 'communities' && /^[\d-]+@g\.us$/.test(groupId)) return reply(res, 200, await communityMembers(id, groupId))
     if (req.method === 'POST' && action === 'start') {
       const { phone } = await body(req)
       if (phone !== undefined && (typeof phone !== 'string' || !/^\d{10,15}$/.test(phone))) return reply(res, 400, { error: 'invalid_phone' })
