@@ -19,6 +19,7 @@ describe('CPF do comprador no cliente', () => {
   it('tela de clientes mostra e busca CPF', () => {
     expect(page).toContain("const documentOf = (client: Client) => pick(obj(client.data), ['document', 'cpf', 'tax_id'])")
     expect(page).toContain('<span>CPF</span>')
-    expect(page).toContain("cpf(pick(data, ['document', 'cpf', 'tax_id']))")
+    // busca no servidor: CPF com ou sem pontuação casa pelos dígitos
+    expect(readFileSync('supabase/migrations/20261102160000_payments_clients_webhooks_v1.sql', 'utf8')).toContain("regexp_replace(c.data::text, '\\D', '', 'g')")
   })
 })

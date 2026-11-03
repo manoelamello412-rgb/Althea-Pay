@@ -43,6 +43,8 @@ type Outbound = {
   max_attempts: number
   created_at: string
   updated_at?: string
+  kind: 'webhook' | 'pushcut'
+  funnel_id: string | null
 }
 
 type Delivery = {
@@ -67,7 +69,10 @@ type Event = {
   retry_count: number | null
 }
 
-const EVENTS = ['transaction.approved', 'transaction.failed', 'transaction.refunded', 'transaction.chargeback']
+const EVENTS = ['transaction.approved', 'transaction.pending', 'transaction.failed', 'transaction.refunded', 'transaction.chargeback', 'message.received']
+const EVENT_LABEL: Record<string, string> = { 'transaction.approved': 'Pagamento aprovado', 'transaction.pending': 'Pagamento pendente', 'transaction.failed': 'Pagamento falhou', 'transaction.refunded': 'Estorno', 'transaction.chargeback': 'Chargeback', 'message.received': 'Mensagem recebida', 'webhook.test': 'Teste' }
+// Pushcut: one notification URL per event.
+const PUSHCUT_EVENTS = ['transaction.approved', 'transaction.pending', 'message.received']
 const MASK = '••••••••••••••••••••••••••••••••'
 const fmt = (value: string | null) => value
   ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(value))
@@ -96,6 +101,11 @@ export default function WebhooksPage() {
   const [name, setName] = useState('')
   const [endpoint, setEndpoint] = useState('')
   const [selectedEvents, setSelectedEvents] = useState<string[]>(EVENTS.slice(0, 2))
+  const [kind, setKind] = useState<'webhook' | 'pushcut'>('webhook')
+  const [funnelId, setFunnelId] = useState('')
+  const [funnels, setFunnels] = useState<{ id: string; nome: string }[]>([])
+  const [pushcutUrls, setPushcutUrls] = useState<Record<string, string>>({})
+  const [testing, setTesting] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -109,12 +119,14 @@ export default function WebhooksPage() {
         return
       }
       const { organization_id: organizationId } = await loadOrganizationAccess(db)
-      const [i, o, d, e] = await Promise.all([
+      const [i, o, d, e, f] = await Promise.all([
         db.from('webhook_integrations').select('id,name,provider,endpoint_key,status,secret_prefix,last_used_at,last_event_at,event_count,funnel_id').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(200),
-        db.from('outbound_webhooks').select('id,name,endpoint_url,events,status,max_attempts,created_at,updated_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(200),
+        db.from('outbound_webhooks').select('id,name,endpoint_url,events,status,max_attempts,created_at,updated_at,kind,funnel_id').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(200),
         db.from('outbound_webhook_deliveries').select('id,webhook_id,event_type,status,attempt,response_code,response_time_ms,error_message,created_at,delivered_at').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(100),
         db.from('integration_events').select('id,event_type,status,created_at,processed_at,retry_count').eq('organization_id', organizationId).order('created_at', { ascending: false }).limit(100),
+        db.from('funnels').select('id,nome').eq('organization_id', organizationId).is('deleted_at', null).order('nome'),
       ])
+      if (!f.error) setFunnels((f.data ?? []) as { id: string; nome: string }[])
       if (i.error) throw i.error
       if (o.error) throw o.error
       if (d.error) throw d.error
@@ -168,10 +180,11 @@ export default function WebhooksPage() {
 
   async function createWebhook(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (kind === 'pushcut') return createPushcut()
     if (!name.trim() || !endpoint.trim() || selectedEvents.length === 0) return
     setSaving(true); setMessage(''); setError('')
     try {
-      const result = await management({ action: 'create', name: name.trim(), endpoint_url: endpoint.trim(), events: selectedEvents })
+      const result = await management({ action: 'create', name: name.trim(), endpoint_url: endpoint.trim(), events: selectedEvents, funnel_id: funnelId || null })
       setSecret(typeof result.secret === 'string' ? result.secret : null)
       setShowSecret(true)
       setName(''); setEndpoint('')
@@ -182,6 +195,33 @@ export default function WebhooksPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function createPushcut() {
+    const entries = PUSHCUT_EVENTS.filter(item => pushcutUrls[item]?.trim())
+    if (!entries.length) return
+    setSaving(true); setMessage(''); setError('')
+    const funnelName = funnels.find(item => item.id === funnelId)?.nome
+    try {
+      for (const item of entries) {
+        await management({ action: 'create', kind: 'pushcut', name: `Pushcut · ${EVENT_LABEL[item]}${funnelName ? ` · ${funnelName}` : ''}`, endpoint_url: pushcutUrls[item].trim(), events: [item], funnel_id: funnelId || null })
+      }
+      setPushcutUrls({})
+      setMessage(`${entries.length} notificação(ões) Pushcut cadastrada(s). Use "Enviar teste" para conferir.`)
+      await load()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Falha ao cadastrar Pushcut.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function sendTest(id: string) {
+    setTesting(id); setMessage(''); setError('')
+    const { error: testError } = await db.rpc('outbound_webhook_test_v1', { p_webhook_id: id })
+    setTesting(null)
+    if (testError) setError(testError.message === 'FORBIDDEN' ? 'Sem permissão para gerenciar integrações.' : 'Não foi possível enviar o teste.')
+    else setMessage('Teste enviado. O resultado aparece em "Entregas recentes" em alguns segundos.')
   }
 
   async function rotate(id: string) {
@@ -269,17 +309,26 @@ export default function WebhooksPage() {
 
         <section className="grid gap-5 xl:grid-cols-[1fr_1fr]">
           <form onSubmit={createWebhook} className="rounded-2xl border border-white/10 bg-white/[.02] p-5">
-            <div className="flex items-center gap-3"><Link2 size={19} className="text-emerald-400"/><div><h2 className="font-black">Novo webhook de saída</h2><p className="text-xs text-slate-600">Provisionado pelo backend e assinado por segredo.</p></div></div>
+            <div className="flex items-center gap-3"><Link2 size={19} className="text-emerald-400"/><div><h2 className="font-black">Novo webhook de saída</h2><p className="text-xs text-slate-600">Webhook assinado por segredo, ou notificação Pushcut no celular.</p></div></div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <div role="radiogroup" aria-label="Tipo" className="flex rounded-xl border border-white/10 p-1">{(['webhook', 'pushcut'] as const).map(item => <button key={item} type="button" role="radio" aria-checked={kind === item} onClick={() => setKind(item)} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${kind === item ? 'bg-white/10 text-white' : 'text-slate-500'}`}>{item === 'webhook' ? 'Webhook' : 'Pushcut'}</button>)}</div>
+              <select aria-label="Funil" value={funnelId} onChange={event => setFunnelId(event.target.value)} className="min-h-10 rounded-xl border border-white/10 bg-[#0b100e] px-3 text-xs outline-none"><option value="">Todos os funis</option>{funnels.map(item => <option key={item.id} value={item.id}>{item.nome}</option>)}</select>
+            </div>
+            {kind === 'pushcut' ? <div className="mt-3 space-y-2">
+              <p className="text-xs text-slate-500">Cole a URL de cada notificação criada no app Pushcut. Deixe vazio o que não quiser receber.</p>
+              {PUSHCUT_EVENTS.map(item => <label key={item} className="block"><span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{EVENT_LABEL[item]}</span><input type="url" value={pushcutUrls[item] ?? ''} onChange={event => setPushcutUrls(current => ({ ...current, [item]: event.target.value }))} placeholder="https://api.pushcut.io/.../notifications/..." className="mt-1 min-h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 font-mono text-xs outline-none" /></label>)}
+            </div> : <>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <input required value={name} onChange={event => setName(event.target.value)} placeholder="Nome do endpoint" className="min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 text-sm outline-none" />
               <input required type="url" value={endpoint} onChange={event => setEndpoint(event.target.value)} placeholder="https://sua-api.com/webhooks/althea" className="min-h-11 rounded-xl border border-white/10 bg-black/20 px-3 font-mono text-xs outline-none" />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {EVENTS.map(item => (
-                <button key={item} type="button" onClick={() => setSelectedEvents(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])} className={`min-h-10 rounded-full border px-3 text-[10px] font-bold ${selectedEvents.includes(item) ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300' : 'border-white/10 text-slate-500'}`}>{item}</button>
+                <button key={item} type="button" aria-pressed={selectedEvents.includes(item)} onClick={() => setSelectedEvents(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])} className={`min-h-10 rounded-full border px-3 text-[10px] font-bold ${selectedEvents.includes(item) ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300' : 'border-white/10 text-slate-500'}`}>{EVENT_LABEL[item]}</button>
               ))}
             </div>
-            <button type="submit" disabled={saving || selectedEvents.length === 0} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 text-xs font-black text-black disabled:opacity-50">
+            </>}
+            <button type="submit" disabled={saving || (kind === 'webhook' ? selectedEvents.length === 0 : !PUSHCUT_EVENTS.some(item => pushcutUrls[item]?.trim()))} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 text-xs font-black text-black disabled:opacity-50">
               {saving ? <RefreshCw size={15} className="animate-spin"/> : <Check size={15}/>} {saving ? 'Provisionando...' : 'Cadastrar endpoint'}
             </button>
             <div className="mt-4 rounded-xl border border-white/[.07] bg-black/20 p-3">
@@ -299,13 +348,13 @@ export default function WebhooksPage() {
 
         <section className="rounded-2xl border border-white/10 bg-white/[.02] p-5">
           <div className="mb-5 flex items-center gap-3"><ArrowUpFromLine size={19} className="text-emerald-400"/><div><h2 className="font-black">Webhooks de saída</h2><p className="text-xs text-slate-600">Gerencie os endpoints que recebem eventos da Althea.</p></div></div>
-          {outbound.length === 0 ? <p className="py-10 text-center text-sm text-slate-600">Nenhum webhook de saída cadastrado.</p> : <div className="grid gap-3 xl:grid-cols-2">{outbound.map(item => <article key={item.id} className="rounded-xl border border-white/[.07] bg-black/10 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="text-sm">{item.name}</b><p className="mt-1 truncate font-mono text-[11px] text-slate-600">{item.endpoint_url}</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><div className="mt-3 flex flex-wrap gap-2">{item.events.map(event => <span key={event} className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-slate-500">{event}</span>)}</div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => void toggle(item)} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{item.status === 'active' ? 'Desativar' : 'Ativar'}</button><button type="button" onClick={() => void rotate(item.id)} disabled={rotating === item.id} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{rotating === item.id ? 'Rotacionando...' : 'Rotacionar segredo'}</button><button type="button" onClick={() => setRemoveTarget(item)} className="ml-auto grid h-10 w-10 place-items-center rounded-lg border border-red-400/20 text-red-300" aria-label="Remover webhook"><Trash2 size={14}/></button></div></article>)}</div>}
+          {outbound.length === 0 ? <p className="py-10 text-center text-sm text-slate-600">Nenhum webhook de saída cadastrado.</p> : <div className="grid gap-3 xl:grid-cols-2">{outbound.map(item => <article key={item.id} className="rounded-xl border border-white/[.07] bg-black/10 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="text-sm">{item.name}</b>{item.kind === 'pushcut' && <span className="ml-2 rounded-full bg-sky-400/10 px-2 py-0.5 text-[10px] text-sky-300">Pushcut</span>}<p className="mt-1 truncate font-mono text-[11px] text-slate-600">{item.endpoint_url}</p><p className="mt-1 text-[11px] text-slate-500">{item.funnel_id ? funnels.find(funnel => funnel.id === item.funnel_id)?.nome ?? item.funnel_id : 'Todos os funis'}</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><div className="mt-3 flex flex-wrap gap-2">{item.events.map(event => <span key={event} className="rounded-full border border-white/10 px-2 py-1 text-[10px] text-slate-500">{EVENT_LABEL[event] ?? event}</span>)}</div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => void toggle(item)} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{item.status === 'active' ? 'Desativar' : 'Ativar'}</button><button type="button" onClick={() => void sendTest(item.id)} disabled={testing === item.id} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{testing === item.id ? 'Enviando...' : 'Enviar teste'}</button>{item.kind !== 'pushcut' && <button type="button" onClick={() => void rotate(item.id)} disabled={rotating === item.id} className="min-h-10 rounded-lg border border-white/10 px-3 text-[10px] font-bold text-slate-400">{rotating === item.id ? 'Rotacionando...' : 'Rotacionar segredo'}</button>}<button type="button" onClick={() => setRemoveTarget(item)} className="ml-auto grid h-10 w-10 place-items-center rounded-lg border border-red-400/20 text-red-300" aria-label="Remover webhook"><Trash2 size={14}/></button></div></article>)}</div>}
         </section>
 
         <section className="grid gap-5 xl:grid-cols-2">
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.02]">
             <div className="flex items-center gap-3 border-b border-white/10 p-5"><Activity size={19} className="text-emerald-400"/><div><h2 className="font-black">Entregas recentes</h2><p className="text-xs text-slate-600">Telemetria do dispatcher de saída.</p></div></div>
-            {deliveries.slice(0, 12).length === 0 ? <p className="py-10 text-center text-sm text-slate-600">Nenhuma entrega registrada.</p> : <div className="divide-y divide-white/[.06]">{deliveries.slice(0, 12).map(item => <div key={item.id} className="p-4"><div className="flex items-center justify-between gap-3"><span><b className="block text-sm">{item.event_type}</b><small className="text-slate-600">{fmt(item.created_at)}</small></span><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><p className="mt-2 text-xs text-slate-500">HTTP {item.response_code ?? '—'} · {item.response_time_ms ?? '—'}ms · tentativa {item.attempt}</p>{item.error_message && <p className="mt-1 truncate text-xs text-red-300">{item.error_message}</p>}</div>)}</div>}
+            {deliveries.slice(0, 12).length === 0 ? <p className="py-10 text-center text-sm text-slate-600">Nenhuma entrega registrada.</p> : <div className="divide-y divide-white/[.06]">{deliveries.slice(0, 12).map(item => <div key={item.id} className="p-4"><div className="flex items-center justify-between gap-3"><span><b className="block text-sm">{EVENT_LABEL[item.event_type] ?? item.event_type}</b><small className="text-slate-600">{outbound.find(webhook => webhook.id === item.webhook_id)?.name ?? '—'} · {fmt(item.created_at)}</small></span><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${badge(item.status)}`}>{item.status}</span></div><p className="mt-2 text-xs text-slate-500">HTTP {item.response_code ?? '—'} · {item.response_time_ms ?? '—'}ms · tentativa {item.attempt}</p>{item.error_message && <p className="mt-1 break-words text-xs text-red-300">{item.error_message}</p>}</div>)}</div>}
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/[.02] p-5">

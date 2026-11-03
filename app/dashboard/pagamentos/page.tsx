@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { loadOrganizationAccess } from '@/lib/auth/organization-access'
 import { CrmMessageAttachment } from '@/components/crm-message-attachment'
+import { periodRange, type Period } from '@/lib/checkout-period'
 
 type Payment = {
   id: string; status: string; external_id: string | null; amount: number | null; currency: string; payment_method: string | null
@@ -12,6 +13,7 @@ type Payment = {
   gateway_name: string | null; provider: string | null; error_message: string | null; created_at: string; updated_at: string; completed_at: string | null
 }
 type Option = { id: string; name: string }
+type Summary = { total: number; approved_count: number; gross: number; fees: number; net: number; fee_known_count: number; fee_missing_count: number; refunded_count: number; refunded_amount: number; refunded_pct: number; chargeback_count: number; chargeback_amount: number; chargeback_pct: number }
 type Page = { items: Payment[]; next_cursor: { created_at: string; id: string } | null; counts: Record<string, number>; can_view_values: boolean; filters: { gateways: Option[]; funnels: Option[] } }
 type TimelineEntry = { source: 'audit' | 'attempt' | 'webhook'; at: string; type: string; status: string | null; origin?: string; gateway?: string; attempt_order?: number; response_code?: string | null; error?: string | null; provider?: string; provider_event_id?: string; attempts?: number; processed_at?: string | null }
 type Receipt = { message_id: string; conversation_id: string; created_at: string; file_name: string | null; mime_type: string | null; bucket: string; path: string }
@@ -44,6 +46,11 @@ export default function PagamentosPage() {
   const [status, setStatus] = useState('')
   const [gateway, setGateway] = useState('')
   const [funnel, setFunnel] = useState('')
+  const [period, setPeriod] = useState<Period>('all')
+  const [periodA, setPeriodA] = useState('')
+  const [periodB, setPeriodB] = useState('')
+  const [summary, setSummary] = useState<Summary | null>(null)
+  const [from, to] = useMemo(() => periodRange(period, periodA, periodB), [period, periodA, periodB])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,15 +63,17 @@ export default function PagamentosPage() {
 
   const fetchPage = useCallback((before: Page['next_cursor']) => db.rpc('transactions_list_v1', {
     p_limit: PAGE_SIZE, p_before_created_at: before?.created_at ?? null, p_before_id: before?.id ?? null,
-    p_status: status || null, p_gateway_id: gateway || null, p_funnel_id: funnel || null, p_search: search || null,
-  }), [db, status, gateway, funnel, search])
+    p_status: status || null, p_gateway_id: gateway || null, p_funnel_id: funnel || null, p_search: search || null, p_from: from, p_to: to,
+  }), [db, status, gateway, funnel, search, from, to])
 
   const load = useCallback(async () => {
     const current = ++request.current
     setLoading(true); setError(null)
     try {
-      const result = await fetchPage(null)
+      const [result, summaryResult] = await Promise.all([fetchPage(null), db.rpc('transactions_summary_v1', { p_from: from, p_to: to, p_funnel_id: funnel || null, p_gateway_id: gateway || null })])
       if (result.error) throw result.error
+      // Summary needs can_view_values; without it the cards are simply not shown.
+      if (current === request.current) setSummary(summaryResult.error ? null : summaryResult.data as Summary)
       if (current !== request.current) return
       const page = result.data as Page
       setPayments(page.items); setCursor(page.next_cursor); setCounts(page.counts); setOptions(page.filters); setCanViewValues(page.can_view_values)
@@ -72,7 +81,7 @@ export default function PagamentosPage() {
       if (current !== request.current) return
       console.error('[ALTHEA-PAGAMENTOS]', cause); setError('Não foi possível carregar os pagamentos.')
     } finally { if (current === request.current) setLoading(false) }
-  }, [fetchPage])
+  }, [fetchPage, db, from, to, funnel, gateway])
 
   async function loadMore() {
     if (!cursor) return
@@ -128,11 +137,23 @@ export default function PagamentosPage() {
   return <main className="min-h-screen bg-[#070809] px-4 py-6 text-white md:px-8 lg:px-10"><div className="mx-auto w-full max-w-[1500px] space-y-6">
     <header className="flex flex-col gap-4 border-b border-white/10 pb-6 md:flex-row md:items-end md:justify-between"><div><p className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-300/80">Operação financeira</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Pagamentos</h1><p className="mt-1 text-sm text-white/50">Espelho das transações reportadas pelos gateways. O gateway continua sendo a fonte de verdade.</p></div><button type="button" onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 transition hover:bg-white/[0.08]"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Sincronizar</button></header>
     <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[['Transações', total], ['Aprovadas', counts.approved ?? 0], ['Pendentes', (counts.pending ?? 0) + (counts.created ?? 0)], ['Exceções', exceptions]].map(([title, value]) => <article key={title} className="rounded-2xl border border-white/10 bg-white/[0.035] p-5"><p className="text-xs uppercase tracking-wider text-white/40">{title}</p><strong className="mt-2 block text-2xl font-semibold">{loading && !payments.length ? '—' : String(value)}</strong></article>)}</section>
+    {summary && <section aria-label="Resumo financeiro" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{([
+      ['Bruto', money(summary.gross, 'BRL'), `${summary.approved_count} aprovada(s)`],
+      ['Taxa da gateway', summary.fee_known_count === 0 && summary.approved_count > 0 ? 'Não informada' : money(summary.fees, 'BRL'), summary.fee_missing_count > 0 && summary.fee_known_count > 0 ? `${summary.fee_missing_count} sem taxa informada` : 'Pela conciliação da gateway'],
+      ['Líquido', money(summary.net, 'BRL'), summary.fee_missing_count > 0 ? 'Sem descontar taxas não informadas' : 'Bruto − taxa'],
+      ['Estornos', money(summary.refunded_amount, 'BRL'), `${summary.refunded_count} · ${summary.refunded_pct}%`],
+      ['Chargebacks', money(summary.chargeback_amount, 'BRL'), `${summary.chargeback_count} · ${summary.chargeback_pct}%`],
+    ] as [string, string, string][]).map(([title, value, hint]) => <article key={title} className="rounded-2xl border border-white/10 bg-white/[0.035] p-5"><p className="text-xs uppercase tracking-wider text-white/40">{title}</p><strong className="mt-2 block text-xl font-semibold">{value}</strong><p className="mt-1 text-xs text-white/35">{hint}</p></article>)}</section>}
     <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 md:p-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
         <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-white/50 lg:max-w-md"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} maxLength={120} placeholder="Cliente, e-mail, ID ou ID externo..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/25" /></label>
         <select aria-label="Gateway" value={gateway} onChange={(event) => setGateway(event.target.value)} className={select}><option value="">Todos os gateways</option>{options.gateways.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
         <select aria-label="Funil" value={funnel} onChange={(event) => setFunnel(event.target.value)} className={select}><option value="">Todos os funis</option>{options.funnels.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+        <select aria-label="Período" value={period} onChange={(event) => { setPeriod(event.target.value as Period); setPeriodA(''); setPeriodB('') }} className={select}><option value="all">Todo o período</option><option value="today">Hoje</option><option value="day">Um dia</option><option value="range">Intervalo</option><option value="month">Mês</option><option value="year">Ano</option></select>
+        {period === 'day' && <input type="date" aria-label="Dia" value={periodA} onChange={(event) => setPeriodA(event.target.value)} className={`${select} [color-scheme:dark]`} />}
+        {period === 'range' && <><input type="date" aria-label="De" value={periodA} onChange={(event) => setPeriodA(event.target.value)} className={`${select} [color-scheme:dark]`} /><input type="date" aria-label="Até" value={periodB} min={periodA || undefined} onChange={(event) => setPeriodB(event.target.value)} className={`${select} [color-scheme:dark]`} /></>}
+        {period === 'month' && <input type="month" aria-label="Mês" value={periodA} onChange={(event) => setPeriodA(event.target.value)} className={`${select} [color-scheme:dark]`} />}
+        {period === 'year' && <input type="number" aria-label="Ano" placeholder="2026" min={2020} max={2100} value={periodA} onChange={(event) => setPeriodA(event.target.value)} className={`${select} w-24`} />}
       </div>
       <div className="mt-3 flex gap-2 overflow-x-auto pb-1">{(['', ...STATUSES] as string[]).map((item) => <button key={item || 'all'} type="button" onClick={() => setStatus(item)} className={`whitespace-nowrap rounded-full border px-3 py-2 text-xs transition ${status === item ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300' : 'border-white/10 text-white/45 hover:bg-white/5'}`}>{item ? label(item) : 'Todos'} <span className="text-white/30">{item ? counts[item] ?? 0 : total}</span></button>)}</div>
       <div className="mt-5 overflow-x-auto">{loading && !payments.length ? <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-white/40"><Loader2 size={16} className="animate-spin" /> Carregando pagamentos...</div> : error && !payments.length ? <div className="flex min-h-56 flex-col items-center justify-center gap-3 text-center"><XCircle className="text-red-300" size={24} /><p className="text-sm text-white/60">{error}</p><button type="button" onClick={() => void load()} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/70">Tentar novamente</button></div> : payments.length === 0 ? <div className="flex min-h-56 flex-col items-center justify-center gap-2 text-center"><CreditCard className="text-white/25" size={25} /><strong className="text-sm text-white/65">Nenhum pagamento encontrado</strong><p className="text-xs text-white/35">{search || status || gateway || funnel ? 'Nenhuma transação com esses filtros.' : 'Os dados aparecem aqui quando os gateways reportarem transações.'}</p></div> : <>

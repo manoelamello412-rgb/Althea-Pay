@@ -57,23 +57,32 @@ Deno.serve(async (req) => {
       const events = Array.isArray(body.events) && body.events.length
         ? body.events.map(String).slice(0, 50)
         : ["transaction.approved", "transaction.failed"];
-      const secret = makeSecret();
-      const stored = await admin.rpc("store_webhook_secret", { p_secret: secret, p_name: `ALTHEA outbound webhook ${user.id}` });
+      // Pushcut takes a plain {title, text} POST: no signing secret.
+      const kind = body.kind === "pushcut" ? "pushcut" : "webhook";
+      const funnel_id = body.funnel_id ? String(body.funnel_id) : null;
+      if (funnel_id) {
+        const funnel = await admin.from("funnels").select("id").eq("id", funnel_id).eq("organization_id", authority!.organization_id).maybeSingle();
+        if (!funnel.data) return json({ ok: false, error: "funnel_not_found" }, 400);
+      }
+      const secret = kind === "webhook" ? makeSecret() : null;
+      const stored = secret ? await admin.rpc("store_webhook_secret", { p_secret: secret, p_name: `ALTHEA outbound webhook ${user.id}` }) : { data: null, error: null };
       if (stored.error) throw stored.error;
       const { data, error } = await admin.from("outbound_webhooks").insert({
+        kind,
+        funnel_id,
         // The dispatcher fans out by the event owner's user_id, so the webhook belongs to the org owner.
         user_id: authority!.owner_user_id ?? user.id,
         organization_id: authority!.organization_id,
         name,
         endpoint_url,
-        secret_ref: String(stored.data),
-        secret_hash: await sha256(secret),
+        secret_ref: secret ? String(stored.data) : null,
+        secret_hash: secret ? await sha256(secret) : null,
         events,
         status: "active",
         max_attempts: 5,
-      }).select("id,name,endpoint_url,events,status,max_attempts,created_at,updated_at").single();
+      }).select("id,name,endpoint_url,events,status,max_attempts,created_at,updated_at,kind,funnel_id").single();
       if (error) throw error;
-      return json({ ok: true, webhook: data, secret, secret_once: true }, 201);
+      return json({ ok: true, webhook: data, secret, secret_once: Boolean(secret) }, 201);
     }
 
     const id = String(body.id ?? "");
