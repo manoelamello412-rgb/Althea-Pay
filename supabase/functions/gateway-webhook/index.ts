@@ -252,10 +252,28 @@ Deno.serve(async (request) => {
 
   if (!valid) return json({ error: "invalid_signature" }, 401);
 
+  
+  const sigiloTransaction =
+    provider === "sigilopay" && rec(payload.transaction)
+      ? payload.transaction
+      : null;
+
+  const sigiloTransactionId = sigiloTransaction
+    ? String(sigiloTransaction.id ?? "").trim()
+    : "";
+
+  const sigiloEvent =
+    provider === "sigilopay"
+      ? String(payload.event ?? "").trim().toUpperCase()
+      : "";
+
   const eventId = (
     request.headers.get("x-provider-event-id") ??
-    String(first(payload, ["id", "event_id", "eventId"]) ?? "")
+    (sigiloTransactionId && sigiloEvent
+      ? `${sigiloTransactionId}:${sigiloEvent}`
+      : String(first(payload, ["id", "event_id", "eventId"]) ?? ""))
   ).trim();
+
   if (!eventId || eventId.length > 300) {
     return json({ error: "provider_event_id_required" }, 400);
   }
@@ -284,9 +302,23 @@ Deno.serve(async (request) => {
     });
   }
 
-  const fields = extractGatewayWebhookFinancialFields(payload, {
+  
+  const financialPayload: JsonRecordLocal =
+    provider === "sigilopay" && rec(payload.transaction)
+      ? {
+          ...payload,
+          status: payload.transaction.status,
+          external_transaction_id: payload.transaction.id,
+          amount: payload.transaction.amount,
+          currency: payload.transaction.currency,
+          event_kind: payload.event,
+        }
+      : payload;
+
+  const fields = extractGatewayWebhookFinancialFields(financialPayload, {
     normalizeStatus,
   });
+
 
   if (!fields.status || !fields.externalTransactionId) {
     return json(
