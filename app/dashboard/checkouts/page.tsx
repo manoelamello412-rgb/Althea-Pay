@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
-import { AlertTriangle, CheckCircle2, Clock3, CreditCard, RefreshCw, Search, ShoppingCart, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, CreditCard, Mail, MessageCircle, RefreshCw, Search, ShoppingCart, XCircle } from 'lucide-react'
+import { CheckoutDetail } from './checkout-detail'
+import { periodRange, type Period } from '@/lib/checkout-period'
 
 type CheckoutStatus = 'started' | 'pending' | 'processing' | 'completed' | 'abandoned' | 'failed' | string
 type PaymentStatus = 'created' | 'pending' | 'approved' | 'failed' | 'refunded' | 'chargeback' | string
@@ -70,7 +72,7 @@ function money(amount: number | string | null, currency: string | null): string 
 }
 
 function checkoutLabel(status: string): string {
-  const labels: Record<string, string> = { started: 'Iniciado', pending: 'Pendente', processing: 'Processando', completed: 'Concluído', abandoned: 'Abandonado', failed: 'Falhou' }
+  const labels: Record<string, string> = { started: 'Iniciado', pending: 'Pendente', processing: 'Em processamento', completed: 'Pago', abandoned: 'Abandonado', failed: 'Falhou' }
   return labels[status.toLowerCase()] || status
 }
 
@@ -87,11 +89,12 @@ function checkoutClass(status: string): string {
 function paymentLabel(status: string | null): string {
   if (!status) return 'Sem tentativa'
   const labels: Record<string, string> = {
-    created: 'Criado',
+    created: 'Em processamento',
+    processing: 'Em processamento',
     pending: 'Pendente',
-    approved: 'Aprovado',
+    approved: 'Aprovado/Pago',
     failed: 'Falhou',
-    refunded: 'Reembolsado',
+    refunded: 'Estornado',
     chargeback: 'Chargeback',
   }
   return labels[status.toLowerCase()] || status
@@ -119,7 +122,15 @@ export default function CheckoutsPage() {
   const [sessions, setSessions] = useState<CheckoutOperation[]>([])
   const [serverMetrics, setServerMetrics] = useState<CheckoutMetrics>({ total: 0, active: 0, completed: 0, abandoned: 0, failed: 0, amount: 0 })
   const [query, setQuery] = useState('')
+  const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
+  const [funnelId, setFunnelId] = useState('')
+  const [funnels, setFunnels] = useState<{ id: string; nome: string }[]>([])
+  const [period, setPeriod] = useState<Period>('all')
+  const [periodA, setPeriodA] = useState('')
+  const [periodB, setPeriodB] = useState('')
+  const [selected, setSelected] = useState<CheckoutOperation | null>(null)
+  const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -132,14 +143,17 @@ export default function CheckoutsPage() {
     let cursor: { created_at?: string; id?: string } | null = null
     let firstMetrics: Partial<CheckoutMetrics> | null = null
 
+    const [from, to] = periodRange(period, periodA, periodB)
     for (let page = 0; page < 2; page += 1) {
       const { data, error: rpcError } = await supabase.rpc('checkout_operations_page_v1', {
         p_limit: 100,
         p_cursor_created_at: cursor?.created_at || null,
         p_cursor_id: cursor?.id || null,
-        p_status: null,
-        p_query: null,
-        p_funnel_id: null,
+        p_status: status === 'all' ? null : status,
+        p_query: search || null,
+        p_funnel_id: funnelId || null,
+        p_from: from,
+        p_to: to,
       })
 
       if (rpcError) throw rpcError
@@ -159,6 +173,23 @@ export default function CheckoutsPage() {
       failed: Number(firstMetrics?.failed ?? 0),
       amount: firstMetrics?.amount ?? 0,
     })
+  }, [supabase, status, search, funnelId, period, periodA, periodB])
+
+  useEffect(() => { const id = setTimeout(() => setSearch(query.trim()), 350); return () => clearTimeout(id) }, [query])
+  useEffect(() => {
+    void supabase.from('funnels').select('id,nome').is('deleted_at', null).order('nome')
+      .then(({ data }: { data: { id: string; nome: string }[] | null }) => setFunnels(data ?? []))
+  }, [supabase])
+
+  const remarketing = useCallback(async (item: CheckoutOperation, channel: 'email' | 'whatsapp') => {
+    setNotice(''); setError('')
+    const { error: rpcError } = await supabase.rpc('checkout_remarketing_send_v1', { p_checkout_id: item.id, p_channel: channel })
+    if (!rpcError) { setNotice(`Remarketing por ${channel === 'email' ? 'e-mail' : 'WhatsApp'} enfileirado para ${customerName(item.customer)}.`); return }
+    const code = rpcError.message || ''
+    setError(code.includes('RECENTLY_SENT') ? 'Já foi enviado por este canal nos últimos 10 minutos.'
+      : code.includes('ALREADY_PAID') ? 'Este checkout já foi pago.'
+      : code.includes('CHANNEL_ACCOUNT_MISSING') ? `Nenhuma conta de ${channel === 'email' ? 'e-mail' : 'WhatsApp'} ativa. Configure em CRM > Configurações.`
+      : code.includes('FORBIDDEN') ? 'Sem permissão para enviar mensagens.' : 'Não foi possível enfileirar o remarketing.')
   }, [supabase])
 
   const refresh = useCallback(async () => {
@@ -179,37 +210,7 @@ export default function CheckoutsPage() {
     return () => { active = false; void supabase.removeChannel(channel) }
   }, [load, supabase])
 
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    return sessions.filter((item) => {
-      if (status !== 'all' && item.status.toLowerCase() !== status) return false
-      if (!normalized) return true
-      const customer = record(item.customer)
-      const attribution = record(item.attribution)
-      const haystack = [
-        item.id,
-        item.transaction_id,
-        item.provider_external_id,
-        customerName(customer),
-        text(customer.email),
-        item.funnel_name,
-        item.product_name,
-        item.gateway_name,
-        item.gateway_provider,
-        item.payment_status,
-        text(attribution.source),
-        text(attribution.campaign),
-      ].join(' ').toLowerCase()
-      return haystack.includes(normalized)
-    })
-  }, [query, sessions, status])
-
-  const lifecycleDrift = useMemo(() => sessions.filter((item) => {
-    const payment = item.payment_status?.toLowerCase()
-    const checkout = item.status.toLowerCase()
-    return (payment === 'approved' && checkout !== 'completed')
-      || (payment === 'failed' && !['failed', 'abandoned'].includes(checkout))
-  }).length, [sessions])
+  const filtered = sessions
 
   return (
     <section className="space-y-6">
@@ -226,17 +227,12 @@ export default function CheckoutsPage() {
 
       {error && <div role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{error}</div>}
 
-      {lifecycleDrift > 0 && (
-        <div role="status" className="flex items-start gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.07] px-4 py-3 text-sm text-amber-100">
-          <AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-300" />
-          <div><strong>{lifecycleDrift} checkout(s) com divergência de lifecycle.</strong><p className="mt-1 text-xs text-amber-100/65">O status financeiro abaixo vem da transação real e permanece separado do status da sessão para não ocultar inconsistências do backend.</p></div>
-        </div>
-      )}
+      {notice && <div role="status" className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Metric icon={ShoppingCart} label="Sessões" value={serverMetrics.total} />
         <Metric icon={Clock3} label="Em andamento" value={serverMetrics.active} />
-        <Metric icon={CheckCircle2} label="Concluídos" value={serverMetrics.completed} />
+        <Metric icon={CheckCircle2} label="Pagos" value={serverMetrics.completed} />
         <Metric icon={XCircle} label="Abandonados" value={serverMetrics.abandoned} />
         <Metric icon={XCircle} label="Falhos" value={serverMetrics.failed} />
       </div>
@@ -248,8 +244,20 @@ export default function CheckoutsPage() {
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar cliente, funil, produto, gateway ou transação..." className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[var(--althea-muted)]" />
           </label>
           <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filtrar por status do checkout" className="h-11 rounded-xl border border-white/[0.07] bg-[#111513] px-3 text-sm text-white outline-none">
-            <option value="all">Todos os checkouts</option><option value="started">Iniciados</option><option value="pending">Pendentes</option><option value="processing">Processando</option><option value="completed">Concluídos</option><option value="abandoned">Abandonados</option><option value="failed">Falhos</option>
+            <option value="all">Todos os status</option><option value="started">Iniciados</option><option value="pending">Pendentes</option><option value="processing">Em processamento</option><option value="completed">Pagos</option><option value="abandoned">Abandonados</option><option value="failed">Falhos</option>
           </select>
+          <select value={funnelId} onChange={(event) => setFunnelId(event.target.value)} aria-label="Filtrar por funil" className="h-11 rounded-xl border border-white/[0.07] bg-[#111513] px-3 text-sm text-white outline-none">
+            <option value="">Todos os funis</option>{funnels.map((funnel) => <option key={funnel.id} value={funnel.id}>{funnel.nome}</option>)}
+          </select>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <select value={period} onChange={(event) => { setPeriod(event.target.value as Period); setPeriodA(''); setPeriodB('') }} aria-label="Período" className="h-10 rounded-xl border border-white/[0.07] bg-[#111513] px-3 text-white outline-none">
+            <option value="all">Todo o período</option><option value="today">Hoje</option><option value="day">Um dia</option><option value="range">Período</option><option value="month">Mês</option><option value="year">Ano</option>
+          </select>
+          {period === 'day' && <input type="date" aria-label="Dia" value={periodA} onChange={(event) => setPeriodA(event.target.value)} className={dateInput} />}
+          {period === 'range' && <><input type="date" aria-label="De" value={periodA} onChange={(event) => setPeriodA(event.target.value)} className={dateInput} /><span className="text-[var(--althea-muted)]">até</span><input type="date" aria-label="Até" value={periodB} min={periodA || undefined} onChange={(event) => setPeriodB(event.target.value)} className={dateInput} /></>}
+          {period === 'month' && <input type="month" aria-label="Mês" value={periodA} onChange={(event) => setPeriodA(event.target.value)} className={dateInput} />}
+          {period === 'year' && <input type="number" aria-label="Ano" placeholder="2026" min={2020} max={2100} value={periodA} onChange={(event) => setPeriodA(event.target.value)} className={`${dateInput} w-28`} />}
         </div>
 
         <div className="mt-5 overflow-x-auto">
@@ -261,15 +269,24 @@ export default function CheckoutsPage() {
             </div>
           ) : (
             <table className="w-full min-w-[1120px] text-left text-sm">
-              <thead><tr className="border-b border-white/[0.06] text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--althea-muted)]"><th className="px-3 py-3">Cliente</th><th className="px-3 py-3">Funil</th><th className="px-3 py-3">Produto</th><th className="px-3 py-3">Valor</th><th className="px-3 py-3">Checkout</th><th className="px-3 py-3">Pagamento</th><th className="px-3 py-3">Gateway</th><th className="px-3 py-3">Criado</th></tr></thead>
-              <tbody>{filtered.map((item) => <tr key={item.id} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]"><td className="px-3 py-4"><p className="font-medium text-white">{customerName(item.customer)}</p><p className="mt-0.5 max-w-[220px] truncate text-xs text-[var(--althea-muted)]">{text(record(item.customer).email) || item.id.slice(0, 12)}</p></td><td className="px-3 py-4 text-zinc-300">{item.funnel_name || item.funnel_id || '—'}</td><td className="px-3 py-4 text-zinc-300">{item.product_name || item.product_id || '—'}</td><td className="px-3 py-4 font-medium text-white">{money(item.amount, item.currency)}</td><td className="px-3 py-4"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${checkoutClass(item.status)}`}>{checkoutLabel(item.status)}</span></td><td className="px-3 py-4"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${paymentClass(item.payment_status)}`}>{paymentLabel(item.payment_status)}</span>{(item.payment_error || item.failure_code) && <p className="mt-1 max-w-[190px] truncate text-[10px] text-rose-300/70" title={item.payment_error || item.failure_code || undefined}>{item.payment_error || item.failure_code}</p>}</td><td className="px-3 py-4"><p className="text-zinc-300">{item.gateway_name || item.gateway_provider || item.gateway_id || '—'}</p>{item.provider_external_id && <p className="mt-0.5 max-w-[180px] truncate font-mono text-[10px] text-[var(--althea-muted)]">{item.provider_external_id}</p>}</td><td className="px-3 py-4 text-xs text-[var(--althea-muted)]">{new Date(item.created_at).toLocaleString('pt-BR')}</td></tr>)}</tbody>
+              <thead><tr className="border-b border-white/[0.06] text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--althea-muted)]"><th className="px-3 py-3">Cliente</th><th className="px-3 py-3">Funil</th><th className="px-3 py-3">Produto</th><th className="px-3 py-3">Valor</th><th className="px-3 py-3">Checkout</th><th className="px-3 py-3">Pagamento</th><th className="px-3 py-3">Gateway</th><th className="px-3 py-3">Criado</th><th className="px-3 py-3"><span className="sr-only">Ações</span></th></tr></thead>
+              <tbody>{filtered.map((item) => <tr key={item.id} onClick={() => setSelected(item)} className="cursor-pointer border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]"><td className="px-3 py-4"><button type="button" onClick={(event) => { event.stopPropagation(); setSelected(item) }} className="text-left font-medium text-white hover:underline">{customerName(item.customer)}</button><p className="mt-0.5 max-w-[220px] truncate text-xs text-[var(--althea-muted)]">{text(record(item.customer).email) || item.id.slice(0, 12)}</p></td><td className="px-3 py-4 text-zinc-300">{item.funnel_name || item.funnel_id || '—'}</td><td className="px-3 py-4 text-zinc-300">{item.product_name || item.product_id || '—'}</td><td className="px-3 py-4 font-medium text-white">{money(item.amount, item.currency)}</td><td className="px-3 py-4"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${checkoutClass(item.status)}`}>{checkoutLabel(item.status)}</span></td><td className="px-3 py-4"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${paymentClass(item.payment_status)}`}>{paymentLabel(item.payment_status)}</span>{(item.payment_error || item.failure_code) && <p className="mt-1 max-w-[190px] truncate text-[10px] text-rose-300/70" title={item.payment_error || item.failure_code || undefined}>{item.payment_error || item.failure_code}</p>}</td><td className="px-3 py-4"><p className="text-zinc-300">{item.gateway_name || item.gateway_provider || item.gateway_id || '—'}</p>{item.provider_external_id && <p className="mt-0.5 max-w-[180px] truncate font-mono text-[10px] text-[var(--althea-muted)]">{item.provider_external_id}</p>}</td><td className="px-3 py-4 text-xs text-[var(--althea-muted)]">{new Date(item.created_at).toLocaleString('pt-BR')}</td><td className="px-3 py-4">{canRemarket(item) && <div className="flex gap-1" onClick={(event) => event.stopPropagation()}><button type="button" title="Remarketing por e-mail" aria-label={`Remarketing por e-mail para ${customerName(item.customer)}`} onClick={() => void remarketing(item, 'email')} className={actionButton}><Mail size={14} /></button><button type="button" title="Remarketing por WhatsApp" aria-label={`Remarketing por WhatsApp para ${customerName(item.customer)}`} onClick={() => void remarketing(item, 'whatsapp')} className={actionButton}><MessageCircle size={14} /></button></div>}</td></tr>)}</tbody>
             </table>
           )}
         </div>
-        {sessions.length >= 200 && <p className="mt-3 text-right text-[10px] text-[var(--althea-muted)]">Exibindo as 200 sessões mais recentes. A busca desta tela atua sobre este recorte operacional.</p>}
+        {sessions.length >= 200 && <p className="mt-3 text-right text-[10px] text-[var(--althea-muted)]">Exibindo as 200 sessões mais recentes do filtro. Refine o período para ver as anteriores.</p>}
       </div>
+      {selected && <CheckoutDetail checkoutId={selected.id} transactionId={selected.transaction_id} onClose={() => setSelected(null)} onRemarketing={(channel) => void remarketing(selected, channel)} canRemarket={canRemarket(selected)} />}
     </section>
   )
+}
+
+const dateInput = 'h-10 rounded-xl border border-white/[0.07] bg-[#111513] px-3 text-white outline-none [color-scheme:dark]'
+const actionButton = 'rounded-lg border border-white/10 p-1.5 text-zinc-300 hover:bg-white/[0.06] hover:text-white'
+
+function canRemarket(item: CheckoutOperation) {
+  const payment = item.payment_status?.toLowerCase()
+  return !item.completed_at && payment !== 'approved' && ['started', 'pending', 'processing', 'abandoned', 'failed'].includes(item.status.toLowerCase())
 }
 
 function Metric({ icon: Icon, label, value }: { icon: typeof ShoppingCart; label: string; value: number }) {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Copy, Loader2, Mic, Pencil, Plus, RefreshCw, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { hasOrganizationCapability, parseOrganizationAccess, type OrganizationAccess } from '@/lib/auth/organization-access'
+import { RemarketingRules } from './remarketing-rules'
 
 type Channel = 'whatsapp' | 'email' | 'sms'
 type Template = { id: string; name: string; channel: Channel; trigger_event: string | null; subject: string | null; body: string; variables: string[]; whatsapp_template_name: string | null; language: string; active: boolean; whatsapp_header_type: string | null; whatsapp_header_url: string | null; whatsapp_buttons: WaButton[] | null; whatsapp_template_data: Record<string, unknown> | null }
@@ -14,7 +15,7 @@ type Campaign = { id: string; name: string; channel_account_id: string; template
 type Metrics = { campaign_id: string; queued: number; sent: number; delivered: number; read: number; failed: number; opted_out: number }
 type Account = { id: string; channel: string; provider: string; display_name: string | null; status: string }
 type Tag = { id: string; name: string }
-type Tab = 'campaigns' | 'links' | 'templates' | 'segments'
+type Tab = 'campaigns' | 'remarketing' | 'links' | 'templates' | 'segments'
 type CheckoutLink = { id: string; funnel_id: string; name: string; price: number; currency: string; status: string; created_at: string }
 type Funnel = { id: string; nome: string; url: string | null }
 type WaButton = { type: keyof typeof WA_BUTTONS; parameter: string }
@@ -188,7 +189,7 @@ export default function CrmCampanhasPage() {
 
   const nameOf = <T extends { id: string; name: string }>(list: T[], id: string) => list.find(item => item.id === id)?.name ?? '—'
   const accountName = (account?: Account) => account ? account.display_name || `${CHANNELS[account.channel] ?? account.channel} · ${account.provider}` : '—'
-  const tabs: [Tab, string, number][] = [['campaigns', 'Campanhas', campaigns.length], ['links', 'Links de checkout', links.length], ['templates', 'Templates', templates.length], ['segments', 'Segmentos', segments.length]]
+  const tabs: [Tab, string, number | null][] = [['campaigns', 'Campanhas', campaigns.length], ['remarketing', 'Remarketing automático', null], ['links', 'Links de checkout', links.length], ['templates', 'Templates', templates.length], ['segments', 'Segmentos', segments.length]]
   const empty = (text: string) => <div className="p-10 text-center text-sm text-slate-600">{text}</div>
   const editButton = (name: string, onClick: () => void) => <button type="button" aria-label={`Editar ${name}`} onClick={onClick} className="rounded-md p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
   const inactive = (active: boolean) => !active && <span className="ml-2 rounded-full bg-white/[.06] px-2 py-0.5 text-[10px] text-slate-500">inativo</span>
@@ -209,17 +210,18 @@ export default function CrmCampanhasPage() {
       <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div><div className="mb-2 text-[10px] font-black uppercase tracking-[.28em] text-emerald-400">ALTHEA PAY // CRM</div><h1 className="text-3xl font-black tracking-tight">Campanhas</h1><p className="mt-1 text-sm text-slate-500">Remarketing por WhatsApp, e-mail e SMS. Contatos que pediram para sair nunca recebem.</p></div>
         <div className="flex gap-2">
-          {canManage && <button type="button" onClick={() => setEditor(newEditor())} className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400"><Plus size={15} /> {tab === 'campaigns' ? 'Nova campanha' : tab === 'links' ? 'Novo link' : tab === 'templates' ? 'Novo template' : 'Novo segmento'}</button>}
+          {canManage && tab !== 'remarketing' && <button type="button" onClick={() => setEditor(newEditor())} className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400"><Plus size={15} /> {tab === 'campaigns' ? 'Nova campanha' : tab === 'links' ? 'Novo link' : tab === 'templates' ? 'Novo template' : 'Novo segmento'}</button>}
           <button type="button" onClick={() => void load()} disabled={loading} aria-label="Atualizar" className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/[.03] px-3 hover:bg-white/[.06] disabled:opacity-50"><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /></button>
         </div>
       </header>
 
-      <div role="tablist" aria-label="Seção" className="mb-4 flex flex-wrap gap-1">{tabs.map(([id, name, count]) => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`rounded-lg px-3 py-1.5 text-sm ${tab === id ? 'bg-white/[.08] text-white' : 'text-slate-500 hover:text-slate-300'}`}>{name} <span className="text-slate-600">{count}</span></button>)}</div>
+      <div role="tablist" aria-label="Seção" className="mb-4 flex flex-wrap gap-1">{tabs.map(([id, name, count]) => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`rounded-lg px-3 py-1.5 text-sm ${tab === id ? 'bg-white/[.08] text-white' : 'text-slate-500 hover:text-slate-300'}`}>{name} {count !== null && <span className="text-slate-600">{count}</span>}</button>)}</div>
       {error && <div role="alert" className="mb-4 rounded-xl border border-red-500/20 bg-red-500/[.06] px-4 py-3 text-sm text-red-300">{error}</div>}
       {!canManage && !loading && <p className="mb-4 text-xs text-slate-500">Somente leitura: criar e disparar campanhas exige a permissão de gerenciar automações.</p>}
 
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.02]">
         {loading ? <div className="flex min-h-40 items-center justify-center gap-2 text-slate-500"><Loader2 size={18} className="animate-spin text-emerald-400" /> Carregando</div>
+          : tab === 'remarketing' ? (access ? <RemarketingRules db={db} organizationId={access.organization_id} accounts={accounts} funnels={funnels} canManage={canManage} /> : null)
           : tab === 'campaigns' ? (campaigns.length ? campaigns.map(campaign => {
             const [statusLabel, tone] = STATUS[campaign.status]
             const m = metrics[campaign.id]

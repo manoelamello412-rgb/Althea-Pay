@@ -229,7 +229,10 @@ async function sendResend(account: Account, identity: Identity, row: Outbox): Pr
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: "Bearer " + token, "content-type": "application/json", "idempotency-key": row.id },
-    body: JSON.stringify({ from, to: [to], subject, text: row.body + extras.footer, headers: extras.headers }),
+    body: JSON.stringify({
+      from, to: [to], subject, text: row.body + extras.footer, headers: extras.headers,
+      ...(row.metadata?.email_html ? { html: String(row.metadata.email_html) } : {}),
+    }),
   });
   const payload = await responseJson(response);
   return { externalId: text(payload.id), provider: account.provider };
@@ -459,6 +462,21 @@ Deno.serve(async (request) => {
       try {
         let account: Account | null = null;
         let identity: Identity | null = null;
+
+        // Remarketing whose checkout got paid after it was queued never goes out.
+        const recoveryCheckoutId = text(row.metadata?.recovery_checkout_id);
+        if (recoveryCheckoutId) {
+          const checkout = await db.from("checkout_sessions").select("completed_at").eq("id", recoveryCheckoutId).maybeSingle();
+          if (checkout.error) throw checkout.error;
+          if (checkout.data?.completed_at) {
+            const cancelled = await db.from("crm_channel_message_outbox")
+              .update({ status: "cancelled", last_error: "checkout_paid", updated_at: new Date().toISOString() })
+              .eq("id", row.id);
+            if (cancelled.error) throw cancelled.error;
+            results.push({ id: row.id, status: "cancelled", reason: "checkout_paid" });
+            continue;
+          }
+        }
 
         if (row.channel_account_id) {
           const accountResult = await db

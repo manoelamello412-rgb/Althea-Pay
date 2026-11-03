@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { templateMessage, type TemplateRow } from "../_shared/remarketing.ts";
+import { ruleMessage, templateMessage, type RemarketingRule, type TemplateRow } from "../_shared/remarketing.ts";
 
 type Json = Record<string, unknown>;
 type RecoveryJob = {
@@ -18,6 +18,13 @@ type RecoveryJob = {
   recovery_count: number;
   event_attempt_count: number;
   event_type: string;
+  rule_id: string | null;
+};
+type Rule = RemarketingRule & {
+  id: string;
+  trigger_event: "payment_pending" | "checkout_abandoned";
+  channel_account_id: string;
+  active: boolean;
 };
 type Account = {
   id: string;
@@ -124,6 +131,31 @@ function recoveryUrl(job: RecoveryJob): string {
 }
 
 const isPaymentPending = (job: RecoveryJob) => job.event_type === "payment_pending";
+// 'rule:<id>' comes from a remarketing rule, 'manual:<channel>:<window>' from the checkouts screen button.
+const isRuleEvent = (job: RecoveryJob) => job.event_type.startsWith("rule:");
+const isManual = (job: RecoveryJob) => job.event_type.startsWith("manual:");
+
+async function ruleOf(id: string | null): Promise<Rule | null> {
+  if (!id) return null;
+  const result = await db
+    .from("crm_remarketing_rules")
+    .select("id,trigger_event,channel,channel_account_id,email_subject,body,button_text,button_url,active")
+    .eq("id", id)
+    .maybeSingle();
+  if (result.error) throw result.error;
+  return result.data as Rule | null;
+}
+
+async function hasActiveRule(organizationId: string, trigger: string): Promise<boolean> {
+  const result = await db
+    .from("crm_remarketing_rules")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .eq("trigger_event", trigger)
+    .eq("active", true);
+  if (result.error) throw result.error;
+  return (result.count ?? 0) > 0;
+}
 
 function messageBody(job: RecoveryJob, customer: Json): string {
   const name = nameOf(customer);
@@ -172,7 +204,7 @@ async function accountsFor(userId: string): Promise<Account[]> {
   return (result.data ?? []) as Account[];
 }
 
-function chooseChannel(job: RecoveryJob, accounts: Account[]): {
+function chooseChannel(job: RecoveryJob, accounts: Account[], rule: Rule | null): {
   selection: Selection | null;
   consentedChannels: string[];
   missingDestinationChannels: string[];
@@ -185,13 +217,19 @@ function chooseChannel(job: RecoveryJob, accounts: Account[]): {
   // WhatsApp's only automatic message is the pending-payment nudge. It is transactional (the buyer
   // gave the number for this purchase), so it skips marketing consent; opt-outs are still enforced
   // by the outbox dispatcher. Abandoned-cart recovery stays on e-mail/SMS with explicit consent.
-  const consentedChannels: ("whatsapp" | "email" | "sms")[] = isPaymentPending(job)
-    ? ["whatsapp"]
-    : (["email", "sms"] as const).filter((channel) => channelConsent(customer, metadata, channel));
+  // Rules and the manual button pick the channel. A rule for abandoned carts still needs marketing consent;
+  // pending payment is transactional and the manual send is the operator's call.
+  const fixed = rule?.channel ?? (isManual(job) ? job.event_type.split(":")[1] as "whatsapp" | "email" : null);
+  const consentedChannels: ("whatsapp" | "email" | "sms")[] = fixed
+    ? (isRuleEvent(job) && rule?.trigger_event === "checkout_abandoned" && !channelConsent(customer, metadata, fixed) ? [] : [fixed])
+    : isPaymentPending(job)
+      ? ["whatsapp"]
+      : (["email", "sms"] as const).filter((channel) => channelConsent(customer, metadata, channel));
   const missingDestinationChannels: string[] = [];
 
   for (const channel of consentedChannels) {
-    const account = accounts.find((candidate) => candidate.channel === channel);
+    const account = accounts.find((candidate) => candidate.id === rule?.channel_account_id && candidate.channel === channel) ??
+      accounts.find((candidate) => candidate.channel === channel);
     if (!account) continue;
     const destination = destinations[channel];
     if (!destination) {
@@ -342,20 +380,10 @@ async function ensureIdentity(job: RecoveryJob, conversationId: string, selectio
 
 // The organization's active template for this trigger (checkout_abandoned or payment_pending) wins
 // over the built-in text.
-async function recoveryMessage(job: RecoveryJob, selection: Selection): Promise<{ body: string; metadata: Json }> {
+function messageContext(job: RecoveryJob): Record<string, string> {
   const customer = objectOf(job.customer);
-  const found = await db
-    .from("crm_message_templates")
-    .select("body,subject,variables,whatsapp_template_name,language")
-    .eq("organization_id", job.organization_id)
-    .eq("channel", selection.channel)
-    .eq("trigger_event", isPaymentPending(job) ? "payment_pending" : "checkout_abandoned")
-    .eq("active", true)
-    .maybeSingle();
-  if (found.error) throw found.error;
-  if (!found.data) return { body: messageBody(job, customer), metadata: {} };
   const name = nameOf(customer);
-  return templateMessage(found.data as TemplateRow, {
+  return {
     nome: name,
     primeiro_nome: name.split(" ")[0] ?? "",
     email: emailOf(customer),
@@ -363,15 +391,34 @@ async function recoveryMessage(job: RecoveryJob, selection: Selection): Promise<
     link: recoveryUrl(job),
     valor: new Intl.NumberFormat("pt-BR", { style: "currency", currency: text(job.currency) || "BRL" }).format(Number(job.amount) || 0),
     produto: text(objectOf(job.checkout_metadata).product_name),
-  });
+  };
 }
 
-async function enqueueOutbox(job: RecoveryJob, conversationId: string, selection: Selection): Promise<string> {
+async function recoveryMessage(job: RecoveryJob, selection: Selection, rule: Rule | null): Promise<{ body: string; metadata: Json }> {
+  if (rule && rule.channel === selection.channel) return ruleMessage(rule, messageContext(job));
+  const customer = objectOf(job.customer);
+  const found = await db
+    .from("crm_message_templates")
+    .select("body,subject,variables,whatsapp_template_name,language")
+    .eq("organization_id", job.organization_id)
+    .eq("channel", selection.channel)
+    .eq("trigger_event", isPaymentPending(job) || (isManual(job) && selection.channel === "whatsapp") ? "payment_pending" : "checkout_abandoned")
+    .eq("active", true)
+    .maybeSingle();
+  if (found.error) throw found.error;
+  if (!found.data) return { body: messageBody(job, customer), metadata: {} };
+  return templateMessage(found.data as TemplateRow, messageContext(job));
+}
+
+async function enqueueOutbox(job: RecoveryJob, conversationId: string, selection: Selection, rule: Rule | null): Promise<string> {
   const attempt = Number(job.recovery_count ?? 0) + 1;
-  const idempotencyKey = isPaymentPending(job)
-    ? `payment-pending:${job.checkout_id}:${selection.channel}`
-    : `checkout-recovery:${job.checkout_id}:${attempt}:${selection.channel}`;
-  const message = await recoveryMessage(job, selection);
+  const idempotencyKey = isRuleEvent(job) || isManual(job)
+    ? `${job.event_type}:${job.checkout_id}`
+    : isPaymentPending(job)
+      ? `payment-pending:${job.checkout_id}:${selection.channel}`
+      : `checkout-recovery:${job.checkout_id}:${attempt}:${selection.channel}`;
+  const message = await recoveryMessage(job, selection, rule);
+  const source = isRuleEvent(job) ? "remarketing_rule" : isManual(job) ? "manual_remarketing" : isPaymentPending(job) ? "payment_pending" : "checkout_recovery";
   const body = message.body;
 
   const inserted = await db
@@ -386,7 +433,8 @@ async function enqueueOutbox(job: RecoveryJob, conversationId: string, selection
       status: "queued",
       metadata: {
         ...message.metadata,
-        source: isPaymentPending(job) ? "payment_pending" : "checkout_recovery",
+        source,
+        remarketing_rule_id: rule?.id ?? null,
         recovery_event_id: job.event_id,
         recovery_checkout_id: job.checkout_id,
         recovery_attempt: attempt,
@@ -412,8 +460,17 @@ async function enqueueOutbox(job: RecoveryJob, conversationId: string, selection
 }
 
 async function processJob(job: RecoveryJob): Promise<Json> {
+  const rule = await ruleOf(job.rule_id);
+  const superseded = isRuleEvent(job)
+    ? !rule?.active
+    : !isManual(job) && await hasActiveRule(job.organization_id, isPaymentPending(job) ? "payment_pending" : "checkout_abandoned");
+  if (superseded) {
+    await updateWorker(job.event_id, "superseded", { error: isRuleEvent(job) ? "remarketing_rule_inactive" : "superseded_by_remarketing_rule" });
+    return { event_id: job.event_id, checkout_id: job.checkout_id, status: "superseded" };
+  }
+
   const accounts = await accountsFor(job.user_id);
-  const choice = chooseChannel(job, accounts);
+  const choice = chooseChannel(job, accounts, rule?.active ? rule : null);
 
   if (choice.consentedChannels.length === 0) {
     await updateWorker(job.event_id, "blocked_consent", { error: "explicit_recovery_contact_consent_missing" });
@@ -441,7 +498,7 @@ async function processJob(job: RecoveryJob): Promise<Json> {
 
   const conversationId = await ensureConversation(job, choice.selection);
   await ensureIdentity(job, conversationId, choice.selection);
-  const outboxId = await enqueueOutbox(job, conversationId, choice.selection);
+  const outboxId = await enqueueOutbox(job, conversationId, choice.selection, rule?.active ? rule : null);
   await updateWorker(job.event_id, "outbox_queued", {
     channel: choice.selection.channel,
     conversationId,

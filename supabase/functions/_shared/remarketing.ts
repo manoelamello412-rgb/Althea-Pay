@@ -61,3 +61,38 @@ export async function verifyUnsubscribe(secret: string, token: string): Promise<
     return null;
   }
 }
+
+// {chave} placeholders, same keys as private.crm_render_named.
+export function renderNamed(body: string, context: Record<string, string>): string {
+  return ["nome", "primeiro_nome", "email", "telefone", "link", "valor", "produto"]
+    .reduce((text, key) => text.split(`{${key}}`).join(context[key] ?? ""), body);
+}
+
+const escapeHtml = (value: string) =>
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+export type RemarketingRule = {
+  channel: "email" | "whatsapp";
+  email_subject: string | null;
+  body: string;
+  button_text: string | null;
+  button_url: string | null;
+};
+
+// Remarketing rule -> outbox body (+ e-mail subject/HTML with a button). The button only goes out with an http(s) URL.
+export function ruleMessage(rule: RemarketingRule, context: Record<string, string>) {
+  const body = renderNamed(rule.body, context);
+  const url = rule.button_url ? renderNamed(rule.button_url, context).trim() : "";
+  const button = rule.button_text && /^https?:\/\/[^\s<>"]+$/i.test(url) ? { text: rule.button_text, url } : null;
+  if (rule.channel === "whatsapp") {
+    return { body: button ? `${body}\n\n${button.text}: ${button.url}` : body, metadata: {} };
+  }
+  const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#111">${escapeHtml(body).replace(/\n/g, "<br>")}` +
+    (button
+      ? `<p style="margin:24px 0"><a href="${escapeHtml(button.url)}" style="background:#10b981;color:#000;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">${escapeHtml(button.text)}</a></p>`
+      : "") + "</div>";
+  return {
+    body: button ? `${body}\n\n${button.text}: ${button.url}` : body,
+    metadata: { email_subject: renderNamed(rule.email_subject ?? "", context), email_html: html },
+  };
+}
