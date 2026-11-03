@@ -29,7 +29,6 @@ const CANONICAL_STATUS_ALIASES: Record<string, GatewayTransactionStatus> = {
   refunded: "refunded",
   refund: "refunded",
   chargeback: "chargeback",
-  charged_back: "chargeback",
   disputed: "chargeback",
   created: "created",
 };
