@@ -112,6 +112,7 @@ describe('SigiloPay TRANSACTION_CREATED webhook contract', () => {
 
 describe('SigiloPay webhook endpoint integration', () => {
   const endpoint = readFileSync('supabase/functions/gateway-webhook/index.ts', 'utf8')
+  const normalizer = readFileSync('supabase/functions/_shared/sigilopay-webhook.ts', 'utf8')
 
   it('authenticates with the gateway-scoped secret before validation and durable ingestion', () => {
     const secretResolution = endpoint.indexOf('"resolve_gateway_webhook_secret"')
@@ -131,6 +132,7 @@ describe('SigiloPay webhook endpoint integration', () => {
     expect(endpoint).toContain('"ingest_gateway_webhook_v2"')
     expect(endpoint).not.toContain('fetch(')
     expect(endpoint).not.toContain('console.log(payload')
-    expect(endpoint).toContain('Object.entries(payload).filter(([key]) => key !== "token")')
+    expect(normalizer).toContain('Object.entries(payload).filter(([key]) => key !== "token")')
+    expect(normalizer).toContain('...safePayload')
   })
 })
