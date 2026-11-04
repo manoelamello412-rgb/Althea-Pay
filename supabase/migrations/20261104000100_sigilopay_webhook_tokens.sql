@@ -1,5 +1,5 @@
 CREATE TABLE public.sigilopay_webhook_tokens (
-  gateway_id uuid NOT NULL
+  gateway_id text NOT NULL
     REFERENCES public.gateways(id),
   transaction_id text NOT NULL,
   token_hash text NOT NULL
