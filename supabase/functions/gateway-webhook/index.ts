@@ -115,10 +115,12 @@ Deno.serve(async (request) => {
   }
 
   const provider = String(gateway.data.provider).toLowerCase();
-  const secretResult = await admin.rpc("resolve_gateway_webhook_secret", {
-    p_gateway_id: gatewayId,
-  });
-  if (secretResult.error || !secretResult.data) {
+  const secretResult = provider === "sigilopay"
+    ? { data: null, error: null }
+    : await admin.rpc("resolve_gateway_webhook_secret", {
+        p_gateway_id: gatewayId,
+      });
+  if (provider !== "sigilopay" && (secretResult.error || !secretResult.data)) {
     return json({ error: "webhook_secret_not_configured" }, 503);
   }
 
@@ -138,7 +140,54 @@ Deno.serve(async (request) => {
   }
 
   let valid = false;
-  if (provider === "stripe") {
+
+  if (provider === "sigilopay") {
+    const transaction = rec(payload.transaction)
+      ? payload.transaction
+      : null;
+  
+    const transactionId = transaction
+      ? String(transaction.id ?? "").trim()
+      : "";
+  
+    const token = typeof payload.token === "string"
+      ? payload.token.trim()
+      : "";
+  
+    if (!transactionId || !token) {
+      return json({ error: "invalid_sigilopay_webhook" }, 401);
+    }
+  
+    const stored = await admin
+      .from("sigilopay_webhook_tokens")
+      .select("token_hash")
+      .eq("gateway_id", gatewayId)
+      .eq("transaction_id", transactionId)
+      .maybeSingle();
+  
+    if (stored.error) {
+      return json({ error: "sigilopay_token_lookup_failed" }, 503);
+    }
+  
+    if (!stored.data) {
+      return json({ error: "invalid_sigilopay_token" }, 401);
+    }
+  
+    const hash = hex(
+      await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(token),
+      ),
+    );
+  
+    valid = safe(hash, stored.data.token_hash);
+  
+    if (valid) {
+      delete payload.token;
+    }
+  
+  } else if (provider === "stripe") {
+  
     const header = request.headers.get("stripe-signature") ?? "";
     const pairs = Object.fromEntries(
       header.split(",").map((x) => {
