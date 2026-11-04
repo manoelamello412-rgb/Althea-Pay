@@ -111,7 +111,7 @@ Deno.serve(async (request) => {
 
   const gateway = await admin
     .from("gateways")
-    .select("id,provider,environment,status,data")
+    .select("id,provider,environment,status,data,credential_id")
     .eq("id", gatewayId)
     .maybeSingle();
   if (gateway.error || !gateway.data) {
@@ -119,6 +119,22 @@ Deno.serve(async (request) => {
   }
 
   const provider = String(gateway.data.provider).toLowerCase();
+  // Some SigiloPay gateways were originally registered through the generic HTTP
+  // adapter. Detect that explicit credential alias for inbound webhook routing
+  // without changing the gateway provider used by payment operations.
+  let credentialGatewayName = "";
+  if (gateway.data.credential_id) {
+    const credential = await admin
+      .from("user_gateway_credentials")
+      .select("gateway_name")
+      .eq("id", gateway.data.credential_id)
+      .maybeSingle();
+    credentialGatewayName = String(credential.data?.gateway_name ?? "").toLowerCase();
+  }
+  const isSigiloPayWebhook =
+    provider === "sigilopay" ||
+    (provider === "generic_http" && credentialGatewayName.includes("sigilopay"));
+
   const rawBody = await request.text();
   if (rawBody.length > 1024 * 1024) {
     return json({ error: "payload_too_large" }, 413);
@@ -136,7 +152,7 @@ Deno.serve(async (request) => {
   let valid = false;
   let sigiloPayPayload: ReturnType<typeof parseSigiloPayTransactionCreatedPayload> = null;
 
-  if (provider === "sigilopay") {
+  if (isSigiloPayWebhook) {
     const expectedToken = Deno.env.get("GATEWAY_WEBHOOK_TOKEN") ?? "";
     if (!expectedToken) return json({ error: "webhook_token_not_configured" }, 503);
     if (!safe(expectedToken, String(payload.token ?? ""))) {
@@ -279,7 +295,7 @@ Deno.serve(async (request) => {
   if (!valid) return json({ error: "invalid_signature" }, 401);
 
   const eventId = (
-    provider === "sigilopay"
+    isSigiloPayWebhook
       ? sigiloPayPayload?.transaction.id
       : request.headers.get("x-provider-event-id") ??
         String(first(payload, ["id", "event_id", "eventId"]) ?? "")
@@ -314,7 +330,7 @@ Deno.serve(async (request) => {
 
   // SigiloPay TRANSACTION_CREATED is durably queued here. The existing
   // gateway-webhook-processor handles it asynchronously; no outbound call is made.
-  if (provider === "sigilopay") {
+  if (isSigiloPayWebhook) {
     return json({
       ok: true,
       accepted: true,
