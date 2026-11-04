@@ -153,9 +153,16 @@ Deno.serve(async (request) => {
   let sigiloPayPayload: ReturnType<typeof parseSigiloPayTransactionCreatedPayload> = null;
 
   if (isSigiloPayWebhook) {
-    const expectedToken = Deno.env.get("GATEWAY_WEBHOOK_TOKEN") ?? "";
-    if (!expectedToken) return json({ error: "webhook_token_not_configured" }, 503);
-    if (!safe(expectedToken, String(payload.token ?? ""))) {
+    // Resolve the secret for this exact gateway. A function-wide environment
+    // token would let a caller replay credentials against another SigiloPay
+    // gateway by changing the gateway ID in the callback URL.
+    const secretResult = await admin.rpc("resolve_gateway_webhook_secret", {
+      p_gateway_id: gatewayId,
+    });
+    if (secretResult.error || !secretResult.data) {
+      return json({ error: "webhook_secret_not_configured" }, 503);
+    }
+    if (!safe(String(secretResult.data), String(payload.token ?? ""))) {
       return json({ error: "invalid_token" }, 401);
     }
 
