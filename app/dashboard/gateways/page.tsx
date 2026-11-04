@@ -9,9 +9,9 @@ import { GlobalFunnelGatewaySwitch } from '@/components/global-funnel-gateway-sw
 type GatewayStatus = 'OPERACIONAL' | 'INDISPONÍVEL';
 type LogType = 'SUCCESS' | 'CRITICAL';
 
-interface GatewayState { id: string; name: string; provider: string; environment: string; status: GatewayStatus; rawStatus: string }
+interface GatewayState { id: string; name: string; provider: string; environment: string; status: GatewayStatus; rawStatus: string; credentialGatewayName: string }
 interface NetworkLogEvent { id: string; timestamp: string; provider: string; message: string; type: LogType }
-interface GatewayRow { id: string; display_name?: string | null; provider?: string | null; environment?: string | null; status?: string | null }
+interface GatewayRow { id: string; credential_id?: string | null; display_name?: string | null; provider?: string | null; environment?: string | null; status?: string | null }
 
 const normalizeProvider = (value: string | null | undefined) => value?.trim() || 'Gateway';
 const normalizeStatus = (value: string | null | undefined): GatewayStatus => {
@@ -48,10 +48,22 @@ export default function GatewaysManagementPage() {
       }
       const { data, error } = await supabase
         .from('gateways')
-        .select('id,display_name,provider,environment,status')
+        .select('id,credential_id,display_name,provider,environment,status')
         .order('created_at', { ascending: false });
       if (error) throw error;
       const rows = (data ?? []) as GatewayRow[];
+      const credentialIds = [...new Set(rows.map(row => row.credential_id).filter((id): id is string => Boolean(id)))];
+      const credentialNames = new Map<string, string>();
+      if (credentialIds.length > 0) {
+        const { data: credentials, error: credentialsError } = await supabase
+          .from('user_gateway_credentials')
+          .select('id,gateway_name')
+          .in('id', credentialIds);
+        if (credentialsError) throw credentialsError;
+        for (const credential of credentials ?? []) {
+          credentialNames.set(String(credential.id), String(credential.gateway_name ?? '').trim().toLowerCase());
+        }
+      }
       setGateways(rows.map(row => ({
         id: row.id,
         name: normalizeProvider(row.display_name),
@@ -59,6 +71,7 @@ export default function GatewaysManagementPage() {
         environment: row.environment?.trim() || 'production',
         status: normalizeStatus(row.status),
         rawStatus: row.status?.trim().toLowerCase() || 'unknown',
+        credentialGatewayName: row.credential_id ? credentialNames.get(row.credential_id) ?? '' : '',
       })));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'erro desconhecido';
@@ -99,6 +112,7 @@ export default function GatewaysManagementPage() {
             });
             return;
           }
+          const previous = gateways.find(item => item.id === row.id);
           const next: GatewayState = {
             id: row.id,
             name: normalizeProvider(row.display_name),
@@ -106,6 +120,7 @@ export default function GatewaysManagementPage() {
             environment: row.environment?.trim() || 'production',
             status: normalizeStatus(row.status),
             rawStatus: row.status?.trim().toLowerCase() || 'unknown',
+            credentialGatewayName: previous?.credentialGatewayName ?? '',
           };
           setGateways(current => {
             const exists = current.some(item => item.id === row.id);
@@ -130,7 +145,7 @@ export default function GatewaysManagementPage() {
 
   const operationalCount = gateways.filter(gateway => gateway.status === 'OPERACIONAL').length;
   const sigilopayGateways = gateways.filter(gateway =>
-    gateway.name.toLowerCase().includes('sigilo') || gateway.provider.toLowerCase().includes('sigilo')
+    gateway.name.toLowerCase().includes('sigilo') || gateway.provider.toLowerCase().includes('sigilo') || gateway.credentialGatewayName.includes('sigilopay')
   );
 
   const saveWebhookSecret = async (gatewayId: string) => {
