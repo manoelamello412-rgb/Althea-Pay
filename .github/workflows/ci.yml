@@ -24,6 +24,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22'
+      - name: Regenerate dependency lockfile
+        run: npm install --package-lock-only --ignore-scripts --legacy-peer-deps --no-audit --no-fund
       - name: Install dependencies
         run: npm ci --no-audit --no-fund --legacy-peer-deps
       - name: Run typecheck

@@ -1,6 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
+  parseSigiloPayTransactionCreatedPayload,
+  toSigiloPayQueuePayload,
+} from "../_shared/sigilopay-webhook.ts";
+import {
   extractGatewayWebhookFinancialFields,
   isGatewayWebhookRecord,
   normalizeGatewayWebhookStatus,
@@ -107,7 +111,7 @@ Deno.serve(async (request) => {
 
   const gateway = await admin
     .from("gateways")
-    .select("id,provider,environment,status,data")
+    .select("id,provider,environment,status,data,credential_id")
     .eq("id", gatewayId)
     .maybeSingle();
   if (gateway.error || !gateway.data) {
@@ -115,14 +119,22 @@ Deno.serve(async (request) => {
   }
 
   const provider = String(gateway.data.provider).toLowerCase();
-  const secretResult = await admin.rpc("resolve_gateway_webhook_secret", {
-    p_gateway_id: gatewayId,
-  });
-  if (secretResult.error || !secretResult.data) {
-    return json({ error: "webhook_secret_not_configured" }, 503);
+  // Some SigiloPay gateways were originally registered through the generic HTTP
+  // adapter. Detect that explicit credential alias for inbound webhook routing
+  // without changing the gateway provider used by payment operations.
+  let credentialGatewayName = "";
+  if (gateway.data.credential_id) {
+    const credential = await admin
+      .from("user_gateway_credentials")
+      .select("gateway_name")
+      .eq("id", gateway.data.credential_id)
+      .maybeSingle();
+    credentialGatewayName = String(credential.data?.gateway_name ?? "").toLowerCase();
   }
+  const isSigiloPayWebhook =
+    provider === "sigilopay" ||
+    (provider === "generic_http" && credentialGatewayName.includes("sigilopay"));
 
-  const secret = String(secretResult.data);
   const rawBody = await request.text();
   if (rawBody.length > 1024 * 1024) {
     return json({ error: "payload_too_large" }, 413);
@@ -138,124 +150,163 @@ Deno.serve(async (request) => {
   }
 
   let valid = false;
-  if (provider === "stripe") {
-    const header = request.headers.get("stripe-signature") ?? "";
-    const pairs = Object.fromEntries(
-      header.split(",").map((x) => {
-        const [k, ...v] = x.split("=");
-        return [k, v.join("=")];
-      }),
-    );
-    const timestamp = Number(pairs.t);
-    const signature = String(pairs.v1 ?? "");
-    if (
-      !Number.isFinite(timestamp) ||
-      !signature ||
-      Math.abs(Date.now() - timestamp * 1000) > 300000
-    ) {
-      return json({ error: "invalid_or_stale_signature" }, 401);
+  let sigiloPayPayload: ReturnType<typeof parseSigiloPayTransactionCreatedPayload> = null;
+
+  if (isSigiloPayWebhook) {
+    // Resolve the secret for this exact gateway. A function-wide environment
+    // token would let a caller replay credentials against another SigiloPay
+    // gateway by changing the gateway ID in the callback URL.
+    const secretResult = await admin.rpc("resolve_gateway_webhook_secret", {
+      p_gateway_id: gatewayId,
+    });
+    if (secretResult.error || !secretResult.data) {
+      return json({ error: "webhook_secret_not_configured" }, 503);
     }
-    valid = safe(
-      await hmac(secret, `${timestamp}.${rawBody}`),
-      signature.toLowerCase(),
-    );
-  } else if (provider === "asaas") {
-    valid = safe(secret, request.headers.get("asaas-access-token") ?? "");
-  } else if (provider === "afiliaxpay") {
-    // ponytail: AfiliaxPay não assina o postback; token secreto vai na query da URL de postback.
-    valid = safe(secret, url.searchParams.get("token") ?? "");
-    if (valid && String(payload.typeTransaction ?? "PIX").toUpperCase() !== "PIX") {
-      return json({ ok: true, ignored: "unsupported_transaction_type" });
+    if (!safe(String(secretResult.data), String(payload.token ?? ""))) {
+      return json({ error: "invalid_token" }, 401);
     }
-    if (valid && payload.idTransaction != null) {
-      payload.external_transaction_id ??= payload.idTransaction;
-      payload.id ??= `${payload.idTransaction}:${payload.status ?? ""}`;
+
+    sigiloPayPayload = parseSigiloPayTransactionCreatedPayload(payload);
+    if (!sigiloPayPayload) {
+      return json({ error: "invalid_transaction_created_payload" }, 422);
     }
-  } else if (provider === "mercado_pago") {
-    const signature = request.headers.get("x-signature") ?? "";
-    const requestId = request.headers.get("x-request-id") ?? "";
-    const dataId =
-      url.searchParams.get("data.id") ??
-      (rec(payload.data) ? String(payload.data.id ?? "") : "");
-    const parts = Object.fromEntries(
-      signature.split(",").map((x) => {
-        const [k, ...v] = x.split("=");
-        return [k, v.join("=")];
-      }),
-    );
-    const timestamp = String(parts.ts ?? "");
-    const v1 = String(parts.v1 ?? "");
-    if (
-      !timestamp ||
-      !v1 ||
-      Math.abs(Date.now() - Number(timestamp) * 1000) > 300000
-    ) {
-      return json({ error: "invalid_or_stale_signature" }, 401);
+
+    if (sigiloPayPayload.event !== "TRANSACTION_CREATED") {
+      return json({ error: "unsupported_event" }, 422);
     }
-    valid = safe(
-      await hmac(
-        secret,
-        `id:${dataId};request-id:${requestId};ts:${timestamp};`,
-      ),
-      v1.toLowerCase(),
-    );
+
+    payload = toSigiloPayQueuePayload(sigiloPayPayload) as JsonRecordLocal;
+    valid = true;
   } else {
-    const registry = await admin
-      .from("gateway_provider_registry")
-      .select("webhook_config,is_active,operational")
-      .eq("provider_key", provider)
-      .maybeSingle();
-    if (
-      registry.error ||
-      !registry.data ||
-      registry.data.is_active !== true
-    ) {
-      return json({ error: "unsupported_webhook_provider" }, 422);
+    const secretResult = await admin.rpc("resolve_gateway_webhook_secret", {
+      p_gateway_id: gatewayId,
+    });
+    if (secretResult.error || !secretResult.data) {
+      return json({ error: "webhook_secret_not_configured" }, 503);
     }
+    const secret = String(secretResult.data);
 
-    const cfg = rec(registry.data.webhook_config)
-      ? registry.data.webhook_config
-      : {};
-    const gatewayData = rec(gateway.data.data) ? gateway.data.data : {};
-    const gatewayWebhook = rec(gatewayData.webhook)
-      ? gatewayData.webhook
-      : {};
+    if (provider === "stripe") {
+      const header = request.headers.get("stripe-signature") ?? "";
+      const pairs = Object.fromEntries(
+        header.split(",").map((x) => {
+          const [k, ...v] = x.split("=");
+          return [k, v.join("=")];
+        }),
+      );
+      const timestamp = Number(pairs.t);
+      const signature = String(pairs.v1 ?? "");
+      if (
+        !Number.isFinite(timestamp) ||
+        !signature ||
+        Math.abs(Date.now() - timestamp * 1000) > 300000
+      ) {
+        return json({ error: "invalid_or_stale_signature" }, 401);
+      }
+      valid = safe(
+        await hmac(secret, `${timestamp}.${rawBody}`),
+        signature.toLowerCase(),
+      );
+    } else if (provider === "asaas") {
+      valid = safe(secret, request.headers.get("asaas-access-token") ?? "");
+    } else if (provider === "afiliaxpay") {
+      // AfiliaxPay sends its webhook token in the configured callback URL.
+      valid = safe(secret, url.searchParams.get("token") ?? "");
+      if (valid && String(payload.typeTransaction ?? "PIX").toUpperCase() !== "PIX") {
+        return json({ ok: true, ignored: "unsupported_transaction_type" });
+      }
+      if (valid && payload.idTransaction != null) {
+        payload.external_transaction_id ??= payload.idTransaction;
+        payload.id ??= `${payload.idTransaction}:${payload.status ?? ""}`;
+      }
+    } else if (provider === "mercado_pago") {
+      const signature = request.headers.get("x-signature") ?? "";
+      const requestId = request.headers.get("x-request-id") ?? "";
+      const dataId =
+        url.searchParams.get("data.id") ??
+        (rec(payload.data) ? String(payload.data.id ?? "") : "");
+      const parts = Object.fromEntries(
+        signature.split(",").map((x) => {
+          const [k, ...v] = x.split("=");
+          return [k, v.join("=")];
+        }),
+      );
+      const timestamp = String(parts.ts ?? "");
+      const v1 = String(parts.v1 ?? "");
+      if (
+        !timestamp ||
+        !v1 ||
+        Math.abs(Date.now() - Number(timestamp) * 1000) > 300000
+      ) {
+        return json({ error: "invalid_or_stale_signature" }, 401);
+      }
+      valid = safe(
+        await hmac(
+          secret,
+          `id:${dataId};request-id:${requestId};ts:${timestamp};`,
+        ),
+        v1.toLowerCase(),
+      );
+    } else {
+      const registry = await admin
+        .from("gateway_provider_registry")
+        .select("webhook_config,is_active,operational")
+        .eq("provider_key", provider)
+        .maybeSingle();
+      if (
+        registry.error ||
+        !registry.data ||
+        registry.data.is_active !== true
+      ) {
+        return json({ error: "unsupported_webhook_provider" }, 422);
+      }
 
-    const headerName = String(
-      gatewayWebhook.signature_header ??
-        cfg.signature_header ??
-        "x-webhook-signature",
-    ).toLowerCase();
-    const supplied = request.headers.get(headerName) ?? "";
-    const algorithm = String(
-      gatewayWebhook.signature_algorithm ??
-        cfg.signature_algorithm ??
-        "hmac-sha256",
-    ).toLowerCase();
+      const cfg = rec(registry.data.webhook_config)
+        ? registry.data.webhook_config
+        : {};
+      const gatewayData = rec(gateway.data.data) ? gateway.data.data : {};
+      const gatewayWebhook = rec(gatewayData.webhook)
+        ? gatewayData.webhook
+        : {};
 
-    if (algorithm !== "hmac-sha256") {
-      return json({ error: "unsupported_webhook_signature_algorithm" }, 422);
+      const headerName = String(
+        gatewayWebhook.signature_header ??
+          cfg.signature_header ??
+          "x-webhook-signature",
+      ).toLowerCase();
+      const supplied = request.headers.get(headerName) ?? "";
+      const algorithm = String(
+        gatewayWebhook.signature_algorithm ??
+          cfg.signature_algorithm ??
+          "hmac-sha256",
+      ).toLowerCase();
+
+      if (algorithm !== "hmac-sha256") {
+        return json({ error: "unsupported_webhook_signature_algorithm" }, 422);
+      }
+
+      const signedValue = String(
+        gatewayWebhook.signature_value ?? cfg.signature_value ?? rawBody,
+      );
+      const expected = await hmac(
+        secret,
+        signedValue === rawBody ? rawBody : signedValue,
+      );
+      valid = safe(
+        expected,
+        supplied.replace(/^sha256=/i, "").trim().toLowerCase(),
+      );
     }
-
-    const signedValue = String(
-      gatewayWebhook.signature_value ?? cfg.signature_value ?? rawBody,
-    );
-    const expected = await hmac(
-      secret,
-      signedValue === rawBody ? rawBody : signedValue,
-    );
-    valid = safe(
-      expected,
-      supplied.replace(/^sha256=/i, "").trim().toLowerCase(),
-    );
   }
 
   if (!valid) return json({ error: "invalid_signature" }, 401);
 
   const eventId = (
-    request.headers.get("x-provider-event-id") ??
-    String(first(payload, ["id", "event_id", "eventId"]) ?? "")
-  ).trim();
+    isSigiloPayWebhook
+      ? sigiloPayPayload?.transaction.id
+      : request.headers.get("x-provider-event-id") ??
+        String(first(payload, ["id", "event_id", "eventId"]) ?? "")
+  )?.trim() ?? "";
   if (!eventId || eventId.length > 300) {
     return json({ error: "provider_event_id_required" }, 400);
   }
@@ -282,6 +333,19 @@ Deno.serve(async (request) => {
       event_id: eventId,
       webhook_id: row?.webhook_id ?? null,
     });
+  }
+
+  // SigiloPay TRANSACTION_CREATED is durably queued here. The existing
+  // gateway-webhook-processor handles it asynchronously; no outbound call is made.
+  if (isSigiloPayWebhook) {
+    return json({
+      ok: true,
+      accepted: true,
+      processed: false,
+      event: "TRANSACTION_CREATED",
+      event_id: eventId,
+      webhook_id: row?.webhook_id ?? null,
+    }, 202);
   }
 
   const fields = extractGatewayWebhookFinancialFields(payload, {

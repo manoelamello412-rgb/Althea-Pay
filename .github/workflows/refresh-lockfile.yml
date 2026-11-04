@@ -1,0 +1,65 @@
+name: Refresh dependency lockfile
+
+on:
+  push:
+    branches:
+      - feat/sigilopay-transaction-created-webhook
+    paths:
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-lockfile-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  refresh-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Regenerate package lock
+        run: npm install --package-lock-only --ignore-scripts
+
+      - name: Commit regenerated lockfile
+        run: |
+          if ! git diff --quiet -- package-lock.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add package-lock.json
+            git commit -m "chore(deps): regenerate lockfile with patched dependencies"
+            git push
+          fi
+
+      - name: Install exact locked dependencies
+        run: npm ci
+
+      - name: Security audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Tests
+        run: npm test
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build

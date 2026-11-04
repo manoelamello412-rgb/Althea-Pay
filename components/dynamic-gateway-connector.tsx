@@ -84,7 +84,7 @@ export const DynamicGatewayConnector: React.FC = () => {
     if (providerResult.error) setError(providerResult.error.message)
     else {
       const list = (providerResult.data ?? [])
-        .filter(provider => validSchema(provider.credential_schema) && provider.operational && provider.provider_key !== 'custom_rest')
+        .filter(provider => validSchema(provider.credential_schema) && (provider.operational || provider.is_custom_or_webhook_only) && provider.provider_key !== 'custom_rest')
         .sort((a, b) => Number(b.adapter_contract_version ?? 0) - Number(a.adapter_contract_version ?? 0)) as Provider[]
       setProviders(list.filter((provider, index, all) =>
         all.findIndex(item => (item.adapter_key || item.provider_key) === (provider.adapter_key || provider.provider_key)) === index
@@ -100,6 +100,7 @@ export const DynamicGatewayConnector: React.FC = () => {
 
   const active = providers.find(provider => provider.provider_key === providerKey) ?? null
   const isGenericHttp = active?.provider_key === 'generic_http' || active?.adapter_key === 'generic_http_json'
+  const isWebhookOnly = active?.is_custom_or_webhook_only === true
   const credentialFields = useMemo(
     () => getOperationalCredentialFields(active?.credential_schema.fields ?? [], isGenericHttp),
     [active, isGenericHttp]
@@ -181,7 +182,8 @@ export const DynamicGatewayConnector: React.FC = () => {
       const gatewayId = typeof rpc.data?.gateway_id === 'string' ? rpc.data.gateway_id : editing
       setMessage(editing ? 'Gateway atualizado. Validando a configuração.' : 'Gateway cadastrado. Validando a conexão.')
       await load()
-      if (gatewayId) await test(gatewayId)
+      if (gatewayId && !isWebhookOnly) await test(gatewayId)
+      else if (gatewayId) setMessage('SigiloPay cadastrada. Configure a URL de callback no painel da SigiloPay; a Althea validará os eventos recebidos pelo webhook.')
       reset()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Falha ao salvar o gateway.')
@@ -212,9 +214,10 @@ export const DynamicGatewayConnector: React.FC = () => {
       await load()
       return
     }
-    setMessage('Gateway reativado. Validando a conexão novamente.')
+    const webhookOnly = providers.find(provider => provider.provider_key === gateway.provider)?.is_custom_or_webhook_only === true
+    setMessage(webhookOnly ? 'Gateway reativado. A conexão será confirmada pelo recebimento do webhook.' : 'Gateway reativado. Validando a conexão novamente.')
     await load()
-    await test(gateway.id)
+    if (!webhookOnly) await test(gateway.id)
   }
 
   const disconnect = async (gateway: Gateway) => {
@@ -267,7 +270,7 @@ export const DynamicGatewayConnector: React.FC = () => {
           <Cpu className="h-4 w-4 text-[#1DB854]" />
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider font-mono text-white">Central de Gateways</h3>
-            <p className="mt-1 text-[11px] text-neutral-500">Conecte, teste, edite e desative gateways sem alterar código.</p>
+            <p className="mt-1 text-[11px] text-neutral-500">Conecte, configure webhooks, edite e desative gateways sem alterar código.</p>
           </div>
         </div>
         <button type="button" onClick={() => void load()} disabled={loading} className="rounded-lg border border-neutral-800 p-2 text-neutral-400">
@@ -296,7 +299,7 @@ export const DynamicGatewayConnector: React.FC = () => {
                 <div className="flex shrink-0 items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-full ${['active', 'connected', 'degraded'].includes(gateway.status.toLowerCase()) ? 'bg-emerald-500' : 'bg-neutral-600'}`} />
                   <button type="button" onClick={() => edit(gateway)} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button type="button" onClick={() => void test(gateway.id)} disabled={testing !== null} className="rounded-md border border-neutral-700 px-2.5 py-2 text-[9px] font-bold font-mono text-white">{testing === gateway.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'TESTAR'}</button>
+                  {providers.find(provider => provider.provider_key === gateway.provider)?.is_custom_or_webhook_only ? <span className="rounded-md border border-sky-900/60 px-2.5 py-2 text-[9px] font-bold font-mono text-sky-300">WEBHOOK</span> : <button type="button" onClick={() => void test(gateway.id)} disabled={testing !== null} className="rounded-md border border-neutral-700 px-2.5 py-2 text-[9px] font-bold font-mono text-white">{testing === gateway.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'TESTAR'}</button>}
                   <button type="button" onClick={() => void toggle(gateway)} disabled={testing !== null || !gateway.credential_id} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Power className="h-3.5 w-3.5" /></button>
                   <button type="button" onClick={() => void disconnect(gateway)} disabled={testing !== null} className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Unplug className="h-3.5 w-3.5" /></button>
                   <button type="button" onClick={() => void remove(gateway)} disabled={testing !== null} aria-label="Excluir gateway" className="rounded-md border border-neutral-700 p-2 text-neutral-300"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -312,7 +315,7 @@ export const DynamicGatewayConnector: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h4 className="text-[10px] font-medium uppercase tracking-wide text-neutral-200">{editing ? 'Editar conexão' : 'Nova conexão de gateway'}</h4>
-              <p className="mt-1 text-[10px] text-neutral-600">Providers nativos pedem só credenciais. A opção HTTP genérica libera configuração avançada de API.</p>
+              <p className="mt-1 text-[10px] text-neutral-600">Gateways operacionais usam teste de conexão; integrações webhook-only são confirmadas pelos eventos recebidos.</p>
             </div>
             {editing && <button type="button" onClick={reset} className="text-neutral-500"><X className="h-4 w-4" /></button>}
           </div>
@@ -343,7 +346,7 @@ export const DynamicGatewayConnector: React.FC = () => {
             <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
               <div>
                 <h5 className="text-xs font-semibold uppercase tracking-wide text-white">{isGenericHttp ? 'Credenciais e configuração avançada da API' : 'Credenciais da conexão'}</h5>
-                <p className="mt-1 text-[10px] text-neutral-500">{isGenericHttp ? 'A URL base e os endpoints ficam configuráveis porque este provider representa uma API ainda não nativa.' : 'O transporte técnico é herdado do adapter canônico do provider.'}</p>
+                <p className="mt-1 text-[10px] text-neutral-500">{isGenericHttp ? 'A URL base e os endpoints ficam configuráveis porque este provider representa uma API ainda não nativa.' : isWebhookOnly ? 'Esta integração espelha as transações enviadas pelo gateway. Não cria cobranças nem processa pagamentos na Althea.' : 'O transporte técnico é herdado do adapter canônico do provider.'}</p>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{credentialFields.map(credential => renderField(credential))}</div>
             </div>
