@@ -290,6 +290,29 @@ Deno.serve(async (request) => {
       ) {
         return json({ error: "sigilopay_invalid_payment_amount" }, 503);
       }
+      const original = await admin
+        .from("gateway_transactions")
+        .select("amount,currency")
+        .eq("gateway_id", gatewayId)
+        .eq("external_id", transactionId)
+        .maybeSingle();
+      
+      if (original.error || !original.data) {
+        return json({ error: "sigilopay_original_transaction_not_found" }, 503);
+      }
+      
+      const expectedAmount = Number(original.data.amount);
+      const expectedCurrency = String(original.data.currency ?? "")
+        .trim()
+        .toUpperCase();
+      
+      if (
+        !Number.isFinite(expectedAmount) ||
+        Math.round(expectedAmount * 100) !== Math.round(verifiedAmount * 100) ||
+        expectedCurrency !== verifiedCurrency
+      ) {
+        return json({ error: "sigilopay_payment_amount_mismatch" }, 409);
+      }
     
       payload.transaction = {
         ...transaction,
