@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   parseSigiloPayTransactionCreatedPayload,
@@ -106,5 +107,24 @@ describe('SigiloPay TRANSACTION_CREATED webhook contract', () => {
       ...validPayload,
       transaction: { ...validPayload.transaction, createdAt: 'not-a-date' },
     })).toBeNull()
+  })
+})
+
+describe('SigiloPay webhook endpoint integration', () => {
+  const endpoint = readFileSync('supabase/functions/gateway-webhook/index.ts', 'utf8')
+
+  it('authenticates with the environment token before ingestion and uses transaction.id for deduplication', () => {
+    expect(endpoint).toContain('Deno.env.get("GATEWAY_WEBHOOK_TOKEN")')
+    expect(endpoint).toContain('safe(expectedToken, String(payload.token ?? ""))')
+    expect(endpoint).toContain('sigiloPayPayload?.transaction.id')
+    expect(endpoint).toContain('"ingest_gateway_webhook_v2"')
+    expect(endpoint).toContain('event: "TRANSACTION_CREATED"')
+    expect(endpoint).toContain('}, 202)')
+  })
+
+  it('queues SigiloPay events for the existing worker without making outbound provider requests', () => {
+    expect(endpoint).toContain('gateway-webhook-processor')
+    expect(endpoint).not.toContain('fetch(')
+    expect(endpoint).not.toContain('console.log(payload')
   })
 })
