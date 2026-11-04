@@ -146,6 +146,8 @@ describe('SigiloPay external transaction materialization migration', () => {
 
   it('imports only SigiloPay transactions through the claimed webhook worker', () => {
     expect(migration).toContain("lower(trim(coalesce(v_event.provider,''))) = 'sigilopay'")
+    expect(migration).toContain("lower(trim(coalesce(v_gateway.provider,''))) <> 'sigilopay'")
+    expect(migration).toContain("v_payload->>'event' is distinct from 'TRANSACTION_CREATED'")
     expect(migration).toContain('insert into public.gateway_transactions')
     expect(migration).toContain('public.allocate_and_insert_gateway_payment_attempt')
     expect(migration).toContain('public.process_gateway_webhook_v11')
