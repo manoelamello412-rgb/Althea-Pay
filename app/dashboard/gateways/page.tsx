@@ -112,7 +112,6 @@ export default function GatewaysManagementPage() {
             });
             return;
           }
-          const previous = gateways.find(item => item.id === row.id);
           const next: GatewayState = {
             id: row.id,
             name: normalizeProvider(row.display_name),
@@ -120,12 +119,15 @@ export default function GatewaysManagementPage() {
             environment: row.environment?.trim() || 'production',
             status: normalizeStatus(row.status),
             rawStatus: row.status?.trim().toLowerCase() || 'unknown',
-            credentialGatewayName: previous?.credentialGatewayName ?? '',
+            credentialGatewayName: '',
           };
           setGateways(current => {
-            const exists = current.some(item => item.id === row.id);
-            return exists ? current.map(item => item.id === row.id ? next : item) : [next, ...current];
+            const previous = current.find(item => item.id === row.id);
+            const merged = { ...next, credentialGatewayName: previous?.credentialGatewayName ?? '' };
+            const exists = Boolean(previous);
+            return exists ? current.map(item => item.id === row.id ? merged : item) : [merged, ...current];
           });
+          if (!row.credential_id) void loadGatewayTelemetry();
           appendLog({
             id: `gateway-${row.id}-${Date.now()}`,
             timestamp: formatTime(new Date()),
