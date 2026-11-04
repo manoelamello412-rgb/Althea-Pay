@@ -40,8 +40,14 @@ export async function POST(request: Request) {
     if (!tx.gateway_id) return NextResponse.json({ ok:true, action:null, status:tx.status })
     const externalId = text(tx.external_id) || text(tx.metadata?.external_transaction_id)
     if (!externalId) return NextResponse.json({ ok:true, action:null, status:tx.status })
-    const { data: gateway } = await admin.from('gateways').select('id,environment,status').eq('id', tx.gateway_id).eq('organization_id', session.organization_id).maybeSingle()
+    const { data: gateway } = await admin.from('gateways').select('id,provider,environment,status').eq('id', tx.gateway_id).eq('organization_id', session.organization_id).maybeSingle()
     if (!gateway || !['active','connected','degraded'].includes(text(gateway.status).toLowerCase())) return NextResponse.json({ ok:true, action:null, status:tx.status })
+    // SigiloPay bloqueia polling (TOO_MANY_REQUESTS) e pode travar a API da conta; o webhook atualiza o banco,
+    // então a consulta ao provedor vira só rede de segurança: no máximo 1 por minuto por transação.
+    if (text(gateway.provider).toLowerCase() === 'sigilopay') {
+      const { data: slot } = await admin.rpc('consume_funnel_event_rate_limit', { p_bucket_key: `provider-status:sigilopay:${tx.id}`, p_limit: 1, p_window_seconds: 60 })
+      if ((Array.isArray(slot) ? slot[0] : slot)?.allowed !== true) return NextResponse.json({ ok:true, action:null, status:tx.status })
+    }
     const secret = text(process.env.ALTHEA_INTERNAL_SECRET)
     const supabaseUrl = text(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)
     if (!secret || !supabaseUrl) return NextResponse.json({ ok:false, code:'PAYMENT_PROCESSOR_NOT_CONFIGURED' }, { status:503 })

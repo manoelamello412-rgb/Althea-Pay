@@ -67,6 +67,15 @@ const legacySyncStatusAliases: Record<string, GatewayTransactionStatus> = {
   dispute: "chargeback",
 };
 
+// TRANSACTION_CREATED é ignorado: a transação já existe do nosso lado desde o create_payment.
+const SIGILO_EVENTS: Record<string, [GatewayTransactionStatus, string]> = {
+  TRANSACTION_PAID: ["approved", "payment"],
+  TRANSACTION_CANCELED: ["failed", "payment"],
+  TRANSACTION_REFUNDED: ["refunded", "refund"],
+  TRANSACTION_CHARGED_BACK: ["chargeback", "chargeback"],
+  CHARGEBACK_CREATED: ["chargeback", "chargeback"],
+};
+
 const normalizeStatus = (value: unknown): GatewayTransactionStatus | null => {
   const canonical = normalizeGatewayWebhookStatus(value);
   if (canonical) return canonical;
@@ -170,6 +179,29 @@ Deno.serve(async (request) => {
     if (valid && payload.idTransaction != null) {
       payload.external_transaction_id ??= payload.idTransaction;
       payload.id ??= `${payload.idTransaction}:${payload.status ?? ""}`;
+    }
+  } else if (provider === "sigilopay") {
+    // ponytail: a SigiloPay manda um token no corpo, mas o callbackUrl é nosso e fixo por gateway, então o token
+    // secreto na query já autentica (igual AfiliaxPay). Status vem do nome do evento, não de transaction.status.
+    valid = safe(secret, url.searchParams.get("token") ?? "");
+    if (valid) {
+      const tx = rec(payload.transaction) ? payload.transaction : {};
+      const ev = String(payload.event ?? "").trim().toUpperCase();
+      const mapped = SIGILO_EVENTS[ev];
+      if (!mapped) return json({ ok: true, ignored: ev || "unknown_event" });
+      // identifier é o nosso gateway_transactions.id; casa a venda mesmo se o id da SigiloPay vier diferente.
+      const ours = String(tx.identifier ?? "").trim();
+      let external = String(tx.id ?? "").trim();
+      if (/^[0-9a-f-]{36}$/i.test(ours)) {
+        const local = await admin.from("gateway_transactions").select("external_id").eq("id", ours).eq("gateway_id", gatewayId).maybeSingle();
+        if (local.data?.external_id) external = String(local.data.external_id);
+      }
+      if (!external) return json({ error: "transaction_id_missing" }, 400);
+      payload.external_transaction_id = external;
+      payload.status = mapped[0];
+      payload.event_kind = mapped[1];
+      payload.id = `${external}:${ev === "CHARGEBACK_CREATED" ? "TRANSACTION_CHARGED_BACK" : ev}`;
+      if (payload.currency == null && tx.currency != null) payload.currency = tx.currency;
     }
   } else if (provider === "mercado_pago") {
     const signature = request.headers.get("x-signature") ?? "";

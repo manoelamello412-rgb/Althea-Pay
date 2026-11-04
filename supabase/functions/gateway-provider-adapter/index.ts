@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { assertPublicHttpsUrl } from "../_shared/ssrf-guard.ts";
+import QRCode from "npm:qrcode@1.5.4";
 
 type O=Record<string,unknown>;
 type Operation="create_payment"|"payment_status"|"retrieve_payment"|"retrieve"|"status"|"refund"|"health_check";
@@ -80,6 +81,56 @@ async function afiliaxpay(operation:Operation,b:O,c:O,gid:string){
   return out({ok:true,id,external_id:id,status:"pending",provider_status:"pendente",amount:Number(b.amount??0),currency:"BRL",action_type:"pix",qr_code:qr||null,copy_paste:first(p,["qrcode"])||null});
 }
 
+// SigiloPay: auth por headers x-public-key/x-secret-key; valores em reais. O callbackUrl é fixo por gateway
+// (a SigiloPay limita 20 webhooks por integração, um por URL distinta) e leva o token na query.
+// identifier = nosso gateway_transactions.id, que o webhook devolve em transaction.identifier.
+const SIGILO_STATUS:O={completed:"approved",paid:"approved",pending:"pending",ok:"pending",failed:"declined",rejected:"declined",canceled:"declined",cancelled:"declined",expired:"declined",refunded:"declined",charged_back:"declined",chargeback:"declined"};
+async function sigilopay(operation:Operation,b:O,c:O,gid:string){
+  const pk=str(c.public_key),sk=str(c.secret_key);if(!pk||!sk)throw new Error("provider_credentials_missing");
+  const base="https://app.sigilopay.com.br/api/v1";
+  const external=str(b.external_transaction_id??b.original_external_id??b.provider_transaction_id);
+  const headers:Record<string,string>={Accept:"application/json","x-public-key":pk,"x-secret-key":sk};
+  const call=async(path:string,payload?:O)=>{const init:RequestInit={method:payload?"POST":"GET",headers:{...headers},signal:AbortSignal.timeout(15000)};if(payload){(init.headers as Record<string,string>)["Content-Type"]="application/json";init.body=JSON.stringify(payload)}const r=await fetch(base+path,init);return{r,p:await parse(r)}};
+  const fail=(r:Response,p:O)=>out({ok:false,error:err(p,`gateway_http_${r.status}`),failure_code:first(p,["errorCode","error.code"],`http_${r.status}`)},r.status);
+  // /ping é público; testar credenciais é o que valida as chaves.
+  if(operation==="health_check"){const{r,p}=await call("/gateway/producer/credentials");return r.ok?out({ok:true,status:"approved",provider_status:"healthy"}):fail(r,p)}
+  if(["payment_status","retrieve_payment","retrieve","status"].includes(operation)){
+    if(!external)throw new Error("external_transaction_id_required");
+    const{r,p}=await call(`/gateway/transactions?id=${encodeURIComponent(external)}`);if(!r.ok)return fail(r,p);
+    const ps=first(p,["status"],"");return out({ok:true,id:external,external_id:external,status:norm(ps,SIGILO_STATUS),provider_status:ps,amount:Number(first(p,["amount"],String(b.amount??0))),currency:first(p,["currency"],"BRL").toUpperCase()});
+  }
+  if(operation!=="create_payment")throw new Error("operation_not_supported");
+  const pm=obj(b.payment_method)?b.payment_method:{};if(str(pm.type)&&str(pm.type)!=="pix")throw new Error("payment_method_not_supported");
+  const amount=Number(b.amount??0);if(!Number.isFinite(amount)||amount<=0)throw new Error("invalid_amount");
+  const cu=obj(b.customer)?b.customer:{},details=obj(pm.details)?pm.details:{};
+  const digits=(v:unknown)=>String(v??"").replace(/\D/g,"");
+  const doc=digits(details.document??cu.document??cu.cpf),phone=digits(cu.phone).replace(/^55(?=\d{10,11}$)/,"");
+  if(doc.length!==11&&doc.length!==14)throw new Error("customer_document_required");
+  const name=str(cu.name),email=str(cu.email);if(!name||!email)throw new Error("customer_name_email_required");
+  const identifier=(str(b.transaction_id)||str(b.idempotency_key)).slice(0,100);if(!identifier)throw new Error("identifier_required");
+  const hook=str(c.webhook_secret),su=str(Deno.env.get("SUPABASE_URL"));if(!hook||!su)throw new Error("webhook_postback_not_configured");
+  const fmtDoc=doc.length===11?doc.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,"$1.$2.$3-$4"):doc.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,"$1.$2.$3/$4-$5");
+  const client:O={name,email,document:fmtDoc};if(phone.length>=10)client.phone=phone.replace(/(\d{2})(\d{4,5})(\d{4})/,"($1) $2-$3");
+  const md=obj(b.metadata)?b.metadata:{},value=Number(amount.toFixed(2));
+  // amount precisa bater com a soma dos produtos (price × quantity + frete + taxas − desconto).
+  const payload:O={identifier,amount:value,client,products:[{id:str(b.product_id)||identifier,name:(str(md.product_name??md.description)||"Pedido").slice(0,255),quantity:1,price:value}],metadata:{provider:"AltheaPay",orderId:identifier},callbackUrl:`${su.replace(/\/$/,"")}/functions/v1/gateway-webhook?gateway_id=${encodeURIComponent(gid)}&token=${encodeURIComponent(hook)}`};
+  let{r,p}=await call("/gateway/pix/receive",payload);
+  let id=first(p,["transactionId"]),ps=first(p,["status"],"").toUpperCase(),code="",img="";
+  if(r.ok){const pix=obj(p.pix)?p.pix:{};code=str(pix.code);img=str(pix.base64)||str(pix.image);p={...p,expiresAt:get(pix,"expiresAt")}}
+  else{
+    // Retentativa do cliente após timeout: o identifier já existe na SigiloPay. Busca o Pix criado em vez de travar.
+    const found=await call(`/gateway/transactions?clientIdentifier=${encodeURIComponent(identifier)}`);
+    const fs=first(found.p,["status"],"").toUpperCase();
+    if(!found.r.ok||fs!=="PENDING"||!first(found.p,["pixInformation.qrCode"]))return fail(r,p);
+    r=found.r;id=first(found.p,["id"]);ps=fs;code=first(found.p,["pixInformation.qrCode"]);img=first(found.p,["pixInformation.base64","pixInformation.image"]);p=found.p;
+  }
+  if(["FAILED","REJECTED","CANCELED"].includes(ps))return out({ok:false,error:first(p,["errorDescription","pix.errorDescription","details"],"provider_declined"),failure_code:"declined",id:id||null,status:"declined",provider_status:ps},402);
+  if(!id||!code)return out({ok:false,error:!id?"provider_transaction_id_missing":"provider_pix_code_missing"},502);
+  // base64 é deprecated (vem vazio) e image é URL opcional; o checkout só desenha data URI, então geramos o QR do código.
+  const qr=img.startsWith("data:image/")?img:await QRCode.toDataURL(code,{margin:1,width:320}).catch(()=>/^https:\/\//i.test(img)?img:null);
+  return out({ok:true,id,external_id:id,status:"pending",provider_status:ps||"PENDING",amount:Number(b.amount??0),currency:"BRL",action_type:"pix",qr_code:qr,copy_paste:code,expires_at:first(p,["expiresAt","pixInformation.expiresAt"])||null});
+}
+
 async function generic(operation:Operation,b:O,c:O){
   const checked=await assertPublicHttpsUrl(str(c.base_url));if(!checked.ok)throw new Error(`target_not_allowed:${checked.reason}`);
   const statusOps=["payment_status","retrieve_payment","retrieve","status"];
@@ -108,5 +159,5 @@ Deno.serve(async req=>{
   if(op!=="health_check"&&!["connected","degraded"].includes(str(g.data.status).toLowerCase()))return out({ok:false,error:"gateway_not_operational"},422);
   const reg=await db.from("gateway_provider_registry").select("provider_key,adapter_key,operational,is_active").eq("provider_key",str(g.data.provider).toLowerCase()).eq("is_active",true).maybeSingle();if(reg.error)return out({ok:false,error:"provider_registry_lookup_failed"},500);if(!reg.data||reg.data.operational!==true)return out({ok:false,error:"provider_adapter_not_operational"},422);
   const cr=await db.rpc("resolve_gateway_credential_for_gateway",{p_gateway_id:gid});if(cr.error||!obj(cr.data))return out({ok:false,error:"provider_credential_missing"},422);const credential=obj(cr.data.credentials)?cr.data.credentials:cr.data;
-  try{if(str(g.data.provider).toLowerCase()==="mercado_pago")return await mercadoPago(op,b,credential);if(str(g.data.provider).toLowerCase()==="afiliaxpay")return await afiliaxpay(op,b,credential,gid);return await generic(op,b,credential)}catch(e){return out({ok:false,error:e instanceof Error?e.message:"gateway_adapter_error"},502)}
+  try{if(str(g.data.provider).toLowerCase()==="mercado_pago")return await mercadoPago(op,b,credential);if(str(g.data.provider).toLowerCase()==="afiliaxpay")return await afiliaxpay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="sigilopay")return await sigilopay(op,b,credential,gid);return await generic(op,b,credential)}catch(e){return out({ok:false,error:e instanceof Error?e.message:"gateway_adapter_error"},502)}
 });

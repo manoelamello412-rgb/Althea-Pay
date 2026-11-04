@@ -9,7 +9,7 @@ describe('public payment creation', () => {
   it('resolves the primary gateway before creating the transaction and creates it with that gateway', () => {
     expect(route.indexOf("from('funnel_gateway_bindings')")).toBeLessThan(route.indexOf("rpc('create_gateway_transaction'"))
     const createCall = route.split('\n').find(line => line.includes("rpc('create_gateway_transaction'")) ?? ''
-    expect(createCall).toContain('p_gateway_id: selectedGatewayId')
+    expect(createCall).toContain('p_gateway_id: routes[0].id')
   })
 
   it('stores the gateway on insert and keeps the function server-only', () => {
