@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { audioMimetype, bridgeSendRequest, whatsappNumber } from "../_shared/whatsapp.ts";
 import { buildTemplateData, configuredTemplateData, findTemplate, infobipMessageId, infobipRequest, infobipTemplatesUrl, parseTemplate } from "../_shared/infobip.ts";
-import { signUnsubscribe } from "../_shared/remarketing.ts";
+import { emailHtml, safeButton, signUnsubscribe } from "../_shared/remarketing.ts";
 
 type Json = Record<string, unknown>;
 type Outbox = {
@@ -209,29 +209,39 @@ async function sendMeta(account: Account, identity: Identity, body: string): Pro
 
 // Campaign e-mails carry one-click unsubscribe (RFC 8058), required by Gmail/Yahoo for bulk senders.
 async function unsubscribeExtras(row: Outbox, address: string) {
-  if (row.metadata?.source !== "campaign") return { headers: undefined, footer: "" };
+  if (row.metadata?.source !== "campaign") return { headers: undefined, footer: "", url: undefined };
   const token = await signUnsubscribe(Deno.env.get("CRM_UNSUBSCRIBE_SECRET") ?? "", { o: row.organization_id, c: "email", a: address });
   const url = supabaseUrl.replace(/\/$/, "") + "/functions/v1/crm-channel-unsubscribe?t=" + token;
   return {
     headers: { "List-Unsubscribe": "<" + url + ">", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
     footer: "\n\n--\nPara não receber mais estes e-mails: " + url,
+    url,
   };
 }
 
 async function sendResend(account: Account, identity: Identity, row: Outbox): Promise<DeliveryResult> {
   const credential = await credentials(account);
   const token = text(credential.api_key ?? credential.access_token ?? credential.token);
-  const from = String(meta(account, "from_email", credential.from ?? ""));
+  const address = String(meta(account, "from_email", credential.from ?? ""));
+  const name = text(meta(account, "from_name"));
+  const from = name && !address.includes("<") ? `${name.replace(/["<>]/g, "")} <${address}>` : address;
+  const replyTo = text(meta(account, "reply_to"));
   const to = identity.email;
-  if (!token || !from || !to) throw new Error("email_configuration_missing");
+  if (!token || !address || !to) throw new Error("email_configuration_missing");
   const subject = text(row.metadata?.email_subject) || String(meta(account, "subject", "Mensagem da Althea Pay"));
   const extras = await unsubscribeExtras(row, to);
+  const rawButton = row.metadata?.email_button;
+  const button = isObject(rawButton) ? safeButton(rawButton.text, rawButton.url) : null;
+  // Rules send their own HTML; everything else (campaigns, templates, plain text) gets the shared layout.
+  const html = row.metadata?.email_html
+    ? String(row.metadata.email_html)
+    : emailHtml(row.body, { headerUrl: row.metadata?.email_header_url, button, unsubscribeUrl: extras.url });
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: "Bearer " + token, "content-type": "application/json", "idempotency-key": row.id },
     body: JSON.stringify({
-      from, to: [to], subject, text: row.body + extras.footer, headers: extras.headers,
-      ...(row.metadata?.email_html ? { html: String(row.metadata.email_html) } : {}),
+      from, to: [to], subject, html, headers: extras.headers, ...(replyTo ? { reply_to: replyTo } : {}),
+      text: row.body + (button ? `\n\n${button.text}: ${button.url}` : "") + extras.footer,
     }),
   });
   const payload = await responseJson(response);

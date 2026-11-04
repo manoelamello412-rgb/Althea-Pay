@@ -1,5 +1,5 @@
 #!/bin/sh
-# Valida as migrations da Fase 0 a 5 num Postgres descartável (precisa de Docker).
+# Valida as migrations da Fase 0 a 6 num Postgres descartável (precisa de Docker).
 # Uso: sh tests/sql/run.sh   → termina com "ALL BEHAVIOR CHECKS PASSED".
 set -e
 cd "$(dirname "$0")/../.."
@@ -24,6 +24,9 @@ for f in tests/sql/stubs.sql \
   tests/sql/settings-phase4-behavior.sql \
   tests/sql/stubs-phase5.sql \
   supabase/migrations/20261102180000_whatsapp_lead_extractor_v1.sql \
-  tests/sql/lead-extractor-phase5-behavior.sql; do
+  tests/sql/lead-extractor-phase5-behavior.sql \
+  tests/sql/stubs-phase6.sql \
+  supabase/migrations/20261103130000_crm_email_resend_v1.sql \
+  tests/sql/email-phase6-behavior.sql; do
   docker exec -i althea-sqltest psql -U postgres -q -v ON_ERROR_STOP=1 < "$f"
 done

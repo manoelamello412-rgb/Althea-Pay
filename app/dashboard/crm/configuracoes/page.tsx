@@ -8,7 +8,7 @@ import { hasOrganizationCapability, parseOrganizationAccess, type OrganizationAc
 type Tag = { id: string; name: string; description: string | null; active: boolean }
 type QuickReply = { id: string; title: string; body: string; channel: string; active: boolean }
 type ChannelAccount = { id: string; channel: string; provider: string; display_name: string | null; external_account_id: string | null; status: 'active' | 'inactive' | 'error'; credentials_ref: string | null; updated_at: string }
-type Tab = 'tags' | 'replies' | 'funnelchat' | 'whatsapp' | 'channels'
+type Tab = 'tags' | 'replies' | 'funnelchat' | 'whatsapp' | 'email' | 'channels'
 type Editor =
   | { kind: 'tag'; id: string | null; name: string; description: string; active: boolean }
   | { kind: 'reply'; id: string | null; title: string; body: string; channel: string; active: boolean }
@@ -16,7 +16,7 @@ type Editor =
 
 const CHANNELS: Record<string, string> = { all: 'Todos os canais', funnel_chat: 'Chat do funil', whatsapp: 'WhatsApp', instagram: 'Instagram', messenger: 'Messenger', email: 'E-mail', sms: 'SMS' }
 const STATUS: Record<ChannelAccount['status'], [string, string]> = { active: ['Ativa', 'text-emerald-400'], inactive: ['Pausada', 'text-slate-500'], error: ['Com erro', 'text-red-400'] }
-const ERRORS: Record<string, string> = { INFOBIP_BASE_URL_INVALID: 'Use a URL base da sua conta Infobip (ex.: xxxxx.api.infobip.com).', WHATSAPP_NUMBER_INVALID: 'Informe o número do WhatsApp com DDD.', INFOBIP_API_KEY_REQUIRED: 'Informe a API key da Infobip.', FORBIDDEN: 'Seu acesso não permite alterar esta configuração.', NAME_TAKEN: 'Já existe um item com esse nome.', TAG_NAME_INVALID: 'Informe um nome de até 60 caracteres.', QUICK_REPLY_TITLE_INVALID: 'Informe um título de até 80 caracteres.', QUICK_REPLY_BODY_INVALID: 'Informe o texto da resposta (até 4000 caracteres).' }
+const ERRORS: Record<string, string> = { EMAIL_FROM_INVALID: 'Informe um e-mail de remetente válido (ex.: vendas@seudominio.com).', EMAIL_REPLY_TO_INVALID: 'O e-mail de resposta é inválido.', EMAIL_FROM_TAKEN: 'Esse remetente já está cadastrado.', RESEND_API_KEY_INVALID: 'A API key da Resend começa com re_.', RESEND_API_KEY_REQUIRED: 'Informe a API key da Resend.', DISPLAY_NAME_TOO_LONG: 'Nome muito longo.', INFOBIP_BASE_URL_INVALID: 'Use a URL base da sua conta Infobip (ex.: xxxxx.api.infobip.com).', WHATSAPP_NUMBER_INVALID: 'Informe o número do WhatsApp com DDD.', INFOBIP_API_KEY_REQUIRED: 'Informe a API key da Infobip.', FORBIDDEN: 'Seu acesso não permite alterar esta configuração.', NAME_TAKEN: 'Já existe um item com esse nome.', TAG_NAME_INVALID: 'Informe um nome de até 60 caracteres.', QUICK_REPLY_TITLE_INVALID: 'Informe um título de até 80 caracteres.', QUICK_REPLY_BODY_INVALID: 'Informe o texto da resposta (até 4000 caracteres).' }
 const messageOf = (cause: unknown) => { const raw = cause && typeof cause === 'object' && 'message' in cause ? String((cause as { message: unknown }).message) : ''; return ERRORS[raw] ?? 'Não foi possível salvar.' }
 const input = 'h-10 w-full rounded-xl border border-white/10 bg-white/[.03] px-3 text-sm outline-none focus:border-emerald-500/40'
 const label = 'text-[10px] font-bold uppercase tracking-widest text-slate-500'
@@ -155,6 +155,82 @@ function WhatsappPanel({ db }: { db: Db }) {
   </div>
 }
 
+type EmailAccount = { id: string; status: string; display_name: string | null; from_email: string | null; from_name: string | null; reply_to: string | null; has_api_key: boolean; last_error: string | null }
+
+function ResendForm({ db, account, onSaved }: { db: Db; account: EmailAccount | null; onSaved: () => void }) {
+  const [form, setForm] = useState({ name: account?.from_name ?? '', from: account?.from_email ?? '', replyTo: account?.reply_to ?? '', apiKey: '' })
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [test, setTest] = useState<{ running: boolean; ok?: boolean; message?: string }>({ running: false })
+  async function runTest() {
+    if (!account) return
+    setTest({ running: true })
+    const response = await fetch(`/api/crm/email/test?account=${account.id}`, { method: 'POST', cache: 'no-store' }).catch(() => null)
+    const result = response ? await response.json().catch(() => ({})) as { ok?: boolean; message?: string } : {}
+    setTest({ running: false, ok: result.ok === true, message: result.message ?? 'Não foi possível testar agora.' })
+  }
+  async function save() {
+    setSaving(true); setNotice('')
+    const { error } = await db.rpc('crm_email_configure', { p_from_email: form.from, p_from_name: form.name || null, p_reply_to: form.replyTo || null, p_api_key: form.apiKey || null, p_account_id: account?.id ?? null, p_display_name: form.name || null })
+    setSaving(false)
+    if (error) { setNotice(messageOf(error)); return }
+    setForm({ ...form, apiKey: '' })
+    setNotice(account ? 'Salvo.' : 'Salvo. Abra a conta e clique em Enviar e-mail de teste.'); onSaved()
+  }
+  return <div className="space-y-3">
+    <ol className="list-decimal space-y-0.5 pl-4 text-xs text-slate-400">
+      <li>Na Resend, em <b>Domains</b>, adicione e verifique o domínio do remetente (registros DNS).</li>
+      <li>Em <b>API Keys</b>, crie uma chave com permissão de envio (começa com re_).</li>
+      <li>Preencha abaixo, salve e envie um e-mail de teste para você.</li>
+    </ol>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="block space-y-1"><span className={label}>Nome do remetente</span><input value={form.name} maxLength={80} placeholder="Althea Pay" onChange={event => setForm({ ...form, name: event.target.value })} className={input} /></label>
+      <label className="block space-y-1"><span className={label}>E-mail do remetente</span><input type="email" value={form.from} maxLength={254} placeholder="vendas@seudominio.com" onChange={event => setForm({ ...form, from: event.target.value })} className={input} /></label>
+      <label className="block space-y-1"><span className={label}>Responder para (opcional)</span><input type="email" value={form.replyTo} maxLength={254} placeholder="suporte@seudominio.com" onChange={event => setForm({ ...form, replyTo: event.target.value })} className={input} /></label>
+      <label className="block space-y-1"><span className={label}>API key da Resend</span><input type="password" autoComplete="off" value={form.apiKey} placeholder={account?.has_api_key ? '•••••••• (mantida; preencha para trocar)' : 're_...'} onChange={event => setForm({ ...form, apiKey: event.target.value })} className={input} /></label>
+    </div>
+    <div className="flex flex-wrap gap-2">
+      <button type="button" disabled={saving || !form.from.trim() || (!form.apiKey.trim() && !account?.has_api_key)} onClick={() => void save()} className="flex h-10 items-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-black hover:bg-emerald-400 disabled:opacity-40">{saving && <Loader2 size={15} className="animate-spin" />} Salvar</button>
+      {account && <button type="button" disabled={test.running} onClick={() => void runTest()} className="flex h-10 items-center gap-2 rounded-xl border border-white/10 px-4 text-sm hover:bg-white/[.06] disabled:opacity-40">{test.running && <Loader2 size={14} className="animate-spin" />} Enviar e-mail de teste</button>}
+    </div>
+    {test.message && <p role="status" className={`text-xs ${test.ok ? 'text-emerald-400' : 'text-red-400'}`}>{test.message}</p>}
+    {notice && <p role="status" className="text-xs text-slate-400">{notice}</p>}
+  </div>
+}
+
+// E-mail senders (Resend). Each one shows up in "Enviar de" for campaigns and remarketing rules.
+function EmailPanel({ db }: { db: Db }) {
+  const [accounts, setAccounts] = useState<EmailAccount[]>([])
+  const [adding, setAdding] = useState(false)
+  const [open, setOpen] = useState<string | null>(null)
+  const reload = useCallback(() => { void db.rpc('crm_email_settings').then(({ data }: { data: EmailAccount[] | null }) => setAccounts(data ?? [])) }, [db])
+  useEffect(reload, [reload])
+  return <div>
+    <div className="flex flex-wrap items-center gap-2 border-b border-white/[.06] px-4 py-4">
+      <p className="min-w-0 flex-1 text-sm text-slate-400">Remetentes de e-mail pela Resend. Cada um pode ser escolhido em campanhas e no remarketing automático. Os textos e o visual ficam em <b>Campanhas &gt; Templates</b>.</p>
+      <button type="button" onClick={() => setAdding(!adding)} className="inline-flex h-9 items-center gap-1 rounded-xl border border-white/10 px-3 text-sm hover:bg-white/[.06]"><Plus size={14} /> Remetente Resend</button>
+    </div>
+    {adding && <div className="border-b border-white/[.06] bg-white/[.02] px-4 py-4"><b className="mb-3 block text-sm">Novo remetente (Resend)</b><ResendForm db={db} account={null} onSaved={() => { setAdding(false); reload() }} /></div>}
+    {accounts.length === 0 && !adding && <div className="p-10 text-center text-sm text-slate-600">Nenhum remetente de e-mail. Adicione um para enviar remarketing por e-mail.</div>}
+    {accounts.map(account => {
+      const [statusLabel, tone] = STATUS[account.status as ChannelAccount['status']] ?? ['—', 'text-slate-500']
+      return <div key={account.id} className="border-b border-white/[.06] px-4 py-3 last:border-0">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <b className="text-sm">{account.from_name || account.display_name || 'E-mail'}</b>
+            <span className="ml-2 rounded-full bg-white/[.06] px-2 py-0.5 text-[10px] text-slate-400">Resend</span>
+            <span className={`ml-2 text-[11px] ${tone}`}>{statusLabel}</span>
+            <p className="truncate text-xs text-slate-500">{account.from_email}{account.reply_to ? ` · responde para ${account.reply_to}` : ''}</p>
+            {account.last_error && <p className="truncate text-xs text-red-400">Último erro de envio: {account.last_error}</p>}
+          </div>
+          <button type="button" aria-expanded={open === account.id} onClick={() => setOpen(open === account.id ? null : account.id)} className="rounded-md p-1.5 text-slate-500 hover:bg-white/5 hover:text-white" aria-label={`Configurar ${account.from_email ?? 'remetente'}`}><Pencil size={14} /></button>
+        </div>
+        {open === account.id && <div className="mt-3"><ResendForm key={account.id} db={db} account={account} onSaved={reload} /></div>}
+      </div>
+    })}
+  </div>
+}
+
 const FLOW_FIELDS: [string, string, string][] = [
   ['welcome', 'Boas-vindas (primeira mensagem do cliente)', 'Use {nome} e {funil}. Mostre as opções 1, 2 e 3.'],
   ['status', 'Opção 1 · status do pagamento', '{status} vira: aprovado, aguardando pagamento, não aprovado…'],
@@ -254,7 +330,7 @@ export default function CrmConfiguracoesPage() {
     await load()
   }
 
-  const tabs: [Tab, string, number][] = [['tags', 'Etiquetas', tags.length], ['replies', 'Respostas rápidas', replies.length], ['funnelchat', 'Chat do funil', 0], ...(canIntegrations ? [['whatsapp', 'WhatsApp', channels.filter(account => account.channel === 'whatsapp').length], ['channels', 'Outros canais', channels.filter(account => account.channel !== 'whatsapp').length]] as [Tab, string, number][] : [])]
+  const tabs: [Tab, string, number][] = [['tags', 'Etiquetas', tags.length], ['replies', 'Respostas rápidas', replies.length], ['funnelchat', 'Chat do funil', 0], ...(canIntegrations ? [['whatsapp', 'WhatsApp', channels.filter(account => account.channel === 'whatsapp').length], ['email', 'E-mail', channels.filter(account => account.channel === 'email').length], ['channels', 'Outros canais', channels.filter(account => account.channel !== 'whatsapp').length]] as [Tab, string, number][] : [])]
   const empty = (text: string) => <div className="p-10 text-center text-sm text-slate-600">{text}</div>
   const editButton = (name: string, onClick: () => void) => <button type="button" aria-label={`Editar ${name}`} onClick={onClick} className="rounded-md p-1.5 text-slate-500 hover:bg-white/5 hover:text-white"><Pencil size={14} /></button>
   const inactive = (active: boolean) => !active && <span className="ml-2 rounded-full bg-white/[.06] px-2 py-0.5 text-[10px] text-slate-500">inativa</span>
@@ -280,6 +356,7 @@ export default function CrmConfiguracoesPage() {
           : tab === 'replies' ? (replies.length ? replies.map(reply => <div key={reply.id} className="flex items-start gap-3 border-b border-white/[.06] px-4 py-3 last:border-0"><div className="min-w-0 flex-1"><b className="text-sm">{reply.title}</b>{inactive(reply.active)}<span className="ml-2 text-[11px] text-slate-500">{CHANNELS[reply.channel] ?? reply.channel}</span><p className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-xs text-slate-500">{reply.body}</p></div>{canConfigure && editButton(reply.title, () => setEditor({ kind: 'reply', id: reply.id, title: reply.title, body: reply.body, channel: reply.channel, active: reply.active }))}</div>) : empty('Nenhuma resposta rápida. Cadastre textos que a equipe envia com frequência.'))
           : tab === 'funnelchat' ? (access ? <FunnelChatFlowPanel db={db} organizationId={access.organization_id} canEdit={canConfigure} /> : null)
           : tab === 'whatsapp' ? <WhatsappPanel db={db} />
+          : tab === 'email' ? <EmailPanel db={db} />
           : channels.filter(account => account.channel !== 'whatsapp').length ? channels.filter(account => account.channel !== 'whatsapp').map(account => { const [statusLabel, tone] = STATUS[account.status]; const name = account.display_name || `${CHANNELS[account.channel] ?? account.channel} · ${account.provider}`; return <div key={account.id} className="flex items-center gap-3 border-b border-white/[.06] px-4 py-3 last:border-0"><div className="min-w-0 flex-1"><b className="text-sm">{name}</b><span className={`ml-2 text-[11px] ${tone}`}>{statusLabel}</span><p className="truncate text-xs text-slate-500">{CHANNELS[account.channel] ?? account.channel} · {account.provider}{account.external_account_id ? ` · ${account.external_account_id}` : ''} · {account.credentials_ref ? 'credencial configurada' : 'sem credencial'}</p></div>{editButton(name, () => setEditor({ kind: 'channel', id: account.id, displayName: account.display_name ?? '', status: account.status === 'active' ? 'active' : 'inactive', label: name }))}</div> }) : empty('Nenhum outro canal conectado. A conexão de e-mail e SMS é feita pela equipe Althea.')}
       </section>
     </div>

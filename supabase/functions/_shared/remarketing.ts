@@ -7,19 +7,26 @@ export type TemplateRow = {
   variables: string[];
   whatsapp_template_name: string | null;
   language: string;
+  email_header_url?: string | null;
+  email_button_text?: string | null;
+  email_button_url?: string | null;
 };
 
 export function renderTemplate(body: string, variables: string[], context: Record<string, string>): string {
   return variables.reduce((text, key, i) => text.split(`{{${i + 1}}}`).join(context[key] ?? ""), body);
 }
 
-// Outbox metadata the dispatcher understands (whatsapp_template, email_subject).
+// Outbox metadata the dispatcher understands (whatsapp_template, email_subject, email_header_url, email_button).
 export function templateMessage(template: TemplateRow, context: Record<string, string>) {
   const placeholders = template.variables.map((key) => context[key] ?? "");
+  const fill = (value: string) => renderNamed(renderTemplate(value, template.variables, context), context).trim();
+  const button = template.email_button_text && template.email_button_url ? safeButton(template.email_button_text, fill(template.email_button_url)) : null;
   return {
     body: renderTemplate(template.body, template.variables, context),
     metadata: {
       ...(template.subject ? { email_subject: renderTemplate(template.subject, template.variables, context) } : {}),
+      ...(template.email_header_url ? { email_header_url: template.email_header_url } : {}),
+      ...(button ? { email_button: button } : {}),
       ...(template.whatsapp_template_name
         ? { whatsapp_template: { name: template.whatsapp_template_name, language: template.language, placeholders } }
         : {}),
@@ -79,20 +86,39 @@ export type RemarketingRule = {
   button_url: string | null;
 };
 
-// Remarketing rule -> outbox body (+ e-mail subject/HTML with a button). The button only goes out with an http(s) URL.
+export type EmailButton = { text: string; url: string };
+const httpUrl = (url: string) => /^https?:\/\/[^\s<>"]+$/i.test(url);
+// The button only goes out with an http(s) URL (never javascript:, data:, …).
+export function safeButton(text: unknown, url: unknown): EmailButton | null {
+  const label = typeof text === "string" ? text.trim() : "";
+  const href = typeof url === "string" ? url.trim() : "";
+  return label && httpUrl(href) ? { text: label, url: href } : null;
+}
+
+// The one e-mail layout: optional header image, the text, an optional button, optional unsubscribe link.
+// Everything is escaped: body and button come from templates filled with customer data.
+export function emailHtml(body: string, options: { headerUrl?: unknown; button?: EmailButton | null; unsubscribeUrl?: string } = {}) {
+  const header = typeof options.headerUrl === "string" && /^https:\/\/[^\s<>"]+$/i.test(options.headerUrl.trim()) ? options.headerUrl.trim() : "";
+  const { button, unsubscribeUrl } = options;
+  return `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#111;max-width:560px">` +
+    (header ? `<p style="margin:0 0 20px"><img src="${escapeHtml(header)}" alt="" style="max-width:100%;height:auto;display:block;border:0"></p>` : "") +
+    escapeHtml(body).replace(/\n/g, "<br>") +
+    (button
+      ? `<p style="margin:24px 0"><a href="${escapeHtml(button.url)}" style="background:#10b981;color:#000;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">${escapeHtml(button.text)}</a></p>`
+      : "") +
+    (unsubscribeUrl ? `<p style="margin-top:32px;font-size:12px;color:#888"><a href="${escapeHtml(unsubscribeUrl)}" style="color:#888">Não quero mais receber estes e-mails</a></p>` : "") +
+    "</div>";
+}
+
+// Remarketing rule -> outbox body (+ e-mail subject/HTML with a button).
 export function ruleMessage(rule: RemarketingRule, context: Record<string, string>) {
   const body = renderNamed(rule.body, context);
-  const url = rule.button_url ? renderNamed(rule.button_url, context).trim() : "";
-  const button = rule.button_text && /^https?:\/\/[^\s<>"]+$/i.test(url) ? { text: rule.button_text, url } : null;
+  const button = rule.button_url ? safeButton(rule.button_text, renderNamed(rule.button_url, context)) : null;
   if (rule.channel === "whatsapp") {
     return { body: button ? `${body}\n\n${button.text}: ${button.url}` : body, metadata: {} };
   }
-  const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#111">${escapeHtml(body).replace(/\n/g, "<br>")}` +
-    (button
-      ? `<p style="margin:24px 0"><a href="${escapeHtml(button.url)}" style="background:#10b981;color:#000;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">${escapeHtml(button.text)}</a></p>`
-      : "") + "</div>";
   return {
     body: button ? `${body}\n\n${button.text}: ${button.url}` : body,
-    metadata: { email_subject: renderNamed(rule.email_subject ?? "", context), email_html: html },
+    metadata: { email_subject: renderNamed(rule.email_subject ?? "", context), email_html: emailHtml(body, { button }) },
   };
 }

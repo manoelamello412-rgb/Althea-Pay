@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { renderNamed, ruleMessage } from '../supabase/functions/_shared/remarketing'
+import { emailHtml, renderNamed, ruleMessage, templateMessage } from '../supabase/functions/_shared/remarketing'
 import { periodRange } from '../lib/checkout-period'
 
 const ctx = { nome: 'Maria <b>Silva</b>', primeiro_nome: 'Maria', link: 'https://pay.example/c/1', valor: 'R$ 97,00' }
@@ -21,6 +21,22 @@ describe('remarketing rule message', () => {
     expect(m.metadata.email_html).toContain('href="https://pay.example/c/1"')
     const unsafe = ruleMessage({ channel: 'email', email_subject: 's', body: 'b', button_text: 'Pagar', button_url: 'javascript:alert(1)' }, ctx)
     expect(unsafe.metadata.email_html).not.toContain('<a ')
+  })
+})
+
+describe('e-mail templates', () => {
+  const base = { body: 'Oi {{1}}', subject: 'Oi', variables: ['nome', 'link'], whatsapp_template_name: null, language: 'pt_BR' }
+  it('fills the button link from {{n}} or {link} and keeps the header', () => {
+    const m = templateMessage({ ...base, email_header_url: 'https://cdn.x/logo.png', email_button_text: 'Pagar', email_button_url: '{{2}}' }, ctx)
+    expect(m.metadata).toMatchObject({ email_header_url: 'https://cdn.x/logo.png', email_button: { text: 'Pagar', url: 'https://pay.example/c/1' } })
+    expect(templateMessage({ ...base, email_button_text: 'Pagar', email_button_url: '{link}' }, ctx).metadata).toMatchObject({ email_button: { url: 'https://pay.example/c/1' } })
+  })
+  it('drops a button without a safe URL and an http header', () => {
+    expect(templateMessage({ ...base, email_button_text: 'Pagar', email_button_url: '{link}' }, {}).metadata).not.toHaveProperty('email_button')
+    const html = emailHtml('<b>x</b>', { headerUrl: 'http://insecure/logo.png', unsubscribeUrl: 'https://u/x?t=1&a=2' })
+    expect(html).not.toContain('<img')
+    expect(html).toContain('&lt;b&gt;x&lt;/b&gt;')
+    expect(html).toContain('href="https://u/x?t=1&amp;a=2"')
   })
 })
 

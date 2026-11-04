@@ -399,7 +399,7 @@ async function recoveryMessage(job: RecoveryJob, selection: Selection, rule: Rul
   const customer = objectOf(job.customer);
   const found = await db
     .from("crm_message_templates")
-    .select("body,subject,variables,whatsapp_template_name,language")
+    .select("body,subject,variables,whatsapp_template_name,language,email_header_url,email_button_text,email_button_url")
     .eq("organization_id", job.organization_id)
     .eq("channel", selection.channel)
     .eq("trigger_event", isPaymentPending(job) || (isManual(job) && selection.channel === "whatsapp") ? "payment_pending" : "checkout_abandoned")
