@@ -115,6 +115,8 @@ describe('SigiloPay webhook endpoint integration', () => {
 
   it('authenticates with the environment token before ingestion and uses transaction.id for deduplication', () => {
     expect(endpoint).toContain('Deno.env.get("GATEWAY_WEBHOOK_TOKEN")')
+    expect(endpoint).toContain('credentialGatewayName.includes("sigilopay")')
+    expect(endpoint).toContain('provider === "generic_http"')
     expect(endpoint).toContain('safe(expectedToken, String(payload.token ?? ""))')
     expect(endpoint).toContain('sigiloPayPayload?.transaction.id')
     expect(endpoint).toContain('"ingest_gateway_webhook_v2"')
