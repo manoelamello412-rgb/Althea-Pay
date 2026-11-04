@@ -136,3 +136,35 @@ describe('SigiloPay webhook endpoint integration', () => {
     expect(normalizer).toContain('...safePayload')
   })
 })
+
+
+describe('SigiloPay external transaction materialization migration', () => {
+  const migration = readFileSync(
+    'supabase/migrations/20261104203000_import_sigilopay_external_transactions.sql',
+    'utf8',
+  )
+
+  it('imports only SigiloPay transactions through the claimed webhook worker', () => {
+    expect(migration).toContain("lower(trim(coalesce(v_event.provider,''))) = 'sigilopay'")
+    expect(migration).toContain('insert into public.gateway_transactions')
+    expect(migration).toContain('public.allocate_and_insert_gateway_payment_attempt')
+    expect(migration).toContain('public.process_gateway_webhook_v11')
+    expect(migration).toContain("'external_gateway_mirror'")
+  })
+
+  it('keeps tenant identity, idempotency, and the provider token out of persisted transaction data', () => {
+    expect(migration).toContain('v_gateway.user_id')
+    expect(migration).toContain('v_gateway.organization_id')
+    expect(migration).toContain('v_gateway.id')
+    expect(migration).toContain("'sigilopay:' || v_gateway.id || ':' || v_external")
+    expect(migration).toContain("v_metadata := v_metadata - 'token'")
+    expect(migration).toContain('revoke all on function public.server_process_claimed_gateway_webhook_v1')
+  })
+
+  it('does not associate an unverified funnel or product and seeds refundable states safely', () => {
+    expect(migration).not.toMatch(/insert into public\.gateway_transactions\s*\([^)]*funnel_id/s)
+    expect(migration).not.toMatch(/insert into public\.gateway_transactions\s*\([^)]*product_id/s)
+    expect(migration).toContain("then 'approved'")
+    expect(migration).toContain("else 'created'")
+  })
+})
