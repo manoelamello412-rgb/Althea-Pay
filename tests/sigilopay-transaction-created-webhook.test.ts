@@ -113,20 +113,24 @@ describe('SigiloPay TRANSACTION_CREATED webhook contract', () => {
 describe('SigiloPay webhook endpoint integration', () => {
   const endpoint = readFileSync('supabase/functions/gateway-webhook/index.ts', 'utf8')
 
-  it('authenticates with the environment token before ingestion and uses transaction.id for deduplication', () => {
-    expect(endpoint).toContain('Deno.env.get("GATEWAY_WEBHOOK_TOKEN")')
+  it('authenticates with the gateway-scoped secret before validation and durable ingestion', () => {
+    const secretResolution = endpoint.indexOf('"resolve_gateway_webhook_secret"')
+    const tokenComparison = endpoint.indexOf('safe(String(secretResult.data), String(payload.token ?? ""))')
+    const ingestion = endpoint.indexOf('"ingest_gateway_webhook_v2"')
+
+    expect(secretResolution).toBeGreaterThan(-1)
+    expect(tokenComparison).toBeGreaterThan(secretResolution)
+    expect(ingestion).toBeGreaterThan(tokenComparison)
     expect(endpoint).toContain('credentialGatewayName.includes("sigilopay")')
-    expect(endpoint).toContain('provider === "generic_http"')
-    expect(endpoint).toContain('safe(expectedToken, String(payload.token ?? ""))')
     expect(endpoint).toContain('sigiloPayPayload?.transaction.id')
-    expect(endpoint).toContain('"ingest_gateway_webhook_v2"')
     expect(endpoint).toContain('event: "TRANSACTION_CREATED"')
     expect(endpoint).toContain('}, 202)')
   })
 
-  it('queues SigiloPay events for the existing worker without making outbound provider requests', () => {
-    expect(endpoint).toContain('gateway-webhook-processor')
+  it('queues accepted events durably without making outbound provider requests or logging payload data', () => {
+    expect(endpoint).toContain('"ingest_gateway_webhook_v2"')
     expect(endpoint).not.toContain('fetch(')
     expect(endpoint).not.toContain('console.log(payload')
+    expect(endpoint).toContain('Object.entries(payload).filter(([key]) => key !== "token")')
   })
 })
