@@ -90,7 +90,7 @@ const SIGILOPAY_STATUS:O={
   charged_back:"declined"
 };
 
-async function sigiloPay(operation:Operation,b:O,c:O){
+async function sigiloPay(operation:Operation,b:O,c:O,gid:string){
   const publicKey=str(c.client_id??c.public_key);
   const secretKey=str(c.client_secret);
 
@@ -129,7 +129,77 @@ async function sigiloPay(operation:Operation,b:O,c:O){
 
     path="/gateway/transactions?id="+encodeURIComponent(id);
   }else if(operation==="create_payment"){
-    throw new Error("sigilopay_create_pending_webhook_integration");
+        const amount=Number(b.amount);
+    const customer=obj(b.customer)?b.customer:{};
+    const pm=obj(b.payment_method)?b.payment_method:{};
+
+    if(str(pm.type)&&str(pm.type).toLowerCase()!=="pix")
+      throw new Error("payment_method_not_supported");
+    if(!Number.isFinite(amount)||amount<=0)
+      throw new Error("invalid_amount");
+
+    const identifier=str(b.transaction_id??b.idempotency_key);
+    if(!identifier)throw new Error("transaction_identifier_required");
+
+    const document=str(customer.document??customer.cpf);
+    if(!str(customer.name)||!str(customer.email)||!str(customer.phone)||!document)
+      throw new Error("sigilopay_customer_required");
+
+    const su=str(Deno.env.get("SUPABASE_URL"));
+    
+    if(!su||!gid)
+      throw new Error("sigilopay_callback_not_configured");
+    
+    const callbackUrl=
+      `${su.replace(/\/$/,"")}/functions/v1/gateway-webhook?gateway_id=${encodeURIComponent(gid)}`;
+    const payload={
+      identifier,
+      amount:Number(amount.toFixed(2)),
+      callbackUrl,
+      client:{
+        name:str(customer.name),
+        email:str(customer.email),
+        phone:str(customer.phone),
+        document
+      }
+    };
+
+    const target=await assertPublicHttpsUrl(base+"/gateway/pix/receive");
+    if(!target.ok)throw new Error(`target_not_allowed:${target.reason}`);
+
+    const response=await fetch(target.url,{
+      method:"POST",
+      headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify(payload),
+      signal:AbortSignal.timeout(15000)
+    });
+
+    const data=await parse(response);
+    if(!response.ok)
+      return out({ok:false,error:err(data,`sigilopay_http_${response.status}`)},response.status);
+
+    const id=str(data.transactionId);
+    if(!id)return out({ok:false,error:"sigilopay_transaction_id_missing"},502);
+
+    const providerStatus=str(data.transactionStatus??(data.status==="OK"?"PENDING":data.status));
+    const pix=obj(data.pix)?data.pix:{};
+
+    return out({
+      ok:true,
+      id,
+      external_id:id,
+      status:norm(providerStatus,SIGILOPAY_STATUS),
+      provider_status:providerStatus,
+      amount,
+      currency:"BRL",
+      action_type:"pix",
+      copy_paste:str(pix.qrCode??pix.copyPaste)||null,
+      response:{
+        transactionId:id,
+        transactionStatus:providerStatus,
+        pix
+      }
+    });
   }else{
     throw new Error("operation_not_supported");
   }
@@ -223,7 +293,7 @@ Deno.serve(async req=>{
       return await afiliaxpay(op,b,credential,gid);
   
     if(str(g.data.provider).toLowerCase()==="sigilopay")
-      return await sigiloPay(op,b,credential);
+      return await sigiloPay(op,b,credential,gid);
   
     return await generic(op,b,credential);
   }catch(e){
