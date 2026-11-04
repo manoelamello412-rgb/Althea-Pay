@@ -107,6 +107,9 @@ export type SigiloPayTransactionCreatedPayload = {
     pixInformation?: SigiloPayPixInformation | null;
     pixMetadata?: SigiloPayPixMetadata;
     boletoInformation?: SigiloPayBoletoInformation | null;
+    subscription?: SigiloPaySubscription | null;
+    orderItems?: SigiloPayOrderItem[];
+    trackProps?: SigiloPayTrackProps;
   };
   subscription: SigiloPaySubscription | null;
   orderItems: SigiloPayOrderItem[];
@@ -197,17 +200,22 @@ export const parseSigiloPayTransactionCreatedPayload = (
   if (!isRecord(value) || value.event !== "TRANSACTION_CREATED" ||
       !hasString(value, "token") || !hasString(value, "offerCode") ||
       !hasString(value, "checkoutUrl") || !isRecord(value.client) ||
-      !isRecord(value.transaction) || !validSubscription(value.subscription) ||
-      !validOrderItems(value.orderItems) || !validTrackProps(value.trackProps)) {
+      !isRecord(value.transaction)) {
     return null;
   }
+
+  const tx = value.transaction;
+  const subscription = value.subscription !== undefined ? value.subscription : tx.subscription;
+  const orderItems = value.orderItems !== undefined ? value.orderItems : tx.orderItems;
+  const trackProps = value.trackProps !== undefined ? value.trackProps : tx.trackProps;
+  if (!validSubscription(subscription) || !validOrderItems(orderItems) ||
+      !validTrackProps(trackProps)) return null;
 
   const client = value.client;
   if (!["id", "name", "email", "phone", "cpf"].every((key) => hasString(client, key)) ||
       !(client.cnpj === null || typeof client.cnpj === "string") ||
       !validAddress(client.address)) return null;
 
-  const tx = value.transaction;
   if (!hasString(tx, "id") || !hasString(tx, "identifier") ||
       !["COMPLETED", "FAILED", "PENDING", "REFUNDED", "CHARGED_BACK"].includes(String(tx.status)) ||
       !["CREDIT_CARD", "PIX", "BOLETO", "CRYPTO"].includes(String(tx.paymentMethod)) ||
@@ -224,7 +232,12 @@ export const parseSigiloPayTransactionCreatedPayload = (
     return null;
   }
 
-  return value as unknown as SigiloPayTransactionCreatedPayload;
+  return {
+    ...value,
+    subscription,
+    orderItems,
+    trackProps,
+  } as unknown as SigiloPayTransactionCreatedPayload;
 };
 
 export const toSigiloPayQueuePayload = (
