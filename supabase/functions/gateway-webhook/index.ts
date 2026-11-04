@@ -164,115 +164,115 @@ Deno.serve(async (request) => {
     const secret = String(secretResult.data);
 
     if (provider === "stripe") {
-    const header = request.headers.get("stripe-signature") ?? "";
-    const pairs = Object.fromEntries(
-      header.split(",").map((x) => {
-        const [k, ...v] = x.split("=");
-        return [k, v.join("=")];
-      }),
-    );
-    const timestamp = Number(pairs.t);
-    const signature = String(pairs.v1 ?? "");
-    if (
-      !Number.isFinite(timestamp) ||
-      !signature ||
-      Math.abs(Date.now() - timestamp * 1000) > 300000
-    ) {
-      return json({ error: "invalid_or_stale_signature" }, 401);
-    }
-    valid = safe(
-      await hmac(secret, `${timestamp}.${rawBody}`),
-      signature.toLowerCase(),
-    );
-  } else if (provider === "asaas") {
-    valid = safe(secret, request.headers.get("asaas-access-token") ?? "");
-  } else if (provider === "afiliaxpay") {
-    // ponytail: AfiliaxPay não assina o postback; token secreto vai na query da URL de postback.
-    valid = safe(secret, url.searchParams.get("token") ?? "");
-    if (valid && String(payload.typeTransaction ?? "PIX").toUpperCase() !== "PIX") {
-      return json({ ok: true, ignored: "unsupported_transaction_type" });
-    }
-    if (valid && payload.idTransaction != null) {
-      payload.external_transaction_id ??= payload.idTransaction;
-      payload.id ??= `${payload.idTransaction}:${payload.status ?? ""}`;
-    }
-  } else if (provider === "mercado_pago") {
-    const signature = request.headers.get("x-signature") ?? "";
-    const requestId = request.headers.get("x-request-id") ?? "";
-    const dataId =
-      url.searchParams.get("data.id") ??
-      (rec(payload.data) ? String(payload.data.id ?? "") : "");
-    const parts = Object.fromEntries(
-      signature.split(",").map((x) => {
-        const [k, ...v] = x.split("=");
-        return [k, v.join("=")];
-      }),
-    );
-    const timestamp = String(parts.ts ?? "");
-    const v1 = String(parts.v1 ?? "");
-    if (
-      !timestamp ||
-      !v1 ||
-      Math.abs(Date.now() - Number(timestamp) * 1000) > 300000
-    ) {
-      return json({ error: "invalid_or_stale_signature" }, 401);
-    }
-    valid = safe(
-      await hmac(
-        secret,
-        `id:${dataId};request-id:${requestId};ts:${timestamp};`,
-      ),
-      v1.toLowerCase(),
-    );
+      const header = request.headers.get("stripe-signature") ?? "";
+      const pairs = Object.fromEntries(
+        header.split(",").map((x) => {
+          const [k, ...v] = x.split("=");
+          return [k, v.join("=")];
+        }),
+      );
+      const timestamp = Number(pairs.t);
+      const signature = String(pairs.v1 ?? "");
+      if (
+        !Number.isFinite(timestamp) ||
+        !signature ||
+        Math.abs(Date.now() - timestamp * 1000) > 300000
+      ) {
+        return json({ error: "invalid_or_stale_signature" }, 401);
+      }
+      valid = safe(
+        await hmac(secret, `${timestamp}.${rawBody}`),
+        signature.toLowerCase(),
+      );
+    } else if (provider === "asaas") {
+      valid = safe(secret, request.headers.get("asaas-access-token") ?? "");
+    } else if (provider === "afiliaxpay") {
+      // AfiliaxPay sends its webhook token in the configured callback URL.
+      valid = safe(secret, url.searchParams.get("token") ?? "");
+      if (valid && String(payload.typeTransaction ?? "PIX").toUpperCase() !== "PIX") {
+        return json({ ok: true, ignored: "unsupported_transaction_type" });
+      }
+      if (valid && payload.idTransaction != null) {
+        payload.external_transaction_id ??= payload.idTransaction;
+        payload.id ??= `${payload.idTransaction}:${payload.status ?? ""}`;
+      }
+    } else if (provider === "mercado_pago") {
+      const signature = request.headers.get("x-signature") ?? "";
+      const requestId = request.headers.get("x-request-id") ?? "";
+      const dataId =
+        url.searchParams.get("data.id") ??
+        (rec(payload.data) ? String(payload.data.id ?? "") : "");
+      const parts = Object.fromEntries(
+        signature.split(",").map((x) => {
+          const [k, ...v] = x.split("=");
+          return [k, v.join("=")];
+        }),
+      );
+      const timestamp = String(parts.ts ?? "");
+      const v1 = String(parts.v1 ?? "");
+      if (
+        !timestamp ||
+        !v1 ||
+        Math.abs(Date.now() - Number(timestamp) * 1000) > 300000
+      ) {
+        return json({ error: "invalid_or_stale_signature" }, 401);
+      }
+      valid = safe(
+        await hmac(
+          secret,
+          `id:${dataId};request-id:${requestId};ts:${timestamp};`,
+        ),
+        v1.toLowerCase(),
+      );
     } else {
-    const registry = await admin
-      .from("gateway_provider_registry")
-      .select("webhook_config,is_active,operational")
-      .eq("provider_key", provider)
-      .maybeSingle();
-    if (
-      registry.error ||
-      !registry.data ||
-      registry.data.is_active !== true
-    ) {
-      return json({ error: "unsupported_webhook_provider" }, 422);
-    }
+      const registry = await admin
+        .from("gateway_provider_registry")
+        .select("webhook_config,is_active,operational")
+        .eq("provider_key", provider)
+        .maybeSingle();
+      if (
+        registry.error ||
+        !registry.data ||
+        registry.data.is_active !== true
+      ) {
+        return json({ error: "unsupported_webhook_provider" }, 422);
+      }
 
-    const cfg = rec(registry.data.webhook_config)
-      ? registry.data.webhook_config
-      : {};
-    const gatewayData = rec(gateway.data.data) ? gateway.data.data : {};
-    const gatewayWebhook = rec(gatewayData.webhook)
-      ? gatewayData.webhook
-      : {};
+      const cfg = rec(registry.data.webhook_config)
+        ? registry.data.webhook_config
+        : {};
+      const gatewayData = rec(gateway.data.data) ? gateway.data.data : {};
+      const gatewayWebhook = rec(gatewayData.webhook)
+        ? gatewayData.webhook
+        : {};
 
-    const headerName = String(
-      gatewayWebhook.signature_header ??
-        cfg.signature_header ??
-        "x-webhook-signature",
-    ).toLowerCase();
-    const supplied = request.headers.get(headerName) ?? "";
-    const algorithm = String(
-      gatewayWebhook.signature_algorithm ??
-        cfg.signature_algorithm ??
-        "hmac-sha256",
-    ).toLowerCase();
+      const headerName = String(
+        gatewayWebhook.signature_header ??
+          cfg.signature_header ??
+          "x-webhook-signature",
+      ).toLowerCase();
+      const supplied = request.headers.get(headerName) ?? "";
+      const algorithm = String(
+        gatewayWebhook.signature_algorithm ??
+          cfg.signature_algorithm ??
+          "hmac-sha256",
+      ).toLowerCase();
 
-    if (algorithm !== "hmac-sha256") {
-      return json({ error: "unsupported_webhook_signature_algorithm" }, 422);
-    }
+      if (algorithm !== "hmac-sha256") {
+        return json({ error: "unsupported_webhook_signature_algorithm" }, 422);
+      }
 
-    const signedValue = String(
-      gatewayWebhook.signature_value ?? cfg.signature_value ?? rawBody,
-    );
-    const expected = await hmac(
-      secret,
-      signedValue === rawBody ? rawBody : signedValue,
-    );
-    valid = safe(
-      expected,
-      supplied.replace(/^sha256=/i, "").trim().toLowerCase(),
-    );
+      const signedValue = String(
+        gatewayWebhook.signature_value ?? cfg.signature_value ?? rawBody,
+      );
+      const expected = await hmac(
+        secret,
+        signedValue === rawBody ? rawBody : signedValue,
+      );
+      valid = safe(
+        expected,
+        supplied.replace(/^sha256=/i, "").trim().toLowerCase(),
+      );
     }
   }
 
