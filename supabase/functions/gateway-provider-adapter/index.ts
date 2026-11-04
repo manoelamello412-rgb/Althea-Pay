@@ -180,6 +180,34 @@ async function sigiloPay(operation:Operation,b:O,c:O,gid:string){
 
     const id=str(data.transactionId);
     if(!id)return out({ok:false,error:"sigilopay_transaction_id_missing"},502);
+    const webhookToken=str(data.webhookToken);
+    if(!webhookToken)
+      return out({ok:false,error:"sigilopay_webhook_token_missing"},502);
+    
+    const hashBytes=await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(webhookToken)
+    );
+    
+    const tokenHash=Array.from(new Uint8Array(hashBytes))
+      .map(x=>x.toString(16).padStart(2,"0"))
+      .join("");
+    
+    const db=createClient(
+      su,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      {auth:{persistSession:false}}
+    );
+    
+    const saved=await db.from("sigilopay_webhook_tokens").upsert({
+      gateway_id:gid,
+      transaction_id:id,
+      token_hash:tokenHash
+    },{onConflict:"gateway_id,transaction_id"});
+    
+    if(saved.error)
+      return out({ok:false,error:"sigilopay_webhook_token_storage_failed"},502);
+    
 
     const providerStatus=str(data.transactionStatus??(data.status==="OK"?"PENDING":data.status));
     const pix=obj(data.pix)?data.pix:{};
