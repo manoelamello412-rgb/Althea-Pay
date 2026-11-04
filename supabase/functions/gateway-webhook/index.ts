@@ -115,6 +115,18 @@ Deno.serve(async (request) => {
   }
 
   const provider = String(gateway.data.provider).toLowerCase();
+  const sigiloCredentials =
+    provider === "sigilopay"
+      ? await admin.rpc("resolve_gateway_credential_for_gateway", {
+          p_gateway_id: gatewayId,
+        })
+      : null;
+  
+  if (provider === "sigilopay") {
+    if (sigiloCredentials?.error || !sigiloCredentials?.data) {
+      return json({ error: "sigilopay_credentials_unavailable" }, 503);
+    }
+  }
   const secretResult = provider === "sigilopay"
     ? { data: null, error: null }
     : await admin.rpc("resolve_gateway_webhook_secret", {
@@ -183,6 +195,110 @@ Deno.serve(async (request) => {
     valid = safe(hash, stored.data.token_hash);
   
     if (valid) {
+      const event = String(payload.event ?? "").trim().toUpperCase();
+      const status = String(transaction?.status ?? "").trim().toUpperCase();
+    
+      const allowedEvents = [
+        "TRANSACTION_PAID",
+        "TRANSACTION_CREATED",
+        "TRANSACTION_CANCELED",
+        "TRANSACTION_REFUNDED",
+        "TRANSACTION_CHARGED_BACK",
+      ];
+    
+      if (!allowedEvents.includes(event)) {
+        return json({ error: "invalid_sigilopay_event" }, 400);
+      }
+    
+      const expectedStatuses: Record<string, string[]> = {
+        TRANSACTION_PAID: ["COMPLETED"],
+        TRANSACTION_CREATED: ["CREATED", "PENDING"],
+        TRANSACTION_CANCELED: ["CANCELED", "CANCELLED"],
+        TRANSACTION_REFUNDED: ["REFUNDED"],
+        TRANSACTION_CHARGED_BACK: ["CHARGED_BACK", "CHARGEBACK"],
+      };
+      
+      if (!expectedStatuses[event]?.includes(status)) {
+        return json({ error: "sigilopay_status_mismatch" }, 400);
+      }
+      
+      if (event === "TRANSACTION_PAID") {
+  const credentialResult = sigiloCredentials?.data;
+  const credentials =
+    rec(credentialResult) && rec(credentialResult.credentials)
+      ? credentialResult.credentials
+      : credentialResult;
+
+  if (!rec(credentials)) {
+    return json({ error: "sigilopay_credentials_invalid" }, 503);
+  }
+
+  const publicKey = String(
+    credentials.client_id ?? credentials.public_key ?? "",
+  ).trim();
+
+  const secretKey = String(credentials.client_secret ?? "").trim();
+
+  if (!publicKey || !secretKey) {
+    return json({ error: "sigilopay_credentials_missing" }, 503);
+  }
+
+  let verification: Response;
+
+  try {
+    verification = await fetch(
+      `https://app.sigilopay.com.br/api/v1/gateway/transactions?id=${encodeURIComponent(transactionId)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "x-public-key": publicKey,
+          "x-secret-key": secretKey,
+        },
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+  } catch {
+    return json({ error: "sigilopay_verification_unavailable" }, 503);
+  }
+
+  if (!verification.ok) {
+    return json({ error: "sigilopay_verification_failed" }, 503);
+  }
+
+      const verifiedData: unknown = await verification.json().catch(() => null);
+    
+      if (!rec(verifiedData)) {
+        return json({ error: "sigilopay_invalid_verification_response" }, 503);
+      }
+    
+      const verifiedId = String(verifiedData.id ?? "").trim();
+      const verifiedStatus = String(verifiedData.status ?? "").trim().toUpperCase();
+    
+      if (verifiedId !== transactionId || verifiedStatus !== "COMPLETED") {
+        return json({ error: "sigilopay_payment_not_confirmed" }, 409);
+      }
+      const verifiedAmount = Number(verifiedData.amount);
+      const verifiedCurrency = String(verifiedData.currency ?? "")
+        .trim()
+        .toUpperCase();
+      
+      if (
+        !Number.isFinite(verifiedAmount) ||
+        verifiedAmount <= 0 ||
+        verifiedCurrency !== "BRL"
+      ) {
+        return json({ error: "sigilopay_invalid_payment_amount" }, 503);
+      }
+    
+      payload.transaction = {
+        ...transaction,
+        id: verifiedId,
+        status: verifiedStatus,
+        amount: verifiedData.amount,
+        currency: verifiedData.currency,
+      };
+    }
       delete payload.token;
     }
   
@@ -317,10 +433,12 @@ Deno.serve(async (request) => {
       : "";
 
   const eventId = (
-    request.headers.get("x-provider-event-id") ??
-    (sigiloTransactionId && sigiloEvent
+    provider === "sigilopay"
       ? `${sigiloTransactionId}:${sigiloEvent}`
-      : String(first(payload, ["id", "event_id", "eventId"]) ?? ""))
+      : (
+          request.headers.get("x-provider-event-id") ??
+          String(first(payload, ["id", "event_id", "eventId"]) ?? "")
+        )
   ).trim();
 
   if (!eventId || eventId.length > 300) {
