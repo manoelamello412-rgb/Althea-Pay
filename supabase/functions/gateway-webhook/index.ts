@@ -115,10 +115,24 @@ Deno.serve(async (request) => {
   }
 
   const provider = String(gateway.data.provider).toLowerCase();
-  const secretResult = await admin.rpc("resolve_gateway_webhook_secret", {
-    p_gateway_id: gatewayId,
-  });
-  if (secretResult.error || !secretResult.data) {
+  const sigiloCredentials =
+    provider === "sigilopay"
+      ? await admin.rpc("resolve_gateway_credential_for_gateway", {
+          p_gateway_id: gatewayId,
+        })
+      : null;
+  
+  if (provider === "sigilopay") {
+    if (sigiloCredentials?.error || !sigiloCredentials?.data) {
+      return json({ error: "sigilopay_credentials_unavailable" }, 503);
+    }
+  }
+  const secretResult = provider === "sigilopay"
+    ? { data: null, error: null }
+    : await admin.rpc("resolve_gateway_webhook_secret", {
+        p_gateway_id: gatewayId,
+      });
+  if (provider !== "sigilopay" && (secretResult.error || !secretResult.data)) {
     return json({ error: "webhook_secret_not_configured" }, 503);
   }
 
@@ -138,7 +152,181 @@ Deno.serve(async (request) => {
   }
 
   let valid = false;
-  if (provider === "stripe") {
+
+  if (provider === "sigilopay") {
+    const transaction = rec(payload.transaction)
+      ? payload.transaction
+      : null;
+  
+    const transactionId = transaction
+      ? String(transaction.id ?? "").trim()
+      : "";
+  
+    const token = typeof payload.token === "string"
+      ? payload.token.trim()
+      : "";
+  
+    if (!transactionId || !token) {
+      return json({ error: "invalid_sigilopay_webhook" }, 401);
+    }
+  
+    const stored = await admin
+      .from("sigilopay_webhook_tokens")
+      .select("token_hash")
+      .eq("gateway_id", gatewayId)
+      .eq("transaction_id", transactionId)
+      .maybeSingle();
+  
+    if (stored.error) {
+      return json({ error: "sigilopay_token_lookup_failed" }, 503);
+    }
+  
+    if (!stored.data) {
+      return json({ error: "invalid_sigilopay_token" }, 401);
+    }
+  
+    const hash = hex(
+      await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(token),
+      ),
+    );
+  
+    valid = safe(hash, stored.data.token_hash);
+  
+    if (valid) {
+      const event = String(payload.event ?? "").trim().toUpperCase();
+      const status = String(transaction?.status ?? "").trim().toUpperCase();
+    
+      const allowedEvents = [
+        "TRANSACTION_PAID",
+        "TRANSACTION_CREATED",
+        "TRANSACTION_CANCELED",
+        "TRANSACTION_REFUNDED",
+        "TRANSACTION_CHARGED_BACK",
+      ];
+    
+      if (!allowedEvents.includes(event)) {
+        return json({ error: "invalid_sigilopay_event" }, 400);
+      }
+    
+      const expectedStatuses: Record<string, string[]> = {
+        TRANSACTION_PAID: ["COMPLETED"],
+        TRANSACTION_CREATED: ["CREATED", "PENDING"],
+        TRANSACTION_CANCELED: ["CANCELED", "CANCELLED"],
+        TRANSACTION_REFUNDED: ["REFUNDED"],
+        TRANSACTION_CHARGED_BACK: ["CHARGED_BACK", "CHARGEBACK"],
+      };
+      
+      if (!expectedStatuses[event]?.includes(status)) {
+        return json({ error: "sigilopay_status_mismatch" }, 400);
+      }
+      
+      if (event === "TRANSACTION_PAID") {
+  const credentialResult = sigiloCredentials?.data;
+  const credentials =
+    rec(credentialResult) && rec(credentialResult.credentials)
+      ? credentialResult.credentials
+      : credentialResult;
+
+  if (!rec(credentials)) {
+    return json({ error: "sigilopay_credentials_invalid" }, 503);
+  }
+
+  const publicKey = String(
+    credentials.client_id ?? credentials.public_key ?? "",
+  ).trim();
+
+  const secretKey = String(credentials.client_secret ?? "").trim();
+
+  if (!publicKey || !secretKey) {
+    return json({ error: "sigilopay_credentials_missing" }, 503);
+  }
+
+  let verification: Response;
+
+  try {
+    verification = await fetch(
+      `https://app.sigilopay.com.br/api/v1/gateway/transactions?id=${encodeURIComponent(transactionId)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "x-public-key": publicKey,
+          "x-secret-key": secretKey,
+        },
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+  } catch {
+    return json({ error: "sigilopay_verification_unavailable" }, 503);
+  }
+
+  if (!verification.ok) {
+    return json({ error: "sigilopay_verification_failed" }, 503);
+  }
+
+      const verifiedData: unknown = await verification.json().catch(() => null);
+    
+      if (!rec(verifiedData)) {
+        return json({ error: "sigilopay_invalid_verification_response" }, 503);
+      }
+    
+      const verifiedId = String(verifiedData.id ?? "").trim();
+      const verifiedStatus = String(verifiedData.status ?? "").trim().toUpperCase();
+    
+      if (verifiedId !== transactionId || verifiedStatus !== "COMPLETED") {
+        return json({ error: "sigilopay_payment_not_confirmed" }, 409);
+      }
+      const verifiedAmount = Number(verifiedData.amount);
+      const verifiedCurrency = String(verifiedData.currency ?? "")
+        .trim()
+        .toUpperCase();
+      
+      if (
+        !Number.isFinite(verifiedAmount) ||
+        verifiedAmount <= 0 ||
+        verifiedCurrency !== "BRL"
+      ) {
+        return json({ error: "sigilopay_invalid_payment_amount" }, 503);
+      }
+      const original = await admin
+        .from("gateway_transactions")
+        .select("amount,currency")
+        .eq("gateway_id", gatewayId)
+        .eq("external_id", transactionId)
+        .maybeSingle();
+      
+      if (original.error || !original.data) {
+        return json({ error: "sigilopay_original_transaction_not_found" }, 503);
+      }
+      
+      const expectedAmount = Number(original.data.amount);
+      const expectedCurrency = String(original.data.currency ?? "")
+        .trim()
+        .toUpperCase();
+      
+      if (
+        !Number.isFinite(expectedAmount) ||
+        Math.round(expectedAmount * 100) !== Math.round(verifiedAmount * 100) ||
+        expectedCurrency !== verifiedCurrency
+      ) {
+        return json({ error: "sigilopay_payment_amount_mismatch" }, 409);
+      }
+    
+      payload.transaction = {
+        ...transaction,
+        id: verifiedId,
+        status: verifiedStatus,
+        amount: verifiedData.amount,
+        currency: verifiedData.currency,
+      };
+    }
+      delete payload.token;
+    }
+  
+  } else if (provider === "stripe") {
+  
     const header = request.headers.get("stripe-signature") ?? "";
     const pairs = Object.fromEntries(
       header.split(",").map((x) => {
@@ -252,10 +440,30 @@ Deno.serve(async (request) => {
 
   if (!valid) return json({ error: "invalid_signature" }, 401);
 
+  
+  const sigiloTransaction =
+    provider === "sigilopay" && rec(payload.transaction)
+      ? payload.transaction
+      : null;
+
+  const sigiloTransactionId = sigiloTransaction
+    ? String(sigiloTransaction.id ?? "").trim()
+    : "";
+
+  const sigiloEvent =
+    provider === "sigilopay"
+      ? String(payload.event ?? "").trim().toUpperCase()
+      : "";
+
   const eventId = (
-    request.headers.get("x-provider-event-id") ??
-    String(first(payload, ["id", "event_id", "eventId"]) ?? "")
+    provider === "sigilopay"
+      ? `${sigiloTransactionId}:${sigiloEvent}`
+      : (
+          request.headers.get("x-provider-event-id") ??
+          String(first(payload, ["id", "event_id", "eventId"]) ?? "")
+        )
   ).trim();
+
   if (!eventId || eventId.length > 300) {
     return json({ error: "provider_event_id_required" }, 400);
   }
@@ -284,9 +492,23 @@ Deno.serve(async (request) => {
     });
   }
 
-  const fields = extractGatewayWebhookFinancialFields(payload, {
+  
+  const financialPayload: JsonRecordLocal =
+    provider === "sigilopay" && rec(payload.transaction)
+      ? {
+          ...payload,
+          status: payload.transaction.status,
+          external_transaction_id: payload.transaction.id,
+          amount: payload.transaction.amount,
+          currency: payload.transaction.currency,
+          event_kind: payload.event,
+        }
+      : payload;
+
+  const fields = extractGatewayWebhookFinancialFields(financialPayload, {
     normalizeStatus,
   });
+
 
   if (!fields.status || !fields.externalTransactionId) {
     return json(

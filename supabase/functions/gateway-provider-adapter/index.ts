@@ -80,6 +80,213 @@ async function afiliaxpay(operation:Operation,b:O,c:O,gid:string){
   return out({ok:true,id,external_id:id,status:"pending",provider_status:"pendente",amount:Number(b.amount??0),currency:"BRL",action_type:"pix",qr_code:qr||null,copy_paste:first(p,["qrcode"])||null});
 }
 
+const SIGILOPAY_STATUS:O={
+  completed:"approved",
+  pending:"pending",
+  failed:"declined",
+  canceled:"declined",
+  cancelled:"declined",
+  refunded:"declined",
+  charged_back:"declined"
+};
+
+async function sigiloPay(operation:Operation,b:O,c:O,gid:string){
+  const publicKey=str(c.client_id??c.public_key);
+  const secretKey=str(c.client_secret);
+
+  if(!publicKey||!secretKey){
+    throw new Error("sigilopay_credentials_missing");
+  }
+
+  const base="https://app.sigilopay.com.br/api/v1";
+  const headers:Record<string,string>={
+    Accept:"application/json",
+    "x-public-key":publicKey,
+    "x-secret-key":secretKey
+  };
+
+  const statusOps=[
+    "payment_status",
+    "retrieve_payment",
+    "retrieve",
+    "status"
+  ];
+
+  let path:string;
+
+  if(operation==="health_check"){
+    path="/gateway/producer/credentials";
+  }else if(statusOps.includes(operation)){
+    const id=str(
+      b.external_transaction_id??
+      b.original_external_id??
+      b.provider_transaction_id
+    );
+
+    if(!id){
+      throw new Error("external_transaction_id_required");
+    }
+
+    path="/gateway/transactions?id="+encodeURIComponent(id);
+  }else if(operation==="create_payment"){
+        const amount=Number(b.amount);
+    const customer=obj(b.customer)?b.customer:{};
+    const pm=obj(b.payment_method)?b.payment_method:{};
+
+    if(str(pm.type)&&str(pm.type).toLowerCase()!=="pix")
+      throw new Error("payment_method_not_supported");
+    if(!Number.isFinite(amount)||amount<=0)
+      throw new Error("invalid_amount");
+
+    const identifier=str(b.transaction_id??b.idempotency_key);
+    if(!identifier)throw new Error("transaction_identifier_required");
+
+    const document=str(customer.document??customer.cpf);
+    if(!str(customer.name)||!str(customer.email)||!str(customer.phone)||!document)
+      throw new Error("sigilopay_customer_required");
+
+    const su=str(Deno.env.get("SUPABASE_URL"));
+    
+    if(!su||!gid)
+      throw new Error("sigilopay_callback_not_configured");
+    
+    const callbackUrl=
+      `${su.replace(/\/$/,"")}/functions/v1/gateway-webhook?gateway_id=${encodeURIComponent(gid)}`;
+    const payload={
+      identifier,
+      amount:Number(amount.toFixed(2)),
+      callbackUrl,
+      client:{
+        name:str(customer.name),
+        email:str(customer.email),
+        phone:str(customer.phone),
+        document
+      }
+    };
+
+    const target=await assertPublicHttpsUrl(base+"/gateway/pix/receive");
+    if(!target.ok)throw new Error(`target_not_allowed:${target.reason}`);
+
+    const response=await fetch(target.url,{
+      method:"POST",
+      headers:{...headers,"Content-Type":"application/json"},
+      body:JSON.stringify(payload),
+      signal:AbortSignal.timeout(15000)
+    });
+
+    const data=await parse(response);
+    if(!response.ok)
+      return out({ok:false,error:err(data,`sigilopay_http_${response.status}`)},response.status);
+
+    const id=str(data.transactionId);
+    if(!id)return out({ok:false,error:"sigilopay_transaction_id_missing"},502);
+    const webhookToken=str(data.webhookToken);
+    if(!webhookToken)
+      return out({ok:false,error:"sigilopay_webhook_token_missing"},502);
+    
+    const hashBytes=await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(webhookToken)
+    );
+    
+    const tokenHash=Array.from(new Uint8Array(hashBytes))
+      .map(x=>x.toString(16).padStart(2,"0"))
+      .join("");
+    
+    const db=createClient(
+      su,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      {auth:{persistSession:false}}
+    );
+    
+    const saved=await db.from("sigilopay_webhook_tokens").upsert({
+      gateway_id:gid,
+      transaction_id:id,
+      token_hash:tokenHash
+    },{onConflict:"gateway_id,transaction_id"});
+    
+    if(saved.error)
+      return out({ok:false,error:"sigilopay_webhook_token_storage_failed"},502);
+    
+
+    const providerStatus=str(data.transactionStatus??(data.status==="OK"?"PENDING":data.status));
+    const pix=obj(data.pix)?data.pix:{};
+
+    return out({
+      ok:true,
+      id,
+      external_id:id,
+      status:norm(providerStatus,SIGILOPAY_STATUS),
+      provider_status:providerStatus,
+      amount,
+      currency:"BRL",
+      action_type:"pix",
+      copy_paste:str(pix.qrCode??pix.copyPaste)||null,
+      response:{
+        transactionId:id,
+        transactionStatus:providerStatus,
+        pix
+      }
+    });
+  }else{
+    throw new Error("operation_not_supported");
+  }
+
+  const target=await assertPublicHttpsUrl(base+path);
+
+  if(!target.ok){
+    throw new Error(`target_not_allowed:${target.reason}`);
+  }
+
+  const response=await fetch(target.url,{
+    method:"GET",
+    headers,
+    signal:AbortSignal.timeout(15000)
+  });
+
+  const data=await parse(response);
+
+  if(!response.ok){
+    return out({
+      ok:false,
+      error:err(data,`sigilopay_http_${response.status}`),
+      failure_code:`http_${response.status}`
+    },response.status);
+  }
+
+  if(operation==="health_check"){
+    return out({
+      ok:true,
+      status:"approved",
+      provider_status:"credentials_valid"
+    });
+  }
+
+  const id=first(data,["id"]);
+  const providerStatus=first(data,["status"]);
+
+  if(!id||!providerStatus){
+    return out({
+      ok:false,
+      error:"sigilopay_invalid_status_response"
+    },502);
+  }
+
+  return out({
+    ok:true,
+    id,
+    external_id:id,
+    status:norm(providerStatus,SIGILOPAY_STATUS),
+    provider_status:providerStatus,
+    amount:Number(data.amount??0),
+    currency:first(data,["currency"],"BRL").toUpperCase(),
+    response:{
+      id,
+      status:providerStatus
+    }
+  });
+}
+
 async function generic(operation:Operation,b:O,c:O){
   const checked=await assertPublicHttpsUrl(str(c.base_url));if(!checked.ok)throw new Error(`target_not_allowed:${checked.reason}`);
   const statusOps=["payment_status","retrieve_payment","retrieve","status"];
@@ -108,5 +315,23 @@ Deno.serve(async req=>{
   if(op!=="health_check"&&!["connected","degraded"].includes(str(g.data.status).toLowerCase()))return out({ok:false,error:"gateway_not_operational"},422);
   const reg=await db.from("gateway_provider_registry").select("provider_key,adapter_key,operational,is_active").eq("provider_key",str(g.data.provider).toLowerCase()).eq("is_active",true).maybeSingle();if(reg.error)return out({ok:false,error:"provider_registry_lookup_failed"},500);if(!reg.data||reg.data.operational!==true)return out({ok:false,error:"provider_adapter_not_operational"},422);
   const cr=await db.rpc("resolve_gateway_credential_for_gateway",{p_gateway_id:gid});if(cr.error||!obj(cr.data))return out({ok:false,error:"provider_credential_missing"},422);const credential=obj(cr.data.credentials)?cr.data.credentials:cr.data;
-  try{if(str(g.data.provider).toLowerCase()==="mercado_pago")return await mercadoPago(op,b,credential);if(str(g.data.provider).toLowerCase()==="afiliaxpay")return await afiliaxpay(op,b,credential,gid);return await generic(op,b,credential)}catch(e){return out({ok:false,error:e instanceof Error?e.message:"gateway_adapter_error"},502)}
+  
+  try{
+    if(str(g.data.provider).toLowerCase()==="mercado_pago")
+      return await mercadoPago(op,b,credential);
+  
+    if(str(g.data.provider).toLowerCase()==="afiliaxpay")
+      return await afiliaxpay(op,b,credential,gid);
+  
+    if(str(g.data.provider).toLowerCase()==="sigilopay")
+      return await sigiloPay(op,b,credential,gid);
+  
+    return await generic(op,b,credential);
+  }catch(e){
+    return out({
+      ok:false,
+      error:e instanceof Error?e.message:"gateway_adapter_error"
+    },502);
+  }
+
 });
