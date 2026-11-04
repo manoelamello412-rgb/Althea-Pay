@@ -41,20 +41,20 @@ const validPayload = {
       payerName: 'Example Payer',
     },
     boletoInformation: null,
-  },
-  subscription: null,
-  orderItems: [{
-    id: 'item-1',
-    price: 100,
-    product: {
-      id: 'product-1',
-      name: 'Example Product',
-      externalId: 'EXT-1',
+    subscription: null,
+    orderItems: [{
+      id: 'item-1',
+      price: 100,
+      product: {
+        id: 'product-1',
+        name: 'Example Product',
+        externalId: 'EXT-1',
+      },
+    }],
+    trackProps: {
+      utm_source: 'facebook',
+      utm_campaign: 'launch',
     },
-  }],
-  trackProps: {
-    utm_source: 'facebook',
-    utm_campaign: 'launch',
   },
 }
 
