@@ -280,7 +280,10 @@ async function sigiloPay(operation:Operation,b:O,c:O,gid:string){
     provider_status:providerStatus,
     amount:Number(data.amount??0),
     currency:first(data,["currency"],"BRL").toUpperCase(),
-    response:data
+    response:{
+      id,
+      status:providerStatus
+    }
   });
 }
 
