@@ -122,7 +122,7 @@ const hasString = (value: UnknownRecord, key: string): boolean =>
   typeof value[key] === "string";
 
 const hasNumber = (value: UnknownRecord, key: string): boolean =>
-  typeof value[key] === "number" && Number.isFinite(value[key]);
+  typeof value[key] === "number" && Number.isFinite(Number(value[key]));
 
 const isIsoDate = (value: unknown): value is string =>
   typeof value === "string" &&
@@ -233,9 +233,10 @@ export const toSigiloPayQueuePayload = (
   const status = payload.transaction.status === "CHARGED_BACK"
     ? "chargeback"
     : payload.transaction.status.toLowerCase();
+  const { token: _webhookToken, ...safePayload } = payload;
 
   return {
-    ...payload,
+    ...safePayload,
     id: payload.transaction.id,
     external_transaction_id: payload.transaction.id,
     status,
