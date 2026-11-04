@@ -89,7 +89,16 @@ begin
   -- Only SigiloPay receives independent-transaction materialization.
   -- All other providers retain the original existing-transaction contract.
   if lower(trim(coalesce(v_event.provider,''))) = 'sigilopay' then
+    if lower(trim(coalesce(v_gateway.provider,''))) <> 'sigilopay' then
+      raise exception 'gateway_provider_mismatch' using errcode='42501';
+    end if;
+    if lower(trim(coalesce(p_next_status,''))) not in ('approved','pending','failed','refunded','chargeback') then
+      raise exception 'invalid_webhook_status' using errcode='22023';
+    end if;
     v_payload := coalesce(v_event.payload,'{}'::jsonb);
+    if v_payload->>'event' is distinct from 'TRANSACTION_CREATED' then
+      raise exception 'sigilopay_event_type_unsupported' using errcode='22023';
+    end if;
     v_transaction := coalesce(v_payload->'transaction','{}'::jsonb);
     v_client := coalesce(v_payload->'client','{}'::jsonb);
     v_track := coalesce(v_payload->'trackProps',v_transaction->'trackProps','{}'::jsonb);
