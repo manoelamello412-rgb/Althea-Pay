@@ -1,6 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
+  parseSigiloPayTransactionCreatedPayload,
+  toSigiloPayQueuePayload,
+} from "../_shared/sigilopay-webhook.ts";
+import {
   extractGatewayWebhookFinancialFields,
   isGatewayWebhookRecord,
   normalizeGatewayWebhookStatus,
@@ -115,14 +119,6 @@ Deno.serve(async (request) => {
   }
 
   const provider = String(gateway.data.provider).toLowerCase();
-  const secretResult = await admin.rpc("resolve_gateway_webhook_secret", {
-    p_gateway_id: gatewayId,
-  });
-  if (secretResult.error || !secretResult.data) {
-    return json({ error: "webhook_secret_not_configured" }, 503);
-  }
-
-  const secret = String(secretResult.data);
   const rawBody = await request.text();
   if (rawBody.length > 1024 * 1024) {
     return json({ error: "payload_too_large" }, 413);
@@ -138,7 +134,36 @@ Deno.serve(async (request) => {
   }
 
   let valid = false;
-  if (provider === "stripe") {
+  let sigiloPayPayload: ReturnType<typeof parseSigiloPayTransactionCreatedPayload> = null;
+
+  if (provider === "sigilopay") {
+    const expectedToken = Deno.env.get("GATEWAY_WEBHOOK_TOKEN") ?? "";
+    if (!expectedToken) return json({ error: "webhook_token_not_configured" }, 503);
+    if (!safe(expectedToken, String(payload.token ?? ""))) {
+      return json({ error: "invalid_token" }, 401);
+    }
+
+    sigiloPayPayload = parseSigiloPayTransactionCreatedPayload(payload);
+    if (!sigiloPayPayload) {
+      return json({ error: "invalid_transaction_created_payload" }, 422);
+    }
+
+    if (sigiloPayPayload.event !== "TRANSACTION_CREATED") {
+      return json({ error: "unsupported_event" }, 422);
+    }
+
+    payload = toSigiloPayQueuePayload(sigiloPayPayload) as JsonRecordLocal;
+    valid = true;
+  } else {
+    const secretResult = await admin.rpc("resolve_gateway_webhook_secret", {
+      p_gateway_id: gatewayId,
+    });
+    if (secretResult.error || !secretResult.data) {
+      return json({ error: "webhook_secret_not_configured" }, 503);
+    }
+    const secret = String(secretResult.data);
+
+    if (provider === "stripe") {
     const header = request.headers.get("stripe-signature") ?? "";
     const pairs = Object.fromEntries(
       header.split(",").map((x) => {
@@ -199,7 +224,7 @@ Deno.serve(async (request) => {
       ),
       v1.toLowerCase(),
     );
-  } else {
+    } else {
     const registry = await admin
       .from("gateway_provider_registry")
       .select("webhook_config,is_active,operational")
@@ -248,14 +273,17 @@ Deno.serve(async (request) => {
       expected,
       supplied.replace(/^sha256=/i, "").trim().toLowerCase(),
     );
+    }
   }
 
   if (!valid) return json({ error: "invalid_signature" }, 401);
 
   const eventId = (
-    request.headers.get("x-provider-event-id") ??
-    String(first(payload, ["id", "event_id", "eventId"]) ?? "")
-  ).trim();
+    provider === "sigilopay"
+      ? sigiloPayPayload?.transaction.id
+      : request.headers.get("x-provider-event-id") ??
+        String(first(payload, ["id", "event_id", "eventId"]) ?? "")
+  )?.trim() ?? "";
   if (!eventId || eventId.length > 300) {
     return json({ error: "provider_event_id_required" }, 400);
   }
@@ -282,6 +310,19 @@ Deno.serve(async (request) => {
       event_id: eventId,
       webhook_id: row?.webhook_id ?? null,
     });
+  }
+
+  // SigiloPay TRANSACTION_CREATED is durably queued here. The existing
+  // gateway-webhook-processor handles it asynchronously; no outbound call is made.
+  if (provider === "sigilopay") {
+    return json({
+      ok: true,
+      accepted: true,
+      processed: false,
+      event: "TRANSACTION_CREATED",
+      event_id: eventId,
+      webhook_id: row?.webhook_id ?? null,
+    }, 202);
   }
 
   const fields = extractGatewayWebhookFinancialFields(payload, {
