@@ -233,7 +233,9 @@ export const toSigiloPayQueuePayload = (
   const status = payload.transaction.status === "CHARGED_BACK"
     ? "chargeback"
     : payload.transaction.status.toLowerCase();
-  const { token: _webhookToken, ...safePayload } = payload;
+  const safePayload = Object.fromEntries(
+    Object.entries(payload).filter(([key]) => key !== "token"),
+  );
 
   return {
     ...safePayload,
