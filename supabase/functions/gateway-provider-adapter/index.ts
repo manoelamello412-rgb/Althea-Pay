@@ -131,6 +131,52 @@ async function sigilopay(operation:Operation,b:O,c:O,gid:string){
   return out({ok:true,id,external_id:id,status:"pending",provider_status:ps||"PENDING",amount:Number(b.amount??0),currency:"BRL",action_type:"pix",qr_code:qr,copy_paste:code,expires_at:first(p,["expiresAt","pixInformation.expiresAt"])||null});
 }
 
+// ImperiumPay: auth por headers X-Api-Public-Key/X-Api-Private-Key; valores em CENTAVOS (o resto do sistema usa reais).
+// O postbackUrl é por venda e leva o token na query. Sem Idempotency-Key documentada: nunca repetir o POST aqui.
+// falha e med ficam pending: ambos podem voltar a PAGO, e failed/chargeback são terminais no banco.
+const IMPERIUM_STATUS:O={pago:"approved",pendente:"pending",em_processamento:"pending",med:"pending",falha:"pending",cancelado:"declined",recusado:"declined",estornado:"declined",chargeback:"declined"};
+async function imperiumpay(operation:Operation,b:O,c:O,gid:string){
+  const pk=str(c.public_key),sk=str(c.private_key);if(!pk||!sk)throw new Error("provider_credentials_missing");
+  const base="https://api.imperiumpay.com.br";
+  const external=str(b.external_transaction_id??b.original_external_id??b.provider_transaction_id);
+  const headers:Record<string,string>={Accept:"application/json","X-Api-Public-Key":pk,"X-Api-Private-Key":sk};
+  const call=async(path:string,payload?:O)=>{const init:RequestInit={method:payload?"POST":"GET",headers:{...headers},signal:AbortSignal.timeout(15000)};if(payload){(init.headers as Record<string,string>)["Content-Type"]="application/json";init.body=JSON.stringify(payload)}const r=await fetch(base+path,init);return{r,p:await parse(r)}};
+  const fail=(r:Response,p:O)=>out({ok:false,error:err(p,`gateway_http_${r.status}`),failure_code:first(p,["error.code"],`http_${r.status}`)},r.status);
+  if(operation==="health_check"){
+    // A resposta tem CPF/CNPJ e endereço do seller: não repassar.
+    const{r,p}=await call("/api/seller");if(!r.ok)return fail(r,p);
+    if((get(p,"permissions.isPixAvailable")??get(p,"data.permissions.isPixAvailable"))===false)return out({ok:false,error:"pix_not_enabled_for_account",failure_code:"pix_not_enabled"},422);
+    return out({ok:true,status:"approved",provider_status:"healthy"});
+  }
+  if(["payment_status","retrieve_payment","retrieve","status"].includes(operation)){
+    if(!external)throw new Error("external_transaction_id_required");
+    const{r,p}=await call(`/api/transactions/${encodeURIComponent(external)}`);if(!r.ok)return fail(r,p);
+    const ps=first(p,["status","data.status"],"");return out({ok:true,id:external,external_id:external,status:norm(ps,IMPERIUM_STATUS),provider_status:ps,amount:Number(b.amount??0),currency:"BRL"});
+  }
+  if(operation!=="create_payment")throw new Error("operation_not_supported");
+  const pm=obj(b.payment_method)?b.payment_method:{};if(str(pm.type)&&str(pm.type)!=="pix")throw new Error("payment_method_not_supported");
+  const amount=Number(b.amount??0);if(!Number.isFinite(amount)||amount<=0)throw new Error("invalid_amount");
+  const cents=Math.round(amount*100);
+  const cu=obj(b.customer)?b.customer:{},details=obj(pm.details)?pm.details:{};
+  const digits=(v:unknown)=>String(v??"").replace(/\D/g,"");
+  const doc=digits(details.document??cu.document??cu.cpf),phone=digits(cu.phone).replace(/^55(?=\d{10,11}$)/,"");
+  if(doc.length!==11&&doc.length!==14)throw new Error("customer_document_required");
+  const name=str(cu.name),email=str(cu.email);if(!name||!email)throw new Error("customer_name_email_required");
+  const hook=str(c.webhook_secret),su=str(Deno.env.get("SUPABASE_URL"));if(!hook||!su)throw new Error("webhook_postback_not_configured");
+  const customer:O={name,email,document:{type:doc.length===11?"cpf":"cnpj",number:doc}};if(phone.length>=10)customer.phone=phone;
+  const md=obj(b.metadata)?b.metadata:{};
+  // tangible:false porque tangible:true exige shipping, que o checkout não coleta.
+  const payload:O={amount:cents,paymentMethod:"PIX",customer,items:[{title:(str(md.product_name??md.description)||"Pedido").slice(0,255),unitPrice:cents,quantity:1,tangible:false}],metadata:{provider:"AltheaPay",orderId:str(b.transaction_id)},postbackUrl:`${su.replace(/\/$/,"")}/functions/v1/gateway-webhook?gateway_id=${encodeURIComponent(gid)}&token=${encodeURIComponent(hook)}`};
+  const{r,p}=await call("/api/sales",payload);if(!r.ok)return fail(r,p);
+  const nested=get(p,"data.sale"),s:O=obj(p.sale)?p.sale:obj(nested)?nested:{};
+  const id=first(s,["id"]),ps=first(s,["status"],"").toUpperCase(),code=first(s,["payment.pix.key"]),img=first(s,["payment.pix.qrCodeBase64"]);
+  // Recusa também vem como 201: o que decide é sale.status.
+  if(["RECUSADO","FALHA","CANCELADO","ESTORNADO"].includes(ps))return out({ok:false,error:"provider_declined",failure_code:"declined",id:id||null,status:"declined",provider_status:ps},402);
+  if(!id||!code)return out({ok:false,error:!id?"provider_transaction_id_missing":"provider_pix_code_missing"},502);
+  const qr=img.startsWith("data:image/")?img:await QRCode.toDataURL(code,{margin:1,width:320}).catch(()=>null);
+  return out({ok:true,id,external_id:id,status:"pending",provider_status:ps||"PENDENTE",amount,currency:"BRL",action_type:"pix",qr_code:qr,copy_paste:code,expires_at:first(s,["payment.pix.expiresAt"])||null});
+}
+
 async function generic(operation:Operation,b:O,c:O){
   const checked=await assertPublicHttpsUrl(str(c.base_url));if(!checked.ok)throw new Error(`target_not_allowed:${checked.reason}`);
   const statusOps=["payment_status","retrieve_payment","retrieve","status"];
@@ -159,5 +205,5 @@ Deno.serve(async req=>{
   if(op!=="health_check"&&!["connected","degraded"].includes(str(g.data.status).toLowerCase()))return out({ok:false,error:"gateway_not_operational"},422);
   const reg=await db.from("gateway_provider_registry").select("provider_key,adapter_key,operational,is_active").eq("provider_key",str(g.data.provider).toLowerCase()).eq("is_active",true).maybeSingle();if(reg.error)return out({ok:false,error:"provider_registry_lookup_failed"},500);if(!reg.data||reg.data.operational!==true)return out({ok:false,error:"provider_adapter_not_operational"},422);
   const cr=await db.rpc("resolve_gateway_credential_for_gateway",{p_gateway_id:gid});if(cr.error||!obj(cr.data))return out({ok:false,error:"provider_credential_missing"},422);const credential=obj(cr.data.credentials)?cr.data.credentials:cr.data;
-  try{if(str(g.data.provider).toLowerCase()==="mercado_pago")return await mercadoPago(op,b,credential);if(str(g.data.provider).toLowerCase()==="afiliaxpay")return await afiliaxpay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="sigilopay")return await sigilopay(op,b,credential,gid);return await generic(op,b,credential)}catch(e){return out({ok:false,error:e instanceof Error?e.message:"gateway_adapter_error"},502)}
+  try{if(str(g.data.provider).toLowerCase()==="mercado_pago")return await mercadoPago(op,b,credential);if(str(g.data.provider).toLowerCase()==="afiliaxpay")return await afiliaxpay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="sigilopay")return await sigilopay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="imperiumpay")return await imperiumpay(op,b,credential,gid);return await generic(op,b,credential)}catch(e){return out({ok:false,error:e instanceof Error?e.message:"gateway_adapter_error"},502)}
 });

@@ -49,6 +49,23 @@ describe('Pix retry after the adapter never produced a charge', () => {
     expect(webhook).toContain('TRANSACTION_PAID: ["approved", "payment"]')
     expect(webhook).toContain('TRANSACTION_REFUNDED: ["refunded", "refund"]')
     expect(webhook).toContain('TRANSACTION_CHARGED_BACK: ["chargeback", "chargeback"]')
-    expect(action).toContain("p_bucket_key: `provider-status:sigilopay:${tx.id}`, p_limit: 1, p_window_seconds: 60")
+    expect(action).toContain("statusProvider === 'sigilopay' || statusProvider === 'imperiumpay'")
+    expect(action).toContain("p_bucket_key: `provider-status:${statusProvider}:${tx.id}`, p_limit: 1, p_window_seconds: 60")
+  })
+
+  it('ImperiumPay: amounts in cents at both borders, and statuses that can return to PAGO stay non-terminal', () => {
+    expect(adapter).toContain('const base="https://api.imperiumpay.com.br"')
+    expect(adapter).toContain('const cents=Math.round(amount*100)')
+    expect(adapter).toContain('falha:"pending"')
+    expect(adapter).toContain('med:"pending"')
+    expect(webhook).toContain('payload.amount = cents / 100')
+    expect(webhook).toContain('PAGO: ["approved", "payment"]')
+    const statuses = webhook.slice(webhook.indexOf('const IMPERIUM_STATUSES'), webhook.indexOf('const normalizeStatus'))
+    expect(statuses).not.toContain('FALHA:')
+    expect(statuses).not.toContain('MED:')
+  })
+
+  it('adapter accepts the gateway id from the header gateway-attempt-recovery sends', () => {
+    expect(adapter).toContain('req.headers.get("x-althea-gateway-id")')
   })
 })

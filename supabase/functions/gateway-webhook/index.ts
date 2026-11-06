@@ -76,6 +76,16 @@ const SIGILO_EVENTS: Record<string, [GatewayTransactionStatus, string]> = {
   CHARGEBACK_CREATED: ["chargeback", "chargeback"],
 };
 
+// FALHA e MED ficam de fora de propósito: podem voltar a PAGO, e failed/chargeback são terminais no banco.
+// ponytail: durante um MED a venda segue aprovada; MED perdido chega como ESTORNADO. Mostrar o MED no painel exige permitir chargeback -> approved.
+const IMPERIUM_STATUSES: Record<string, [GatewayTransactionStatus, string]> = {
+  PAGO: ["approved", "payment"],
+  CANCELADO: ["failed", "payment"],
+  RECUSADO: ["failed", "payment"],
+  ESTORNADO: ["refunded", "refund"],
+  CHARGEBACK: ["chargeback", "chargeback"],
+};
+
 const normalizeStatus = (value: unknown): GatewayTransactionStatus | null => {
   const canonical = normalizeGatewayWebhookStatus(value);
   if (canonical) return canonical;
@@ -202,6 +212,26 @@ Deno.serve(async (request) => {
       payload.event_kind = mapped[1];
       payload.id = `${external}:${ev === "CHARGEBACK_CREATED" ? "TRANSACTION_CHARGED_BACK" : ev}`;
       if (payload.currency == null && tx.currency != null) payload.currency = tx.currency;
+    }
+  } else if (provider === "imperiumpay") {
+    // ponytail: token secreto na query do postbackUrl (igual AfiliaxPay/SigiloPay). O X-Signature exige chave do suporte
+    // e a doc assina o JSON reserializado; validar sobre rawBody quando a chave existir.
+    valid = safe(secret, url.searchParams.get("token") ?? "");
+    if (valid) {
+      const st = String(payload.status ?? "").trim().toUpperCase();
+      const mapped = IMPERIUM_STATUSES[st];
+      if (!mapped) return json({ ok: true, ignored: st || "unknown_status" });
+      // id é o sale.id que guardamos; externalTransactionId é o id da adquirente e não casa com a venda.
+      const external = String(payload.id ?? "").trim();
+      if (!external) return json({ error: "transaction_id_missing" }, 400);
+      payload.external_transaction_id = external;
+      payload.status = mapped[0];
+      payload.event_kind = mapped[1];
+      payload.id = `${external}:${st}`;
+      // amount vem em centavos como string; o banco grava reembolso e disputa em reais.
+      const cents = Number(payload.amount);
+      if (Number.isFinite(cents) && cents > 0) payload.amount = cents / 100;
+      else delete payload.amount;
     }
   } else if (provider === "mercado_pago") {
     const signature = request.headers.get("x-signature") ?? "";
