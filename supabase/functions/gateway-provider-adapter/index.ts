@@ -135,47 +135,284 @@ async function sigilopay(operation:Operation,b:O,c:O,gid:string){
 // O postbackUrl é por venda e leva o token na query. Sem Idempotency-Key documentada: nunca repetir o POST aqui.
 // falha e med ficam pending: ambos podem voltar a PAGO, e failed/chargeback são terminais no banco.
 const IMPERIUM_STATUS:O={pago:"approved",pendente:"pending",em_processamento:"pending",med:"pending",falha:"pending",cancelado:"declined",recusado:"declined",estornado:"declined",chargeback:"declined"};
+
 async function imperiumpay(operation:Operation,b:O,c:O,gid:string){
-  const pk=str(c.public_key),sk=str(c.private_key);if(!pk||!sk)throw new Error("provider_credentials_missing");
+  const pk=str(c.public_key),sk=str(c.private_key);
+  if(!pk||!sk)throw new Error("provider_credentials_missing");
+
   const base="https://api.imperiumpay.com.br";
   const external=str(b.external_transaction_id??b.original_external_id??b.provider_transaction_id);
-  const headers:Record<string,string>={Accept:"application/json","X-Api-Public-Key":pk,"X-Api-Private-Key":sk};
-  const call=async(path:string,payload?:O)=>{const init:RequestInit={method:payload?"POST":"GET",headers:{...headers},signal:AbortSignal.timeout(15000)};if(payload){(init.headers as Record<string,string>)["Content-Type"]="application/json";init.body=JSON.stringify(payload)}const r=await fetch(base+path,init);return{r,p:await parse(r)}};
-  const fail=(r:Response,p:O)=>out({ok:false,error:err(p,`gateway_http_${r.status}`),failure_code:first(p,["error.code"],`http_${r.status}`)},r.status);
+  const headers:Record<string,string>={
+    Accept:"application/json",
+    "X-Api-Public-Key":pk,
+    "X-Api-Private-Key":sk
+  };
+
+  const call=async(path:string,payload?:O)=>{
+    const init:RequestInit={
+      method:payload?"POST":"GET",
+      headers:{...headers},
+      signal:AbortSignal.timeout(15000)
+    };
+    if(payload){
+      (init.headers as Record<string,string>)["Content-Type"]="application/json";
+      init.body=JSON.stringify(payload);
+    }
+    const r=await fetch(base+path,init);
+    return {r,p:await parse(r)};
+  };
+
+  const fail=(r:Response,p:O)=>out({
+    ok:false,
+    error:err(p,`gateway_http_${r.status}`),
+    failure_code:first(p,["error.code"],`http_${r.status}`)
+  },r.status);
+
+  const getSale=(p:O):O=>{
+    const sale=get(p,"sale");
+    const nested=get(p,"data.sale");
+    if(obj(sale))return sale;
+    if(obj(nested))return nested;
+    if(obj(p.data))return p.data;
+    return p;
+  };
+
+  const pixCode=(s:O)=>first(s,[
+    "payment.pix.key",
+    "payment.pix.copyPaste",
+    "payment.pix.copy_paste",
+    "pix.key",
+    "pix.copyPaste",
+    "pix.copy_paste",
+    "pix.emv",
+    "copy_paste"
+  ]);
+
+  const pixImage=(s:O)=>first(s,[
+    "payment.pix.qrCodeBase64",
+    "pix.qrCodeBase64"
+  ]);
+
+  const pixAction=async(code:string,img:string)=>{
+    return img.startsWith("data:image/")
+      ?img
+      :await QRCode.toDataURL(code,{
+        margin:1,
+        width:320
+      }).catch(()=>null);
+  };
+
   if(operation==="health_check"){
-    // A resposta tem CPF/CNPJ e endereço do seller: não repassar.
-    const{r,p}=await call("/api/seller");if(!r.ok)return fail(r,p);
-    if((get(p,"permissions.isPixAvailable")??get(p,"data.permissions.isPixAvailable"))===false)return out({ok:false,error:"pix_not_enabled_for_account",failure_code:"pix_not_enabled"},422);
-    return out({ok:true,status:"approved",provider_status:"healthy"});
+    const{r,p}=await call("/api/seller");
+    if(!r.ok)return fail(r,p);
+
+    if((get(p,"permissions.isPixAvailable")??
+        get(p,"data.permissions.isPixAvailable"))===false){
+      return out({
+        ok:false,
+        error:"pix_not_enabled_for_account",
+        failure_code:"pix_not_enabled"
+      },422);
+    }
+    return out({
+      ok:true,
+      status:"approved",
+      provider_status:"healthy"
+    });
   }
+
   if(["payment_status","retrieve_payment","retrieve","status"].includes(operation)){
     if(!external)throw new Error("external_transaction_id_required");
-    const{r,p}=await call(`/api/transactions/${encodeURIComponent(external)}`);if(!r.ok)return fail(r,p);
-    const ps=first(p,["status","data.status"],"");return out({ok:true,id:external,external_id:external,status:norm(ps,IMPERIUM_STATUS),provider_status:ps,amount:Number(b.amount??0),currency:"BRL"});
+
+    const{r,p}=await call(
+      `/api/transactions/${encodeURIComponent(external)}`
+    );
+    if(!r.ok)return fail(r,p);
+
+    const s=getSale(p);
+    const ps=first(s,["status"],"");
+    const code=pixCode(s);
+    const img=pixImage(s);
+
+    const result:O={
+      ok:true,
+      id:external,
+      external_id:external,
+      status:norm(ps,IMPERIUM_STATUS),
+      provider_status:ps,
+      amount:Number(b.amount??0),
+      currency:"BRL"
+    };
+
+    if(code){
+      result.action_type="pix";
+      result.copy_paste=code;
+      result.qr_code=await pixAction(code,img);
+      result.expires_at=first(s,[
+        "payment.pix.expiresAt",
+        "pix.expiresAt"
+      ])||null;
+    }
+
+    return out(result);
   }
-  if(operation!=="create_payment")throw new Error("operation_not_supported");
-  const pm=obj(b.payment_method)?b.payment_method:{};if(str(pm.type)&&str(pm.type)!=="pix")throw new Error("payment_method_not_supported");
-  const amount=Number(b.amount??0);if(!Number.isFinite(amount)||amount<=0)throw new Error("invalid_amount");
+
+  if(operation!=="create_payment"){
+    throw new Error("operation_not_supported");
+  }
+
+  const pm=obj(b.payment_method)?b.payment_method:{};
+  if(str(pm.type)&&str(pm.type)!=="pix"){
+    throw new Error("payment_method_not_supported");
+  }
+
+  const amount=Number(b.amount??0);
+  if(!Number.isFinite(amount)||amount<=0){
+    throw new Error("invalid_amount");
+  }
+
   const cents=Math.round(amount*100);
-  const cu=obj(b.customer)?b.customer:{},details=obj(pm.details)?pm.details:{};
+  const cu=obj(b.customer)?b.customer:{};
+  const details=obj(pm.details)?pm.details:{};
   const digits=(v:unknown)=>String(v??"").replace(/\D/g,"");
-  const doc=digits(details.document??cu.document??cu.cpf),phone=digits(cu.phone).replace(/^55(?=\d{10,11}$)/,"");
-  if(doc.length!==11&&doc.length!==14)throw new Error("customer_document_required");
-  const name=str(cu.name),email=str(cu.email);if(!name||!email)throw new Error("customer_name_email_required");
-  const hook=str(c.webhook_secret),su=str(Deno.env.get("SUPABASE_URL"));if(!hook||!su)throw new Error("webhook_postback_not_configured");
-  const customer:O={name,email,document:{type:doc.length===11?"cpf":"cnpj",number:doc}};if(phone.length>=10)customer.phone=phone;
+
+  const doc=digits(details.document??cu.document??cu.cpf);
+  const phone=digits(cu.phone).replace(/^55(?=\d{10,11}$)/,"");
+
+  if(doc.length!==11&&doc.length!==14){
+    throw new Error("customer_document_required");
+  }
+
+  const name=str(cu.name),email=str(cu.email);
+  if(!name||!email){
+    throw new Error("customer_name_email_required");
+  }
+
+  const hook=str(c.webhook_secret);
+  const su=str(Deno.env.get("SUPABASE_URL"));
+  if(!hook||!su){
+    throw new Error("webhook_postback_not_configured");
+  }
+
+  const customer:O={
+    name,
+    email,
+    document:{
+      type:doc.length===11?"cpf":"cnpj",
+      number:doc
+    }
+  };
+  if(phone.length>=10)customer.phone=phone;
+
   const md=obj(b.metadata)?b.metadata:{};
-  // tangible:false porque tangible:true exige shipping, que o checkout não coleta.
-  const payload:O={amount:cents,paymentMethod:"PIX",customer,items:[{title:(str(md.product_name??md.description)||"Pedido").slice(0,255),unitPrice:cents,quantity:1,tangible:false}],metadata:{provider:"AltheaPay",orderId:str(b.transaction_id)},postbackUrl:`${su.replace(/\/$/,"")}/functions/v1/gateway-webhook?gateway_id=${encodeURIComponent(gid)}&token=${encodeURIComponent(hook)}`};
-  const{r,p}=await call("/api/sales",payload);if(!r.ok)return fail(r,p);
-  const nested=get(p,"data.sale"),s:O=obj(p.sale)?p.sale:obj(nested)?nested:{};
-  const id=first(s,["id"]),ps=first(s,["status"],"").toUpperCase(),code=first(s,["payment.pix.key"]),img=first(s,["payment.pix.qrCodeBase64"]);
-  // Recusa também vem como 201: o que decide é sale.status.
-  if(["RECUSADO","FALHA","CANCELADO","ESTORNADO"].includes(ps))return out({ok:false,error:"provider_declined",failure_code:"declined",id:id||null,status:"declined",provider_status:ps},402);
-  if(!id||!code)return out({ok:false,error:!id?"provider_transaction_id_missing":"provider_pix_code_missing"},502);
-  const qr=img.startsWith("data:image/")?img:await QRCode.toDataURL(code,{margin:1,width:320}).catch(()=>null);
-  return out({ok:true,id,external_id:id,status:"pending",provider_status:ps||"PENDENTE",amount,currency:"BRL",action_type:"pix",qr_code:qr,copy_paste:code,expires_at:first(s,["payment.pix.expiresAt"])||null});
+
+  const payload:O={
+    amount:cents,
+    paymentMethod:"PIX",
+    customer,
+    items:[{
+      title:(str(md.product_name??md.description)||"Pedido").slice(0,255),
+      unitPrice:cents,
+      quantity:1,
+      tangible:false
+    }],
+    metadata:{
+      provider:"AltheaPay",
+      orderId:str(b.transaction_id)
+    },
+    postbackUrl:
+      `${su.replace(/\/$/,"")}/functions/v1/gateway-webhook`+
+      `?gateway_id=${encodeURIComponent(gid)}`+
+      `&token=${encodeURIComponent(hook)}`
+  };
+
+  // Apenas uma criação. Nunca repetir POST /api/sales aqui.
+  const{r,p}=await call("/api/sales",payload);
+  if(!r.ok)return fail(r,p);
+
+  const s=getSale(p);
+  const id=first(s,["id"])||first(p,["id","data.id"]);
+  const ps=first(s,["status"],"").toUpperCase();
+  let code=pixCode(s);
+  let img=pixImage(s);
+  let expires=first(s,[
+    "payment.pix.expiresAt",
+    "pix.expiresAt"
+  ]);
+
+  if(["RECUSADO","FALHA","CANCELADO","ESTORNADO"].includes(ps)){
+    return out({
+      ok:false,
+      error:"provider_declined",
+      failure_code:"declined",
+      id:id||null,
+      external_id:id||null,
+      status:"declined",
+      provider_status:ps
+    },402);
+  }
+
+  // Se a venda foi criada sem PIX, consultar a mesma venda.
+  // Nunca gerar outra cobrança nesta recuperação.
+  if(id&&!code){
+    try{
+      const recovered=await call(
+        `/api/transactions/${encodeURIComponent(id)}`
+      );
+      if(recovered.r.ok){
+        const detail=getSale(recovered.p);
+        code=pixCode(detail)||code;
+        img=pixImage(detail)||img;
+        expires=first(detail,[
+          "payment.pix.expiresAt",
+          "pix.expiresAt"
+        ])||expires;
+      }
+    }catch{
+      console.error("[IMPERIUM_PIX_RECOVERY] lookup_failed");
+    }
+  }
+
+  if(!id||!code){
+    console.error("[IMPERIUM_PIX_RECOVERY]",{
+      has_external_id:Boolean(id),
+      has_pix_code:Boolean(code),
+      provider_http_status:r.status
+    });
+
+    return out({
+      ok:false,
+      error:!id
+        ?"provider_transaction_id_missing"
+        :"provider_pix_code_missing",
+      failure_code:!id
+        ?"provider_transaction_id_missing"
+        :"provider_pix_code_missing",
+      id:id||null,
+      external_id:id||null,
+      status:"pending",
+      provider_status:ps||null,
+      requires_reconciliation:true
+    },502);
+  }
+
+  const qr=await pixAction(code,img);
+
+  return out({
+    ok:true,
+    id,
+    external_id:id,
+    status:"pending",
+    provider_status:ps||"PENDENTE",
+    amount,
+    currency:"BRL",
+    action_type:"pix",
+    qr_code:qr,
+    copy_paste:code,
+    expires_at:expires||null
+  });
 }
+
 
 async function generic(operation:Operation,b:O,c:O){
   const checked=await assertPublicHttpsUrl(str(c.base_url));if(!checked.ok)throw new Error(`target_not_allowed:${checked.reason}`);
