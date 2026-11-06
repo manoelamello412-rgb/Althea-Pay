@@ -71,8 +71,45 @@ export async function POST(request: Request) {
     if (TERMINAL_TRANSACTION_STATES.has(text(transaction.status))) return NextResponse.json({ ok: true, transaction: { id: transaction.id, status: transaction.status, amount: transaction.amount, currency: transaction.currency, gateway_id: transaction.gateway_id }, next: 'complete' })
     // Pending with an external id: the provider already holds the charge. Pending without one: the previous
     // adapter call never produced a charge (timeout, adapter down), so the customer's retry calls it again.
-    const retryingAdapter = text(transaction.status) === 'pending' && !text(transaction.external_id)
-    if (text(transaction.status) === 'pending' && !retryingAdapter) return NextResponse.json({ ok: true, transaction: { id: transaction.id, status: transaction.status, amount: transaction.amount, currency: transaction.currency, gateway_id: transaction.gateway_id }, next: 'awaiting_gateway' })
+    
+    // Uma resposta anterior pode ter criado uma venda mesmo sem external_id.
+    // Nunca interpretar external_id ausente como autorização para novo POST.
+    if (text(transaction.status) === 'pending') {
+      const { data: previousAttempts, error: attemptsLookupError } = await admin
+        .from('gateway_payment_attempts')
+        .select('id')
+        .eq('transaction_id', transaction.id)
+        .eq('gateway_id', transaction.gateway_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (attemptsLookupError) {
+        console.error('[ALTHEA-PAYMENTS-ATTEMPTS-LOOKUP]', attemptsLookupError)
+        return NextResponse.json({
+          ok: false,
+          code: 'PAYMENT_RECONCILIATION_REQUIRED',
+          transaction_id: transaction.id
+        }, { status: 503 })
+      }
+
+      if (text(transaction.external_id) || previousAttempts?.length) {
+        return NextResponse.json({
+          ok: true,
+          transaction: {
+            id: transaction.id,
+            status: transaction.status,
+            amount: transaction.amount,
+            currency: transaction.currency,
+            gateway_id: transaction.gateway_id,
+            external_id: transaction.external_id ?? null
+          },
+          action: null,
+          next: 'awaiting_gateway'
+        })
+      }
+    }
+
+    
 
     const internalSecret = text(process.env.ALTHEA_INTERNAL_SECRET); const supabaseUrl = text(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)
     if (!internalSecret || !supabaseUrl) { console.error('[ALTHEA-PAYMENTS-CONFIG] gateway execution secret/url is not configured'); return NextResponse.json({ ok: false, code: 'PAYMENT_PROCESSOR_NOT_CONFIGURED' }, { status: 503 }) }
@@ -82,12 +119,14 @@ export async function POST(request: Request) {
       const { id: selectedGatewayId, gateway } = routes[index]
       const hasFallback = index < routes.length - 1
       // <payment>:<gateway> like the orchestrator: guard_gateway_ambiguous_failover groups attempts by the part before the first ':'.
-      const attemptKey = `${idempotencyKey}:${selectedGatewayId}` + (retryingAdapter ? `:${crypto.randomUUID()}` : '')
+      
+      const attemptKey = `${idempotencyKey}:${selectedGatewayId}`
+
 
       if (text(pendingTransaction.gateway_id) !== selectedGatewayId || text(pendingTransaction.status) !== 'pending') {
         const expectedVersion = Number(pendingTransaction.version)
         const { data: boundTransaction, error: bindError } = await admin.rpc('bind_gateway_transaction_gateway', { p_transaction_id: pendingTransaction.id, p_user_id: session.user_id, p_gateway_id: selectedGatewayId, p_expected_version: Number.isFinite(expectedVersion) ? expectedVersion : null })
-        if (bindError || !boundTransaction) { console.error('[ALTHEA-PAYMENTS-BIND]', bindError); if (hasFallback) continue; return NextResponse.json({ ok: false, code: 'GATEWAY_BIND_FAILED' }, { status: 409 }) }
+        if (bindError || !boundTransaction) { console.error('[ALTHEA-PAYMENTS-BIND]', bindError); return NextResponse.json({ ok: false, code: 'GATEWAY_BIND_FAILED' }, { status: 409 }) }
         pendingTransaction = boundTransaction
         if (text(boundTransaction.status) !== 'pending') {
           const { data: pending, error: pendingError } = await admin.rpc('transition_gateway_transaction_status', { p_transaction_id: boundTransaction.id, p_user_id: session.user_id, p_next_status: 'pending', p_failure_code: null, p_external_id: null, p_expected_version: Number(boundTransaction.version) })
@@ -105,21 +144,53 @@ export async function POST(request: Request) {
         clearTimeout(timeout); console.error('[ALTHEA-PAYMENTS-ADAPTER]', selectedGatewayId, error)
         const { error: attemptError } = await admin.rpc('allocate_and_insert_gateway_payment_attempt', { p_user_id: session.user_id, p_transaction_id: pendingTransaction.id, p_gateway_id: selectedGatewayId, p_gateway_name: selectedGatewayId, p_idempotency_key: attemptKey, p_status: 'unknown', p_failure_class: 'timeout', p_external_transaction_id: null, p_routing_rule_id: null, p_routing_policy_id: null, p_routing_policy_version: null, p_decision_reason: index ? 'funnel_fallback_binding' : 'funnel_primary_binding', p_provider_request_id: null, p_duration_ms: ADAPTER_TIMEOUT_MS, p_sale_id: null, p_product_id: session.product_id })
         if (attemptError) console.error('[ALTHEA-PAYMENTS-ATTEMPT]', attemptError)
-        if (hasFallback) continue
+        
         return NextResponse.json({ ok: false, code: 'GATEWAY_TIMEOUT', transaction_id: pendingTransaction.id }, { status: 504 })
       } finally { clearTimeout(timeout) }
 
       const adapterPayloadResult = await adapterResponse.json().catch(() => ({})) as JsonObject
       const providerExternalId = text(adapterPayloadResult.external_id ?? adapterPayloadResult.id); const providerRequestId = text(adapterPayloadResult.provider_request_id ?? adapterPayloadResult.request_id); const providerStatus = text(adapterPayloadResult.status).toLowerCase(); const durationMs = Math.max(0, Math.round(Number(adapterPayloadResult.duration_ms ?? 0))) || null
       const nextAction = normalizePaymentAction(adapterPayloadResult, paymentMethod)
-      let attemptStatus: 'approved' | 'declined' | 'pending' | 'processing' | 'unknown' = 'unknown'; let transactionStatus: 'approved' | 'failed' | 'pending' = 'pending'
-      if (adapterResponse.ok && providerStatus === 'approved') { attemptStatus = 'approved'; transactionStatus = 'approved' } else if (adapterResponse.ok && providerStatus === 'pending') { attemptStatus = 'pending'; transactionStatus = 'pending' } else if (adapterResponse.status >= 400 && adapterResponse.status < 500) { attemptStatus = 'declined'; transactionStatus = 'failed' }
-      const produced = attemptStatus === 'approved' || attemptStatus === 'pending'
+      
+      let attemptStatus: 'approved' | 'declined' | 'pending' | 'processing' | 'unknown' = 'unknown'
+      let transactionStatus: 'approved' | 'failed' | 'pending' = 'pending'
+
+      const confirmedDecline =
+        adapterResponse.status === 402 &&
+        providerStatus === 'declined' &&
+        text(adapterPayloadResult.failure_code) === 'declined'
+
+      if (adapterResponse.ok && providerStatus === 'approved') {
+        attemptStatus = 'approved'
+        transactionStatus = 'approved'
+      } else if (adapterResponse.ok && providerStatus === 'pending') {
+        attemptStatus = 'pending'
+      } else if (confirmedDecline) {
+        attemptStatus = 'declined'
+        transactionStatus = 'failed'
+      }
+
+      const produced = attemptStatus === 'approved' ||
+                       attemptStatus === 'pending'
 
       const { error: attemptError } = await admin.rpc('allocate_and_insert_gateway_payment_attempt', { p_user_id: session.user_id, p_transaction_id: pendingTransaction.id, p_gateway_id: selectedGatewayId, p_gateway_name: selectedGatewayId, p_idempotency_key: attemptKey, p_status: attemptStatus, p_failure_class: attemptStatus === 'declined' ? 'declined' : attemptStatus === 'unknown' ? 'technical' : null, p_external_transaction_id: providerExternalId || null, p_routing_rule_id: null, p_routing_policy_id: null, p_routing_policy_version: null, p_decision_reason: index ? 'funnel_fallback_binding' : 'funnel_primary_binding', p_provider_request_id: providerRequestId || null, p_duration_ms: durationMs, p_sale_id: null, p_product_id: session.product_id })
-      if (attemptError) { console.error('[ALTHEA-PAYMENTS-ATTEMPT]', attemptError); if (!produced && hasFallback) continue; return NextResponse.json({ ok: false, code: 'PAYMENT_ATTEMPT_PERSIST_FAILED', transaction_id: pendingTransaction.id }, { status: 500 }) }
+      
+      if (attemptError) {
+        console.error('[ALTHEA-PAYMENTS-ATTEMPT]', attemptError)
+        return NextResponse.json({
+          ok: false,
+          code: 'PAYMENT_RECONCILIATION_REQUIRED',
+          transaction_id: pendingTransaction.id
+        }, { status: 503 })
+      }
+
       // A gateway that did not produce the Pix (declined, 5xx, missing id) hands over to the next one.
-      if (!produced && hasFallback) { console.error('[ALTHEA-PAYMENTS-FAILOVER]', selectedGatewayId, adapterResponse.status, adapterPayloadResult.error ?? null); continue }
+      
+      if (!produced && hasFallback && confirmedDecline && !providerExternalId) {
+        console.error('[ALTHEA-PAYMENTS-FAILOVER]', selectedGatewayId, 'confirmed_decline')
+        continue
+      }
+
 
       const { data: finalTransaction, error: transitionError } = await admin.rpc('transition_gateway_transaction_status', { p_transaction_id: pendingTransaction.id, p_user_id: session.user_id, p_next_status: transactionStatus, p_failure_code: attemptStatus === 'declined' || attemptStatus === 'unknown' ? text(adapterPayloadResult.failure_code ?? adapterPayloadResult.error) || 'GATEWAY_EXECUTION_PENDING_OR_FAILED' : null, p_external_id: providerExternalId || null, p_expected_version: Number(pendingTransaction.version) })
       if (transitionError || !finalTransaction) { console.error('[ALTHEA-PAYMENTS-TRANSITION]', transitionError); return NextResponse.json({ ok: false, code: 'PAYMENT_STATE_UPDATE_FAILED', transaction_id: pendingTransaction.id }, { status: 500 }) }
