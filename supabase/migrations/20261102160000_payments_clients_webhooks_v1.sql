@@ -232,7 +232,7 @@ set search_path = pg_catalog, public
 as $function$
 begin
   perform net.http_post(
-    url := 'https://gselijpmiaspfgmihdpu.supabase.co/functions/v1/outbound-webhook-dispatcher',
+    url := 'https://hkraryqoziravulvqkid.supabase.co/functions/v1/outbound-webhook-dispatcher',
     headers := jsonb_build_object('Content-Type', 'application/json',
       'x-internal-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'ALTHEA_INTERNAL_SECRET' limit 1)),
     body := '{}'::jsonb);

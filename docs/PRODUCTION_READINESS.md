@@ -89,7 +89,7 @@ Before applying new database changes:
 
 The repository is the canonical Edge Function inventory. On `main`, the deployment workflow runs:
 
-`supabase functions deploy --project-ref gselijpmiaspfgmihdpu --prune`
+`supabase functions deploy --project-ref hkraryqoziravulvqkid --prune`
 
 This deploys canonical functions and removes remote functions intentionally retired from source.
 
