@@ -87,6 +87,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          supabase link --project-ref "hkraryqoziravulvqkid" --password "$SUPABASE_DB_PASSWORD"
+          supabase link --project-ref "dswowdmewadcohjyfxgc" --password "$SUPABASE_DB_PASSWORD"
           supabase migration list --linked --password "$SUPABASE_DB_PASSWORD"
           echo "Database deployment remains intentionally disabled in CI."

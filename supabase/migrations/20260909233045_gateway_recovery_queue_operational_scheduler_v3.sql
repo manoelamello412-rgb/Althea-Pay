@@ -27,5 +27,5 @@ declare jid bigint;
 begin
   select jobid into jid from cron.job where jobname='althea-gateway-attempt-recovery';
   if jid is not null then perform cron.unschedule(jid); end if;
-  perform cron.schedule('althea-gateway-attempt-recovery','* * * * *', $cmd$select net.http_post(url := 'https://hkraryqoziravulvqkid.supabase.co/functions/v1/gateway-attempt-recovery', headers := jsonb_build_object('Content-Type','application/json','x-althea-internal-secret',coalesce((select decrypted_secret from vault.decrypted_secrets where name='ALTHEA_INTERNAL_SECRET' limit 1),'')), body := '{"limit":25}'::jsonb);$cmd$);
+  perform cron.schedule('althea-gateway-attempt-recovery','* * * * *', $cmd$select net.http_post(url := 'https://dswowdmewadcohjyfxgc.supabase.co/functions/v1/gateway-attempt-recovery', headers := jsonb_build_object('Content-Type','application/json','x-althea-internal-secret',coalesce((select decrypted_secret from vault.decrypted_secrets where name='ALTHEA_INTERNAL_SECRET' limit 1),'')), body := '{"limit":25}'::jsonb);$cmd$);
 end $outer$;
