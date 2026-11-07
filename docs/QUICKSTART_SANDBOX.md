@@ -17,7 +17,7 @@ A chave deve ser tratada como segredo e usada apenas no servidor.
 ```bash
 curl -sS \
   -H "x-althea-api-key: $ALTHEA_API_KEY" \
-  "https://dswowdmewadcohjyfxgc.supabase.co/functions/v1/althea-public-api/v1/funnels"
+  "https://gselijpmiaspfgmihdpu.supabase.co/functions/v1/althea-public-api/v1/funnels"
 ```
 
 Copie o `id` do funil para `FUNNEL_ID`.
@@ -39,7 +39,7 @@ curl -sS -X POST \
       "scenario": "approved"
     }
   }' \
-  "https://dswowdmewadcohjyfxgc.supabase.co/functions/v1/althea-public-api/v1/events"
+  "https://gselijpmiaspfgmihdpu.supabase.co/functions/v1/althea-public-api/v1/events"
 ```
 
 A resposta deve conter `accepted: true`, um `event_id` e um status de processamento. Reenviar o mesmo `external_id` para o mesmo merchant não deve criar um segundo evento.
@@ -49,7 +49,7 @@ A resposta deve conter `accepted: true`, um `event_id` e um status de processame
 ```bash
 curl -sS \
   -H "x-althea-api-key: $ALTHEA_API_KEY" \
-  "https://dswowdmewadcohjyfxgc.supabase.co/functions/v1/althea-public-api/v1/transactions?limit=20"
+  "https://gselijpmiaspfgmihdpu.supabase.co/functions/v1/althea-public-api/v1/transactions?limit=20"
 ```
 
 ## Cenários de sandbox

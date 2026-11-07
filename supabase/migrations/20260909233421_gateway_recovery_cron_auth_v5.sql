@@ -21,5 +21,5 @@ declare jid bigint;
 begin
   select jobid into jid from cron.job where jobname='althea-gateway-attempt-recovery';
   if jid is not null then perform cron.unschedule(jid); end if;
-  perform cron.schedule('althea-gateway-attempt-recovery','* * * * *', $cmd$with t as (select extract(epoch from clock_timestamp())::bigint ts, decrypted_secret secret from vault.decrypted_secrets where name='ALTHEA_INTERNAL_SECRET' limit 1) select net.http_post(url := 'https://dswowdmewadcohjyfxgc.supabase.co/functions/v1/gateway-attempt-recovery', headers := jsonb_build_object('Content-Type','application/json','x-althea-recovery-timestamp',t.ts::text,'x-althea-recovery-signature',encode(digest(t.secret||':'||t.ts::text,'sha256'),'hex')), body := '{"limit":25}'::jsonb) from t;$cmd$);
+  perform cron.schedule('althea-gateway-attempt-recovery','* * * * *', $cmd$with t as (select extract(epoch from clock_timestamp())::bigint ts, decrypted_secret secret from vault.decrypted_secrets where name='ALTHEA_INTERNAL_SECRET' limit 1) select net.http_post(url := 'https://gselijpmiaspfgmihdpu.supabase.co/functions/v1/gateway-attempt-recovery', headers := jsonb_build_object('Content-Type','application/json','x-althea-recovery-timestamp',t.ts::text,'x-althea-recovery-signature',encode(digest(t.secret||':'||t.ts::text,'sha256'),'hex')), body := '{"limit":25}'::jsonb) from t;$cmd$);
 end $outer$;

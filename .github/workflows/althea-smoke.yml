@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          body="$(curl -fsS https://dswowdmewadcohjyfxgc.supabase.co/functions/v1/health)"
+          body="$(curl -fsS https://gselijpmiaspfgmihdpu.supabase.co/functions/v1/health)"
           echo "$body"
           echo "$body" | grep -q '"ok":true'
           echo "$body" | grep -q '"service":"althea-api"'
@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           code="$(curl -sS -o /tmp/gateway-response.json -w '%{http_code}' -X POST \
-            https://dswowdmewadcohjyfxgc.supabase.co/functions/v1/gateway-orchestrator \
+            https://gselijpmiaspfgmihdpu.supabase.co/functions/v1/gateway-orchestrator \
             -H 'Content-Type: application/json' \
             --data '{"funnel_id":"smoke","amount":1,"idempotency_key":"smoke-anonymous"}')"
           cat /tmp/gateway-response.json
