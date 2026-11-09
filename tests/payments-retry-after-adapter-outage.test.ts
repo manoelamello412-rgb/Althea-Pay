@@ -49,8 +49,20 @@ describe('Pix retry after the adapter never produced a charge', () => {
     expect(webhook).toContain('TRANSACTION_PAID: ["approved", "payment"]')
     expect(webhook).toContain('TRANSACTION_REFUNDED: ["refunded", "refund"]')
     expect(webhook).toContain('TRANSACTION_CHARGED_BACK: ["chargeback", "chargeback"]')
-    expect(action).toContain("['sigilopay', 'amplopay', 'imperiumpay'].includes(statusProvider)")
+    expect(action).toContain("['sigilopay', 'amplopay', 'imperiumpay', 'atlaspags'].includes(statusProvider)")
     expect(action).toContain("p_bucket_key: `provider-status:${statusProvider}:${tx.id}`, p_limit: 1, p_window_seconds: 60")
+  })
+
+  it('Atlas Pags: Bearer + Idempotency-Key, livemode guard, Stripe-style signature on X-Atlas-Signature', () => {
+    expect(adapter).toContain('==="atlaspags")return await atlaspags(op,b,credential,gid,str(g.data.environment).toLowerCase())')
+    expect(adapter).toContain('const{r,p}=await call("/charges",payload,identifier)')
+    expect(adapter).toContain('headers["Idempotency-Key"]=key')
+    expect(adapter).toContain('environment==="production"&&get(p,"livemode")!==true')
+    expect(webhook).toContain('provider === "stripe" ? "stripe-signature" : "x-atlas-signature"')
+    expect(webhook).toContain('"transaction.paid": ["approved", "payment"]')
+    expect(webhook).toContain('"transaction.expired": ["failed", "payment"]')
+    expect(action).toContain("'atlaspags'].includes(statusProvider)")
+    expect(readFileSync('supabase/migrations/20261109160000_atlaspags_provider_v1.sql', 'utf8')).toContain("'payment_methods',jsonb_build_array('pix')")
   })
 
   it('AmploPay: same platform as SigiloPay, only the base URL changes (Pix only)', () => {

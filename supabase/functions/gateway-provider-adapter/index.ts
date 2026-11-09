@@ -177,6 +177,46 @@ async function imperiumpay(operation:Operation,b:O,c:O,gid:string){
   return out({ok:true,id,external_id:id,status:"pending",provider_status:ps||"PENDENTE",amount,currency:"BRL",action_type:"pix",qr_code:qr,copy_paste:code,expires_at:first(s,["payment.pix.expiresAt"])||null});
 }
 
+
+// Atlas Pags: REST com Bearer, valor em reais. Idempotency-Key = nosso transaction_id, então a retentativa após
+// timeout devolve a mesma cobrança (corpo precisa sair idêntico: nada de campo variável aqui).
+// postback_url é assinado com o segredo de webhook da conta (X-Atlas-Signature), validado no gateway-webhook.
+const ATLAS_STATUS:O={paid:"approved",pending:"pending",failed:"declined",expired:"declined",refunded:"declined",chargeback:"declined"};
+async function atlaspags(operation:Operation,b:O,c:O,gid:string,environment:string){
+  const sk=str(c.secret_key);if(!sk)throw new Error("provider_credentials_missing");
+  const base="https://atlaspags.com/api/v1";
+  const external=str(b.external_transaction_id??b.original_external_id??b.provider_transaction_id);
+  const call=async(path:string,payload?:O,key?:string)=>{const headers:Record<string,string>={Accept:"application/json",Authorization:`Bearer ${sk}`};const init:RequestInit={method:payload?"POST":"GET",headers,signal:AbortSignal.timeout(15000)};if(payload){headers["Content-Type"]="application/json";if(key)headers["Idempotency-Key"]=key;init.body=JSON.stringify(payload)}const r=await fetch(base+path,init);return{r,p:await parse(r)}};
+  const fail=(r:Response,p:O)=>out({ok:false,error:err(p,`gateway_http_${r.status}`),failure_code:first(p,["error.code"],`http_${r.status}`)},r.status);
+  if(operation==="health_check"){const{r,p}=await call("/ping");return r.ok?out({ok:true,status:"approved",provider_status:"healthy"}):fail(r,p)}
+  if(["payment_status","retrieve_payment","retrieve","status"].includes(operation)){
+    if(!external)throw new Error("external_transaction_id_required");
+    const{r,p}=await call(`/charges/${encodeURIComponent(external)}`);if(!r.ok)return fail(r,p);
+    const ps=first(p,["status"],"");return out({ok:true,id:external,external_id:external,status:norm(ps,ATLAS_STATUS),provider_status:ps,amount:Number(first(p,["amount"],String(b.amount??0))),currency:"BRL"});
+  }
+  if(operation!=="create_payment")throw new Error("operation_not_supported");
+  const pm=obj(b.payment_method)?b.payment_method:{};if(str(pm.type)&&str(pm.type)!=="pix")throw new Error("payment_method_not_supported");
+  const amount=Number(Number(b.amount??0).toFixed(2));if(!Number.isFinite(amount)||amount<=0)throw new Error("invalid_amount");
+  const cu=obj(b.customer)?b.customer:{},details=obj(pm.details)?pm.details:{};
+  const digits=(v:unknown)=>String(v??"").replace(/\D/g,"");
+  const name=str(cu.name),email=str(cu.email);if(!name||!email)throw new Error("customer_name_email_required");
+  const identifier=(str(b.transaction_id)||str(b.idempotency_key)).slice(0,100);if(!identifier)throw new Error("identifier_required");
+  const su=str(Deno.env.get("SUPABASE_URL"));if(!str(c.webhook_secret)||!su)throw new Error("webhook_postback_not_configured");
+  const customer:O={name:name.slice(0,120),email};
+  const doc=digits(details.document??cu.document??cu.cpf);if(doc.length===11||doc.length===14)customer.document=doc;
+  const phone=digits(cu.phone);if(phone.length>=10)customer.phone=phone.slice(0,30);
+  const md=obj(b.metadata)?b.metadata:{};
+  const payload:O={amount,method:"pix",customer,description:(str(md.product_name??md.description)||"Pedido").slice(0,120),external_id:identifier,postback_url:`${su.replace(/\/$/,"")}/functions/v1/gateway-webhook?gateway_id=${encodeURIComponent(gid)}`};
+  const{r,p}=await call("/charges",payload,identifier);if(!r.ok)return fail(r,p);
+  const id=first(p,["id"]),ps=first(p,["status"],"").toLowerCase();
+  // A plataforma da Atlas ainda pode estar inteira em teste: PIX simulado não pode chegar a comprador real.
+  if(environment==="production"&&get(p,"livemode")!==true)return out({ok:false,error:"provider_not_in_livemode",failure_code:"provider_not_in_livemode",id:id||null,status:"declined",provider_status:ps||null},422);
+  if(["failed","expired"].includes(ps))return out({ok:false,error:"provider_declined",failure_code:"declined",id:id||null,external_id:id||null,status:"declined",provider_status:ps},402);
+  const code=first(p,["pix.code"]),img=first(p,["pix.qr_code_image"]);
+  if(!id||!code)return out({ok:false,error:!id?"provider_transaction_id_missing":"provider_pix_code_missing"},502);
+  const qr=img.startsWith("data:image/")?img:await QRCode.toDataURL(code,{margin:1,width:320}).catch(()=>/^https:\/\//i.test(img)?img:null);
+  return out({ok:true,id,external_id:id,status:"pending",provider_status:ps||"pending",amount,currency:"BRL",action_type:"pix",qr_code:qr,copy_paste:code,expires_at:first(p,["pix.expires_at"])||null});
+}
 async function generic(operation:Operation,b:O,c:O){
   const checked=await assertPublicHttpsUrl(str(c.base_url));if(!checked.ok)throw new Error(`target_not_allowed:${checked.reason}`);
   const statusOps=["payment_status","retrieve_payment","retrieve","status"];
@@ -205,5 +245,5 @@ Deno.serve(async req=>{
   if(op!=="health_check"&&!["connected","degraded"].includes(str(g.data.status).toLowerCase()))return out({ok:false,error:"gateway_not_operational"},422);
   const reg=await db.from("gateway_provider_registry").select("provider_key,adapter_key,operational,is_active").eq("provider_key",str(g.data.provider).toLowerCase()).eq("is_active",true).maybeSingle();if(reg.error)return out({ok:false,error:"provider_registry_lookup_failed"},500);if(!reg.data||reg.data.operational!==true)return out({ok:false,error:"provider_adapter_not_operational"},422);
   const cr=await db.rpc("resolve_gateway_credential_for_gateway",{p_gateway_id:gid});if(cr.error||!obj(cr.data))return out({ok:false,error:"provider_credential_missing"},422);const credential=obj(cr.data.credentials)?cr.data.credentials:cr.data;
-  try{if(str(g.data.provider).toLowerCase()==="mercado_pago")return await mercadoPago(op,b,credential);if(str(g.data.provider).toLowerCase()==="afiliaxpay")return await afiliaxpay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="sigilopay")return await sigilopay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="amplopay")return await sigilopay(op,b,credential,gid,"https://app.amplopay.com/api/v1");if(str(g.data.provider).toLowerCase()==="imperiumpay")return await imperiumpay(op,b,credential,gid);return await generic(op,b,credential)}catch(e){return out({ok:false,error:e instanceof Error?e.message:"gateway_adapter_error"},502)}
+  try{if(str(g.data.provider).toLowerCase()==="mercado_pago")return await mercadoPago(op,b,credential);if(str(g.data.provider).toLowerCase()==="afiliaxpay")return await afiliaxpay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="sigilopay")return await sigilopay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="amplopay")return await sigilopay(op,b,credential,gid,"https://app.amplopay.com/api/v1");if(str(g.data.provider).toLowerCase()==="imperiumpay")return await imperiumpay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="atlaspags")return await atlaspags(op,b,credential,gid,str(g.data.environment).toLowerCase());return await generic(op,b,credential)}catch(e){return out({ok:false,error:e instanceof Error?e.message:"gateway_adapter_error"},502)}
 });

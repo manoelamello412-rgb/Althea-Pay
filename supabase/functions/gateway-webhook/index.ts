@@ -86,6 +86,15 @@ const IMPERIUM_STATUSES: Record<string, [GatewayTransactionStatus, string]> = {
   CHARGEBACK: ["chargeback", "chargeback"],
 };
 
+// transaction.pending, payout.* e webhook.test são ignorados (200).
+const ATLAS_EVENTS: Record<string, [GatewayTransactionStatus, string]> = {
+  "transaction.paid": ["approved", "payment"],
+  "transaction.failed": ["failed", "payment"],
+  "transaction.expired": ["failed", "payment"],
+  "transaction.refunded": ["refunded", "refund"],
+  "transaction.chargeback": ["chargeback", "chargeback"],
+};
+
 const normalizeStatus = (value: unknown): GatewayTransactionStatus | null => {
   const canonical = normalizeGatewayWebhookStatus(value);
   if (canonical) return canonical;
@@ -157,8 +166,9 @@ Deno.serve(async (request) => {
   }
 
   let valid = false;
-  if (provider === "stripe") {
-    const header = request.headers.get("stripe-signature") ?? "";
+  if (provider === "stripe" || provider === "atlaspags") {
+    // Atlas Pags assina igual à Stripe: t=...,v1=HMAC-SHA256("{t}." + corpo bruto), só muda o cabeçalho.
+    const header = request.headers.get(provider === "stripe" ? "stripe-signature" : "x-atlas-signature") ?? "";
     const pairs = Object.fromEntries(
       header.split(",").map((x) => {
         const [k, ...v] = x.split("=");
@@ -178,6 +188,20 @@ Deno.serve(async (request) => {
       await hmac(secret, `${timestamp}.${rawBody}`),
       signature.toLowerCase(),
     );
+    if (valid && provider === "atlaspags") {
+      const type = String(payload.type ?? "").trim().toLowerCase();
+      const mapped = ATLAS_EVENTS[type];
+      if (!mapped) return json({ ok: true, ignored: type || "unknown_event" });
+      const data = rec(payload.data) ? payload.data : {};
+      // data.id é o id da cobrança na Atlas, o mesmo que gravamos em external_id. Valores já vêm em reais.
+      const external = String(data.id ?? "").trim();
+      if (!external) return json({ error: "transaction_id_missing" }, 400);
+      payload.external_transaction_id = external;
+      payload.status = mapped[0];
+      payload.event_kind = mapped[1];
+      payload.id = `${external}:${type}`;
+      if (data.amount != null) payload.amount = data.amount;
+    }
   } else if (provider === "asaas") {
     valid = safe(secret, request.headers.get("asaas-access-token") ?? "");
   } else if (provider === "afiliaxpay") {
