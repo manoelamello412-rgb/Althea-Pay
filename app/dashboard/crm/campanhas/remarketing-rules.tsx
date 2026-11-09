@@ -8,12 +8,12 @@ type Db = ReturnType<typeof createSupabaseBrowserClient>
 type Account = { id: string; channel: string; provider: string; display_name: string | null; status: string }
 type Funnel = { id: string; nome: string }
 type Rule = {
-  id: string; funnel_id: string | null; trigger_event: 'payment_pending' | 'checkout_abandoned'; channel: 'email' | 'whatsapp'
+  id: string; funnel_id: string | null; trigger_event: 'payment_pending' | 'checkout_abandoned' | 'payment_approved'; channel: 'email' | 'whatsapp'
   channel_account_id: string; delay_minutes: number; email_subject: string | null; body: string; button_text: string | null; button_url: string | null; active: boolean
 }
 type Draft = Omit<Rule, 'id' | 'delay_minutes'> & { id: string | null; delay: string; unit: 'min' | 'h' }
 
-const TRIGGERS = { payment_pending: 'Pagamento pendente (PIX gerado e não pago)', checkout_abandoned: 'Checkout abandonado' }
+const TRIGGERS = { payment_pending: 'Pagamento pendente (PIX gerado e não pago)', checkout_abandoned: 'Checkout abandonado', payment_approved: 'Pagamento aprovado (confirmação para o comprador)' }
 const VARS = '{nome} {primeiro_nome} {email} {telefone} {link} {valor} {produto}'
 const input = 'h-10 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm outline-none focus:border-emerald-500/50'
 
@@ -76,7 +76,7 @@ export function RemarketingRules({ db, organizationId, accounts, funnels, canMan
 
   return <div>
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[.06] px-4 py-3">
-      <p className="text-xs text-slate-500">Mensagens automáticas depois que o checkout fica pendente ou é abandonado. Param sozinhas quando o pagamento é aprovado.</p>
+      <p className="text-xs text-slate-500">Mensagens automáticas depois que o checkout fica pendente, é abandonado ou é pago. As de pendente/abandonado param sozinhas quando o pagamento é aprovado.</p>
       {canManage && <button type="button" onClick={() => setDraft(blank())} className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-500 px-3 text-sm font-bold text-black hover:bg-emerald-400"><Plus size={15} /> Nova regra</button>}
     </div>
     {error && <div role="alert" className="m-4 rounded-xl border border-red-500/20 bg-red-500/[.06] px-4 py-3 text-sm text-red-300">{error}</div>}
@@ -97,7 +97,7 @@ export function RemarketingRules({ db, organizationId, accounts, funnels, canMan
       <div role="dialog" aria-modal="true" aria-label="Regra de remarketing" onClick={event => event.stopPropagation()} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-[#0b0f0d] p-5">
         <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{draft.id ? 'Editar regra' : 'Nova regra'}</h2><button type="button" aria-label="Fechar" onClick={() => setDraft(null)} className="rounded-md p-1 hover:bg-white/5"><X size={16} /></button></div>
         <div className="space-y-3 text-sm">
-          <label className="block">Quando<select className={input} value={draft.trigger_event} onChange={event => set({ trigger_event: event.target.value as Draft['trigger_event'] })}>{Object.entries(TRIGGERS).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+          <label className="block">Quando<select className={input} value={draft.trigger_event} onChange={event => { const trigger_event = event.target.value as Draft['trigger_event']; set(trigger_event === 'payment_approved' ? { trigger_event, channel: 'email', channel_account_id: senders('email')[0]?.id ?? '', delay: '1', unit: 'min', email_subject: 'Pagamento confirmado', body: 'Olá, {primeiro_nome}! Recebemos seu pagamento de {valor}. Obrigado pela compra!', button_text: null, button_url: null } : { trigger_event }) }}>{Object.entries(TRIGGERS).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
           <div className="flex gap-2">
             <label className="block flex-1">Esperar<input type="number" min={1} className={input} value={draft.delay} onChange={event => set({ delay: event.target.value })} /></label>
             <label className="block w-32">Unidade<select className={input} value={draft.unit} onChange={event => set({ unit: event.target.value as Draft['unit'] })}><option value="min">minutos</option><option value="h">horas</option></select></label>

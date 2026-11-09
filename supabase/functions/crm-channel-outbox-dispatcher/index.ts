@@ -473,8 +473,8 @@ Deno.serve(async (request) => {
         let account: Account | null = null;
         let identity: Identity | null = null;
 
-        // Remarketing whose checkout got paid after it was queued never goes out.
-        const recoveryCheckoutId = text(row.metadata?.recovery_checkout_id);
+        // Remarketing whose checkout got paid after it was queued never goes out (the payment confirmation itself does).
+        const recoveryCheckoutId = row.metadata?.source === "payment_approved" ? "" : text(row.metadata?.recovery_checkout_id);
         if (recoveryCheckoutId) {
           const checkout = await db.from("checkout_sessions").select("completed_at").eq("id", recoveryCheckoutId).maybeSingle();
           if (checkout.error) throw checkout.error;

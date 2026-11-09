@@ -63,4 +63,17 @@ describe('phase 2 migration', () => {
     expect(dispatcher).toContain('recovery_checkout_id')
     expect(dispatcher).toContain('"cancelled"')
   })
+
+  it('payment_approved rule: queued by the paid trigger and never cancelled by the paid guards', () => {
+    const sql = readFileSync('supabase/migrations/20261109150000_payment_approved_email_rule_v1.sql', 'utf8')
+    const worker = readFileSync('supabase/functions/checkout-recovery-worker/index.ts', 'utf8')
+    const dispatcher = readFileSync('supabase/functions/crm-channel-outbox-dispatcher/index.ts', 'utf8')
+    expect(sql).toContain("'paid:' || r.id")
+    expect(sql).toContain("on conflict (checkout_id, event_type) do nothing")
+    expect(sql).toContain("and event_type not like 'paid:%'")
+    expect(sql).toContain("r.event_type like 'paid:%'")
+    expect(sql).toContain("r.trigger_event <> 'payment_approved'")
+    expect(worker).toContain('isPaidEvent(job) ? "payment_approved"')
+    expect(dispatcher).toContain('row.metadata?.source === "payment_approved" ? ""')
+  })
 })

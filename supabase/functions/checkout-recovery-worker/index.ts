@@ -22,7 +22,7 @@ type RecoveryJob = {
 };
 type Rule = RemarketingRule & {
   id: string;
-  trigger_event: "payment_pending" | "checkout_abandoned";
+  trigger_event: "payment_pending" | "checkout_abandoned" | "payment_approved";
   channel_account_id: string;
   active: boolean;
 };
@@ -132,7 +132,9 @@ function recoveryUrl(job: RecoveryJob): string {
 
 const isPaymentPending = (job: RecoveryJob) => job.event_type === "payment_pending";
 // 'rule:<id>' comes from a remarketing rule, 'manual:<channel>:<window>' from the checkouts screen button.
-const isRuleEvent = (job: RecoveryJob) => job.event_type.startsWith("rule:");
+// 'paid:<id>' is a payment_approved rule: a thank-you to the buyer, queued by the payment-approved trigger.
+const isPaidEvent = (job: RecoveryJob) => job.event_type.startsWith("paid:");
+const isRuleEvent = (job: RecoveryJob) => job.event_type.startsWith("rule:") || isPaidEvent(job);
 const isManual = (job: RecoveryJob) => job.event_type.startsWith("manual:");
 
 async function ruleOf(id: string | null): Promise<Rule | null> {
@@ -418,7 +420,7 @@ async function enqueueOutbox(job: RecoveryJob, conversationId: string, selection
       ? `payment-pending:${job.checkout_id}:${selection.channel}`
       : `checkout-recovery:${job.checkout_id}:${attempt}:${selection.channel}`;
   const message = await recoveryMessage(job, selection, rule);
-  const source = isRuleEvent(job) ? "remarketing_rule" : isManual(job) ? "manual_remarketing" : isPaymentPending(job) ? "payment_pending" : "checkout_recovery";
+  const source = isPaidEvent(job) ? "payment_approved" : isRuleEvent(job) ? "remarketing_rule" : isManual(job) ? "manual_remarketing" : isPaymentPending(job) ? "payment_pending" : "checkout_recovery";
   const body = message.body;
 
   const inserted = await db
