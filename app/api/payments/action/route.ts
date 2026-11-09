@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     // por conta, no mesmo grupo do POST /api/sales. O webhook atualiza o banco, então a consulta ao provedor vira só
     // rede de segurança: no máximo 1 por minuto por transação.
     const statusProvider = text(gateway.provider).toLowerCase()
-    if (statusProvider === 'sigilopay' || statusProvider === 'imperiumpay') {
+    if (['sigilopay', 'amplopay', 'imperiumpay'].includes(statusProvider)) {
       const { data: slot } = await admin.rpc('consume_funnel_event_rate_limit', { p_bucket_key: `provider-status:${statusProvider}:${tx.id}`, p_limit: 1, p_window_seconds: 60 })
       if ((Array.isArray(slot) ? slot[0] : slot)?.allowed !== true) return NextResponse.json({ ok:true, action:null, status:tx.status })
     }

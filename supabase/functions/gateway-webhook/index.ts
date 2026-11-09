@@ -190,7 +190,7 @@ Deno.serve(async (request) => {
       payload.external_transaction_id ??= payload.idTransaction;
       payload.id ??= `${payload.idTransaction}:${payload.status ?? ""}`;
     }
-  } else if (provider === "sigilopay") {
+  } else if (provider === "sigilopay" || provider === "amplopay") {
     // ponytail: a SigiloPay manda um token no corpo, mas o callbackUrl é nosso e fixo por gateway, então o token
     // secreto na query já autentica (igual AfiliaxPay). Status vem do nome do evento, não de transaction.status.
     valid = safe(secret, url.searchParams.get("token") ?? "");

@@ -85,9 +85,9 @@ async function afiliaxpay(operation:Operation,b:O,c:O,gid:string){
 // (a SigiloPay limita 20 webhooks por integração, um por URL distinta) e leva o token na query.
 // identifier = nosso gateway_transactions.id, que o webhook devolve em transaction.identifier.
 const SIGILO_STATUS:O={completed:"approved",paid:"approved",pending:"pending",ok:"pending",failed:"declined",rejected:"declined",canceled:"declined",cancelled:"declined",expired:"declined",refunded:"declined",charged_back:"declined",chargeback:"declined"};
-async function sigilopay(operation:Operation,b:O,c:O,gid:string){
+// AmploPay é a mesma plataforma (doc idêntica nas rotas Pix e webhooks); só muda a base.
+async function sigilopay(operation:Operation,b:O,c:O,gid:string,base="https://app.sigilopay.com.br/api/v1"){
   const pk=str(c.public_key),sk=str(c.secret_key);if(!pk||!sk)throw new Error("provider_credentials_missing");
-  const base="https://app.sigilopay.com.br/api/v1";
   const external=str(b.external_transaction_id??b.original_external_id??b.provider_transaction_id);
   const headers:Record<string,string>={Accept:"application/json","x-public-key":pk,"x-secret-key":sk};
   const call=async(path:string,payload?:O)=>{const init:RequestInit={method:payload?"POST":"GET",headers:{...headers},signal:AbortSignal.timeout(15000)};if(payload){(init.headers as Record<string,string>)["Content-Type"]="application/json";init.body=JSON.stringify(payload)}const r=await fetch(base+path,init);return{r,p:await parse(r)}};
@@ -205,5 +205,5 @@ Deno.serve(async req=>{
   if(op!=="health_check"&&!["connected","degraded"].includes(str(g.data.status).toLowerCase()))return out({ok:false,error:"gateway_not_operational"},422);
   const reg=await db.from("gateway_provider_registry").select("provider_key,adapter_key,operational,is_active").eq("provider_key",str(g.data.provider).toLowerCase()).eq("is_active",true).maybeSingle();if(reg.error)return out({ok:false,error:"provider_registry_lookup_failed"},500);if(!reg.data||reg.data.operational!==true)return out({ok:false,error:"provider_adapter_not_operational"},422);
   const cr=await db.rpc("resolve_gateway_credential_for_gateway",{p_gateway_id:gid});if(cr.error||!obj(cr.data))return out({ok:false,error:"provider_credential_missing"},422);const credential=obj(cr.data.credentials)?cr.data.credentials:cr.data;
-  try{if(str(g.data.provider).toLowerCase()==="mercado_pago")return await mercadoPago(op,b,credential);if(str(g.data.provider).toLowerCase()==="afiliaxpay")return await afiliaxpay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="sigilopay")return await sigilopay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="imperiumpay")return await imperiumpay(op,b,credential,gid);return await generic(op,b,credential)}catch(e){return out({ok:false,error:e instanceof Error?e.message:"gateway_adapter_error"},502)}
+  try{if(str(g.data.provider).toLowerCase()==="mercado_pago")return await mercadoPago(op,b,credential);if(str(g.data.provider).toLowerCase()==="afiliaxpay")return await afiliaxpay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="sigilopay")return await sigilopay(op,b,credential,gid);if(str(g.data.provider).toLowerCase()==="amplopay")return await sigilopay(op,b,credential,gid,"https://app.amplopay.com/api/v1");if(str(g.data.provider).toLowerCase()==="imperiumpay")return await imperiumpay(op,b,credential,gid);return await generic(op,b,credential)}catch(e){return out({ok:false,error:e instanceof Error?e.message:"gateway_adapter_error"},502)}
 });

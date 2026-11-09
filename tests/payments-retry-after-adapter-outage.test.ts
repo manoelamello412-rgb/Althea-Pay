@@ -49,8 +49,14 @@ describe('Pix retry after the adapter never produced a charge', () => {
     expect(webhook).toContain('TRANSACTION_PAID: ["approved", "payment"]')
     expect(webhook).toContain('TRANSACTION_REFUNDED: ["refunded", "refund"]')
     expect(webhook).toContain('TRANSACTION_CHARGED_BACK: ["chargeback", "chargeback"]')
-    expect(action).toContain("statusProvider === 'sigilopay' || statusProvider === 'imperiumpay'")
+    expect(action).toContain("['sigilopay', 'amplopay', 'imperiumpay'].includes(statusProvider)")
     expect(action).toContain("p_bucket_key: `provider-status:${statusProvider}:${tx.id}`, p_limit: 1, p_window_seconds: 60")
+  })
+
+  it('AmploPay: same platform as SigiloPay, only the base URL changes (Pix only)', () => {
+    expect(adapter).toContain('==="amplopay")return await sigilopay(op,b,credential,gid,"https://app.amplopay.com/api/v1")')
+    expect(webhook).toContain('provider === "sigilopay" || provider === "amplopay"')
+    expect(readFileSync('supabase/migrations/20261109120000_amplopay_provider_v1.sql', 'utf8')).toContain("'payment_methods',jsonb_build_array('pix')")
   })
 
   it('ImperiumPay: amounts in cents at both borders, and statuses that can return to PAGO stay non-terminal', () => {
