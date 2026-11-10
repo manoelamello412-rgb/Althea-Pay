@@ -10,6 +10,7 @@ export type TemplateRow = {
   email_header_url?: string | null;
   email_button_text?: string | null;
   email_button_url?: string | null;
+  email_html?: string | null;
 };
 
 export function renderTemplate(body: string, variables: string[], context: Record<string, string>): string {
@@ -20,13 +21,17 @@ export function renderTemplate(body: string, variables: string[], context: Recor
 export function templateMessage(template: TemplateRow, context: Record<string, string>) {
   const placeholders = template.variables.map((key) => context[key] ?? "");
   const fill = (value: string) => renderNamed(renderTemplate(value, template.variables, context), context).trim();
+  const renderedHtml = template.email_html
+    ? renderEmailTemplateHtml(template.email_html, context, template.variables)
+    : null;
   const button = template.email_button_text && template.email_button_url ? safeButton(template.email_button_text, fill(template.email_button_url)) : null;
   return {
-    body: renderTemplate(template.body, template.variables, context),
+    body: renderedHtml ? renderNamed(renderTemplate(template.body, template.variables, context), context) : renderTemplate(template.body, template.variables, context),
     metadata: {
       ...(template.subject ? { email_subject: renderTemplate(template.subject, template.variables, context) } : {}),
       ...(template.email_header_url ? { email_header_url: template.email_header_url } : {}),
       ...(button ? { email_button: button } : {}),
+      ...(renderedHtml ? { email_html: renderedHtml } : {}),
       ...(template.whatsapp_template_name
         ? { whatsapp_template: { name: template.whatsapp_template_name, language: template.language, placeholders } }
         : {}),
