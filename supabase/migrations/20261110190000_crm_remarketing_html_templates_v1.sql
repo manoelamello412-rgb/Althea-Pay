@@ -34,7 +34,10 @@ BEGIN
   END IF;
   -- Filtro defensivo de HTML ativo; usar apenas HTML de autores confiaveis.
   IF coalesce(p_email_html, '') ~* '<[[:space:]]*(script|iframe|object|embed|form|base)([[:space:]>])'
-     OR coalesce(p_email_html, '') ~* '(javascript:|data:text/html|on[a-z]+[[:space:]]*=)' THEN
+     OR coalesce(p_email_html, '') ~*
+       '(javascript:|data:text/html)'
+     OR coalesce(p_email_html, '') ~*
+       '(^|[^[:alnum:]_-])on[a-z]+[[:space:]]*=' THEN
     RAISE EXCEPTION 'EMAIL_HTML_UNSAFE' USING errcode = '22023';
   END IF;
 
