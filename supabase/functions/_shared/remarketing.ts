@@ -78,6 +78,50 @@ export function renderNamed(body: string, context: Record<string, string>): stri
 const escapeHtml = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
+/**
+ * Preenche variáveis em um HTML de e-mail já cadastrado.
+ * Preserva as tags do template e escapa os dados do cliente.
+ *
+ * Compatível com:
+ * {nome}, {primeiro_nome}, {email}, {telefone},
+ * {link}, {valor}, {produto}
+ * e variáveis posicionais {{1}}, {{2}}, ...
+ */
+export function renderEmailTemplateHtml(
+  html: string,
+  context: Record<string, string>,
+  variables: string[] = [],
+): string {
+  const supported = [
+    "nome",
+    "primeiro_nome",
+    "email",
+    "telefone",
+    "link",
+    "valor",
+    "produto",
+  ];
+
+  const replacements = new Map<string, string>();
+
+  for (const key of supported) {
+    replacements.set(`{${key}}`, escapeHtml(context[key] ?? ""));
+  }
+
+  variables.forEach((key, index) => {
+    replacements.set(
+      `{{${index + 1}}}`,
+      escapeHtml(context[key] ?? ""),
+    );
+  });
+
+  return html.replace(
+    /\{\{\d+\}\}|\{(?:nome|primeiro_nome|email|telefone|link|valor|produto)\}/g,
+    (placeholder) => replacements.get(placeholder) ?? "",
+  );
+}
+
+
 export type RemarketingRule = {
   channel: "email" | "whatsapp";
   email_subject: string | null;
