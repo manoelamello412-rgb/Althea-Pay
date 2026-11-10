@@ -40,7 +40,9 @@ describe('unsubscribe tokens', () => {
     expect(unsubscribe.indexOf('req.method === "GET"')).toBeLessThan(unsubscribe.indexOf('crm_channel_record_consent'))
     expect(migration).toContain('grant execute on function public.crm_channel_record_consent(uuid, text, text, text, text) to service_role;')
     expect(dispatcher).toContain('"List-Unsubscribe-Post": "List-Unsubscribe=One-Click"')
-    expect(dispatcher).toContain('row.metadata?.source !== "campaign"')
+    expect(dispatcher).toContain('row.metadata?.source === "campaign"')
+    expect(dispatcher).toContain('row.metadata?.source === "remarketing_rule"')
+    expect(dispatcher).toContain('row.metadata?.remarketing_trigger === "checkout_abandoned"')
   })
 })
 
