@@ -209,7 +209,9 @@ async function sendMeta(account: Account, identity: Identity, body: string): Pro
 
 // Campaign e-mails carry one-click unsubscribe (RFC 8058), required by Gmail/Yahoo for bulk senders.
 async function unsubscribeExtras(row: Outbox, address: string) {
-  if (row.metadata?.source !== "campaign") return { headers: undefined, footer: "", url: undefined };
+  const isMarketing = row.metadata?.source === "campaign" ||
+    (row.metadata?.source === "remarketing_rule" && row.metadata?.remarketing_trigger === "checkout_abandoned");
+  if (!isMarketing) return { headers: undefined, footer: "", url: undefined };
   const token = await signUnsubscribe(Deno.env.get("CRM_UNSUBSCRIBE_SECRET") ?? "", { o: row.organization_id, c: "email", a: address });
   const url = supabaseUrl.replace(/\/$/, "") + "/functions/v1/crm-channel-unsubscribe?t=" + token;
   return {
@@ -233,9 +235,26 @@ async function sendResend(account: Account, identity: Identity, row: Outbox): Pr
   const rawButton = row.metadata?.email_button;
   const button = isObject(rawButton) ? safeButton(rawButton.text, rawButton.url) : null;
   // Rules send their own HTML; everything else (campaigns, templates, plain text) gets the shared layout.
-  const html = row.metadata?.email_html
-    ? String(row.metadata.email_html)
-    : emailHtml(row.body, { headerUrl: row.metadata?.email_header_url, button, unsubscribeUrl: extras.url });
+  const customHtml = typeof row.metadata?.email_html === "string" ? row.metadata.email_html : "";
+  const unsubscribeFooter = extras.url
+    ? `<p style="text-align:center;font:12px Arial,sans-serif"><a href="${extras.url}">Não quero mais receber estes e-mails</a></p>`
+    : "";
+  let html: string;
+  if (customHtml) {
+    if (extras.url) {
+      html = customHtml.includes("{{link_descadastro}}")
+        ? customHtml.replaceAll("{{link_descadastro}}", extras.url)
+        : /<\/body>/i.test(customHtml)
+          ? customHtml.replace(/<\/body>/i, unsubscribeFooter + "</body>")
+          : customHtml + unsubscribeFooter;
+    } else {
+      // Transactional messages do not expose a promotional opt-out link.
+      html = customHtml.replace(/<a\b[^>]*href=["']\{\{link_descadastro\}\}["'][^>]*>[\s\S]*?<\/a>/gi, "")
+        .replaceAll("{{link_descadastro}}", "");
+    }
+  } else {
+    html = emailHtml(row.body, { headerUrl: row.metadata?.email_header_url, button, unsubscribeUrl: extras.url });
+  }
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: "Bearer " + token, "content-type": "application/json", "idempotency-key": row.id },
