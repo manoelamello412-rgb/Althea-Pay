@@ -25,6 +25,7 @@ type Rule = RemarketingRule & {
   trigger_event: "payment_pending" | "checkout_abandoned" | "payment_approved";
   channel_account_id: string;
   active: boolean;
+  template_id: string | null;
 };
 type Account = {
   id: string;
@@ -141,7 +142,7 @@ async function ruleOf(id: string | null): Promise<Rule | null> {
   if (!id) return null;
   const result = await db
     .from("crm_remarketing_rules")
-    .select("id,trigger_event,channel,channel_account_id,email_subject,body,button_text,button_url,active")
+    .select("id,trigger_event,channel,channel_account_id,email_subject,body,button_text,button_url,active,template_id")
     .eq("id", id)
     .maybeSingle();
   if (result.error) throw result.error;
@@ -397,7 +398,21 @@ function messageContext(job: RecoveryJob): Record<string, string> {
 }
 
 async function recoveryMessage(job: RecoveryJob, selection: Selection, rule: Rule | null): Promise<{ body: string; metadata: Json }> {
-  if (rule && rule.channel === selection.channel) return ruleMessage(rule, messageContext(job));
+  if (rule && rule.channel === selection.channel) {
+    if (rule.channel === "email" && rule.template_id) {
+      const selected = await db.from("crm_message_templates")
+        .select("body,subject,variables,whatsapp_template_name,language,email_header_url,email_button_text,email_button_url,email_html")
+        .eq("id", rule.template_id)
+        .eq("organization_id", job.organization_id)
+        .eq("channel", "email")
+        .eq("active", true)
+        .maybeSingle();
+      if (selected.error) throw selected.error;
+      if (!selected.data) throw new Error("remarketing_email_template_unavailable");
+      return templateMessage(selected.data as TemplateRow, messageContext(job));
+    }
+    return ruleMessage(rule, messageContext(job));
+  }
   const customer = objectOf(job.customer);
   const found = await db
     .from("crm_message_templates")
@@ -437,6 +452,7 @@ async function enqueueOutbox(job: RecoveryJob, conversationId: string, selection
         ...message.metadata,
         source,
         remarketing_rule_id: rule?.id ?? null,
+        remarketing_trigger: rule?.trigger_event ?? null,
         recovery_event_id: job.event_id,
         recovery_checkout_id: job.checkout_id,
         recovery_attempt: attempt,
