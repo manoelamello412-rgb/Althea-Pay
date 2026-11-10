@@ -9,7 +9,7 @@ type Account = { id: string; channel: string; provider: string; display_name: st
 type Funnel = { id: string; nome: string }
 type Rule = {
   id: string; funnel_id: string | null; trigger_event: 'payment_pending' | 'checkout_abandoned' | 'payment_approved'; channel: 'email' | 'whatsapp'
-  channel_account_id: string; delay_minutes: number; email_subject: string | null; body: string; button_text: string | null; button_url: string | null; active: boolean
+  channel_account_id: string; delay_minutes: number; email_subject: string | null; body: string; button_text: string | null; button_url: string | null; active: boolean; template_id: string | null
 }
 type Draft = Omit<Rule, 'id' | 'delay_minutes'> & { id: string | null; delay: string; unit: 'min' | 'h' }
 
@@ -29,6 +29,7 @@ const errorText = (message: string) => ERRORS.find(([code]) => message.includes(
 
 export function RemarketingRules({ db, organizationId, accounts, funnels, canManage }: { db: Db; organizationId: string; accounts: Account[]; funnels: Funnel[]; canManage: boolean }) {
   const [rules, setRules] = useState<Rule[]>([])
+  const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
@@ -37,7 +38,7 @@ export function RemarketingRules({ db, organizationId, accounts, funnels, canMan
   const load = useCallback(async () => {
     setLoading(true)
     const { data, error: loadError } = await db.from('crm_remarketing_rules')
-      .select('id,funnel_id,trigger_event,channel,channel_account_id,delay_minutes,email_subject,body,button_text,button_url,active')
+      .select('id,funnel_id,trigger_event,channel,channel_account_id,delay_minutes,email_subject,body,button_text,button_url,active,template_id')
       .eq('organization_id', organizationId).order('trigger_event').order('delay_minutes')
     setLoading(false)
     if (loadError) { setError('Não foi possível carregar as regras.'); return }
@@ -45,19 +46,31 @@ export function RemarketingRules({ db, organizationId, accounts, funnels, canMan
   }, [db, organizationId])
   useEffect(() => { void load() }, [load])
 
+  useEffect(() => {
+    let cancelled = false
+    void db.from('crm_message_templates').select('id,name')
+      .eq('organization_id', organizationId).eq('channel', 'email').eq('active', true)
+      .order('name')
+      .then(({ data, error: templateError }) => {
+        if (!cancelled && !templateError) setEmailTemplates((data ?? []) as { id: string; name: string }[])
+      })
+    return () => { cancelled = true }
+  }, [db, organizationId])
+
   const senders = (channel: string) => accounts.filter(account => account.channel === channel)
   const accountName = (id: string) => { const account = accounts.find(item => item.id === id); return account ? account.display_name || `${account.channel} · ${account.provider}` : '—' }
-  const blank = (): Draft => ({ id: null, funnel_id: null, trigger_event: 'payment_pending', channel: 'whatsapp', channel_account_id: senders('whatsapp')[0]?.id ?? '', delay: '5', unit: 'min', email_subject: null, body: 'Olá, {primeiro_nome}! Seu pagamento de {valor} ainda está pendente.', button_text: 'Finalizar pagamento', button_url: '{link}', active: true })
+  const blank = (): Draft => ({ id: null, funnel_id: null, trigger_event: 'payment_pending', channel: 'whatsapp', channel_account_id: senders('whatsapp')[0]?.id ?? '', delay: '5', unit: 'min', email_subject: null, body: 'Olá, {primeiro_nome}! Seu pagamento de {valor} ainda está pendente.', button_text: 'Finalizar pagamento', button_url: '{link}', active: false, template_id: null })
   const edit = (rule: Rule): Draft => ({ ...rule, delay: String(rule.delay_minutes % 60 === 0 ? rule.delay_minutes / 60 : rule.delay_minutes), unit: rule.delay_minutes % 60 === 0 ? 'h' : 'min' })
 
   async function save() {
     if (!draft) return
     setSaving(true); setError('')
-    const { error: saveError } = await db.rpc('crm_remarketing_rule_save', {
+    const { error: saveError } = await db.rpc(draft.channel === 'email' ? 'crm_remarketing_rule_save_html' : 'crm_remarketing_rule_save', {
       p_id: draft.id, p_trigger_event: draft.trigger_event, p_channel: draft.channel, p_channel_account_id: draft.channel_account_id,
       p_delay_minutes: Math.round(Number(draft.delay) * (draft.unit === 'h' ? 60 : 1)), p_body: draft.body,
       p_email_subject: draft.channel === 'email' ? draft.email_subject : null, p_button_text: draft.button_text || null,
       p_button_url: draft.button_text ? draft.button_url || '{link}' : null, p_funnel_id: draft.funnel_id || null, p_active: draft.active,
+      ...(draft.channel === 'email' ? { p_template_id: draft.template_id } : {}),
     })
     setSaving(false)
     if (saveError) { setError(errorText(saveError.message ?? '')); return }
@@ -97,18 +110,24 @@ export function RemarketingRules({ db, organizationId, accounts, funnels, canMan
       <div role="dialog" aria-modal="true" aria-label="Regra de remarketing" onClick={event => event.stopPropagation()} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-[#0b0f0d] p-5">
         <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{draft.id ? 'Editar regra' : 'Nova regra'}</h2><button type="button" aria-label="Fechar" onClick={() => setDraft(null)} className="rounded-md p-1 hover:bg-white/5"><X size={16} /></button></div>
         <div className="space-y-3 text-sm">
-          <label className="block">Quando<select className={input} value={draft.trigger_event} onChange={event => { const trigger_event = event.target.value as Draft['trigger_event']; set(trigger_event === 'payment_approved' ? { trigger_event, channel: 'email', channel_account_id: senders('email')[0]?.id ?? '', delay: '1', unit: 'min', email_subject: 'Pagamento confirmado', body: 'Olá, {primeiro_nome}! Recebemos seu pagamento de {valor}. Obrigado pela compra!', button_text: null, button_url: null } : { trigger_event }) }}>{Object.entries(TRIGGERS).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+          <label className="block">Quando<select className={input} value={draft.trigger_event} onChange={event => { const trigger_event = event.target.value as Draft['trigger_event']; set(trigger_event === 'payment_approved' ? { trigger_event, channel: 'email', channel_account_id: senders('email')[0]?.id ?? '', delay: '1', unit: 'min', email_subject: 'Pagamento confirmado', body: 'Olá, {primeiro_nome}! Recebemos seu pagamento de {valor}. Obrigado pela compra!', button_text: null, button_url: null, template_id: null } : { trigger_event, template_id: null }) }}>{Object.entries(TRIGGERS).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
           <div className="flex gap-2">
             <label className="block flex-1">Esperar<input type="number" min={1} className={input} value={draft.delay} onChange={event => set({ delay: event.target.value })} /></label>
             <label className="block w-32">Unidade<select className={input} value={draft.unit} onChange={event => set({ unit: event.target.value as Draft['unit'] })}><option value="min">minutos</option><option value="h">horas</option></select></label>
           </div>
           <label className="block">Funil<select className={input} value={draft.funnel_id ?? ''} onChange={event => set({ funnel_id: event.target.value || null })}><option value="">Todos os funis</option>{funnels.map(funnel => <option key={funnel.id} value={funnel.id}>{funnel.nome}</option>)}</select></label>
-          <label className="block">Canal<select className={input} value={draft.channel} onChange={event => { const channel = event.target.value as Draft['channel']; set({ channel, channel_account_id: senders(channel)[0]?.id ?? '' }) }}><option value="whatsapp">WhatsApp</option><option value="email">E-mail</option></select></label>
+          <label className="block">Canal<select className={input} value={draft.channel} onChange={event => { const channel = event.target.value as Draft['channel']; set({ channel, channel_account_id: senders(channel)[0]?.id ?? '', template_id: null }) }}><option value="whatsapp">WhatsApp</option><option value="email">E-mail</option></select></label>
           <label className="block">Enviar de<select className={input} value={draft.channel_account_id} onChange={event => set({ channel_account_id: event.target.value })}><option value="">Escolha a conta</option>{senders(draft.channel).map(account => <option key={account.id} value={account.id}>{account.display_name || account.provider}{account.status !== 'active' ? ' (inativa)' : ''}</option>)}</select></label>
           {!senders(draft.channel).length && <p className="text-xs text-amber-300">Nenhuma conta de {draft.channel === 'email' ? 'e-mail' : 'WhatsApp'}. Cadastre em CRM &gt; Configurações &gt; {draft.channel === 'email' ? 'E-mail' : 'WhatsApp'}.</p>}
           {draft.channel === 'email' && <>
             <p className="text-xs text-slate-500">O e-mail sai pela Resend com o remetente da conta escolhida. O domínio desse remetente precisa estar verificado na Resend, senão o envio falha.</p>
             <label className="block">Assunto<input className={input} maxLength={200} value={draft.email_subject ?? ''} onChange={event => set({ email_subject: event.target.value })} /></label>
+            <label className="block">Template HTML de e-mail
+              <select className={input} value={draft.template_id ?? ''} onChange={event => set({ template_id: event.target.value || null })}>
+                <option value="">Sem template HTML (texto atual)</option>
+                {emailTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}
+              </select>
+            </label>
           </>}
           {draft.channel === 'whatsapp' && draft.trigger_event === 'checkout_abandoned' && <p className="text-xs text-slate-500">Checkout abandonado só recebe se o cliente aceitou contato no checkout.</p>}
           <label className="block">Mensagem<textarea rows={5} maxLength={4000} className={`${input} h-auto py-2`} value={draft.body} onChange={event => set({ body: event.target.value })} /></label>
